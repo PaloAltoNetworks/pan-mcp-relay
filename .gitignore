@@ -1,0 +1,100 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# CI Cache
+.cache
+
+# Local Developer Workspaces
+env/
+.env
+.local/
+venv/
+.venv/
+.python-version
+node_modules/
+.node_modules
+
+# Distribution / packaging
+build/
+dist/
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit tests / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*,cover
+.hypothesis/
+.pytest_cache
+reports/
+
+# Translations
+*.mo
+*.pot
+
+# Log Files
+*.log
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+#Ipython Notebook
+.ipynb_checkpoints
+
+# Locally Installed Binaries
+bin/
+
+# Temp Files
+~*
+*~
+*.tmp
+._*
+*.BAK
+
+# Apple/macOS
+.DS_Store
+# Thumbnails
+._*
+
+# JetBrains / PyCharm - only include specific project files
+.idea/*
+!.idea/
+!.idea/.gitignore
+!.idea/jsonSchemas.xml
+!.idea/vcs.xml
+.idea/modules.xml
+.idea/*.iml
+aisecurity/__version__.py
