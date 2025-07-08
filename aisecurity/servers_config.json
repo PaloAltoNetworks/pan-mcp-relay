@@ -1,0 +1,26 @@
+{
+    "mcpServers": {
+        "pan-aisecurity": {
+          "command": "python",
+          "args": ["/Users/wfeng/Workspace/mcp_poc/mcp_server/pan_security_server.py"],
+          "env": {
+            "hidden_mode": "enabled"
+          }
+        },
+        "sqlite": {
+          "command": "python",
+          "args": ["/Users/wfeng/Workspace/mcp_poc/mcp_server/sqlite_server.py"]
+        },
+        "weather": {
+          "command": "python",
+          "args": ["/Users/wfeng/Workspace/mcp_poc/mcp_server/weather_server.py"]
+        },
+        "cloudflare": {
+          "command": "npx",
+          "args": [
+            "mcp-remote",
+            "https://demo-day.mcp.cloudflare.com/sse"
+          ]
+        }
+    }
+}

@@ -1,0 +1,46 @@
+from enum import Enum
+import mcp.types as types
+from typing import Optional
+
+
+class ErrorType(Enum):
+    """Enum defining error type codes for AISecMcpRelay exceptions.
+
+    These error types are used to categorize different errors that can occur
+    within the SDK and are included in exception messages.
+    """
+
+    AISEC_MCP_RELAY_INTERNAL_ERROR = "AISEC_MCP_RELAY_INTERNAL_ERROR"
+    INVALID_CONFIGURATION = "AISEC_INVALID_CONFIGURATION"
+    TOOL_EXECUTION_ERROR = "AISEC_TOOL_EXECUTION_ERROR"
+    SECURITY_BLOCK = "AISEC_SECURITY_BLOCK"
+    TOOL_NOT_FOUND = "AISEC_TOOL_NOT_FOUND"
+    SERVER_NOT_FOUND = "AISEC_SERVER_NOT_FOUND"
+    VALIDATION_ERROR = "AISEC_VALIDATION_ERROR"
+    TOOL_REGISTRY_ERROR = "AISEC_TOOL_REGISTRY_ERROR"
+
+
+class AISecMcpRelayException(Exception):
+    """Base exception class for mcp-relay-related exceptions."""
+
+    def __init__(
+        self, message: str = "", error_type: Optional[ErrorType] = None
+    ) -> None:
+        self.message = message
+        self.error_type = error_type
+
+    def __str__(self) -> str:
+        if self.error_type:
+            return f"{self.error_type.value}:{self.message}"
+        return f"{self.message}"
+
+    def to_mcp_format(self) -> types.CallToolResult:
+        """
+        Convert the exception to an MCP call tool result format.
+
+        Returns:
+            types.CallToolResult: A structured error result
+        """
+        return types.CallToolResult(
+            isError=True, content=[types.TextContent(type="text", text=self.__str__)]
+        )
