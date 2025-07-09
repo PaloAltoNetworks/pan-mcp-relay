@@ -84,14 +84,18 @@ Configure downstream MCP servers in `config/servers_config.json`:
   "mcpServers": {
     "pan-aisecurity": {
       "command": "python",
-      "args": ["aisecurity/mcp_server/pan_security_server.py"],
+      "args": ["path/to/pan_security_server.py"],
       "env": {
         "hidden_mode": "enabled"
       }
     },
-    "weather": {
+    "example-server": {
+      "command": "node",
+      "args": ["path/to/server/index.js"]
+    },
+    "another-server": {
       "command": "python",
-      "args": ["other_mcp_tool_path/other_tool.py"]
+      "args": ["path/to/another/server.py"]
     }
   }
 }
@@ -122,12 +126,12 @@ The relay supports two transport mechanisms:
 
 ```sh
 # Run with STDIO transport (default)
-python aisecurity/mcp_relay/pan_security_relay.py \
+python pan_aisecurity_mcp/mcp_relay/pan_security_relay.py \
   --config-file=config/servers_config.json \
   --transport=stdio
 
 # Run with SSE transport
-python aisecurity/mcp_relay/pan_security_relay.py \
+python pan_aisecurity_mcp/mcp_relay/pan_security_relay.py \
   --config-file=config/servers_config.json \
   --transport=sse \
   --host=127.0.0.1 \
@@ -137,7 +141,7 @@ python aisecurity/mcp_relay/pan_security_relay.py \
 Additional configuration options:
 
 ```sh
-python aisecurity/mcp_relay/pan_security_relay.py \
+python pan_aisecurity_mcp/mcp_relay/pan_security_relay.py \
   --config-file=config/servers_config.json \
   --transport=stdio \
   --host=127.0.0.1 \
@@ -168,7 +172,7 @@ python aisecurity/mcp_relay/pan_security_relay.py \
 
 </a>
 
-The relay defines custom exceptions in `aisecurity/mcp_relay/exceptions.py`:
+The relay defines custom exceptions in `pan_aisecurity_mcp/mcp_relay/exceptions.py`:
 
 - **AISEC_MCP_RELAY_INTERNAL_ERROR**: Internal relay errors
 - **AISEC_INVALID_CONFIGURATION**: Configuration validation errors
