@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch, Mock
 import mcp.types as types
-from aisecurity.security_scanner import SecurityScanner
+from aisecurity.mcp_relay.security_scanner import SecurityScanner
 from aisecurity.scan.asyncio.scanner import ScanResponse
 
 
