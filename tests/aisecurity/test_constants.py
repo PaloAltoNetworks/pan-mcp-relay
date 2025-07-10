@@ -1,4 +1,5 @@
 """Unit tests for MCP Relay application constants."""
+
 import unittest
 import pytest
 from datetime import datetime
@@ -64,12 +65,14 @@ class TestDefaultValues:
         assert constants.MAX_DOWNSTREAM_TOOLS_DEFAULT > 0
 
 
-
 class TestToolNames:
     """Test tool name constants."""
 
     def test_tool_name_list_downstream_servers_info(self):
-        assert constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO == "list_downstream_servers_info"
+        assert (
+            constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO
+            == "list_downstream_servers_info"
+        )
         assert isinstance(constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO, str)
         assert len(constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO) > 0
 
@@ -107,7 +110,10 @@ class TestConstantIntegrity:
 
     def test_scan_response_actions_are_different(self):
         """Ensure scan response actions are distinct."""
-        assert constants.SECURITY_SCAN_RESPONSE_ACTION_BLOCK != constants.SECURITY_SCAN_RESPONSE_ACTION_ALLOW
+        assert (
+            constants.SECURITY_SCAN_RESPONSE_ACTION_BLOCK
+            != constants.SECURITY_SCAN_RESPONSE_ACTION_ALLOW
+        )
 
     def test_server_names_are_different(self):
         """Ensure server names are distinct."""
@@ -115,40 +121,51 @@ class TestConstantIntegrity:
 
     def test_tool_names_are_different(self):
         """Ensure tool names are distinct."""
-        assert constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO != constants.TOOL_NAME_PAN_AISECURITY_INLINE_SCAN
+        assert (
+            constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO
+            != constants.TOOL_NAME_PAN_AISECURITY_INLINE_SCAN
+        )
 
     def test_default_values_are_reasonable(self):
         """Test that default values are within reasonable ranges."""
-        assert 0 < constants.TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT <= 3600  # Between 0 and 1 hour
+        assert (
+            0 < constants.TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT <= 3600
+        )  # Between 0 and 1 hour
         assert 0 < constants.MAX_DOWNSTREAM_SERVERS_DEFAULT <= 1000
         assert 0 < constants.MAX_DOWNSTREAM_TOOLS_DEFAULT <= 1000
 
     def test_max_tools_greater_than_max_servers(self):
         """Test logical relationship between max tools and servers."""
-        assert constants.MAX_DOWNSTREAM_TOOLS_DEFAULT >= constants.MAX_DOWNSTREAM_SERVERS_DEFAULT
+        assert (
+            constants.MAX_DOWNSTREAM_TOOLS_DEFAULT
+            >= constants.MAX_DOWNSTREAM_SERVERS_DEFAULT
+        )
 
 
 class TestConstantImmutability:
     """Test that constants maintain their expected values."""
 
-    @pytest.mark.parametrize("constant_name,expected_value", [
-        ("SECURITY_SERVER_NAME", "pan-aisecurity"),
-        ("MCP_RELAY_NAME", "pan-aisecurity-relay"),
-        ("ENVIRONMENT_CONFIG_LABEL", "env"),
-        ("MCP_SERVER_CONFIG_LABEL", "mcpServers"),
-        ("HIDDEN_MODE_LABEL", "hidden_mode"),
-        ("HIDDEN_MODE_ENABLED", "enabled"),
-        ("MCP_RELAY_TRANSPORT_SSE", "sse"),
-        ("MCP_RELAY_TRANSPORT_STDIO", "stdio"),
-        ("TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT", 300),
-        ("MAX_DOWNSTREAM_SERVERS_DEFAULT", 32),
-        ("MAX_DOWNSTREAM_TOOLS_DEFAULT", 64),
-        ("TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO", "list_downstream_servers_info"),
-        ("TOOL_NAME_PAN_AISECURITY_INLINE_SCAN", "pan_inline_scan"),
-        ("EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH", 1),
-        ("SECURITY_SCAN_RESPONSE_ACTION_BLOCK", "block"),
-        ("SECURITY_SCAN_RESPONSE_ACTION_ALLOW", "allow"),
-    ])
+    @pytest.mark.parametrize(
+        "constant_name,expected_value",
+        [
+            ("SECURITY_SERVER_NAME", "pan-aisecurity"),
+            ("MCP_RELAY_NAME", "pan-aisecurity-relay"),
+            ("ENVIRONMENT_CONFIG_LABEL", "env"),
+            ("MCP_SERVER_CONFIG_LABEL", "mcpServers"),
+            ("HIDDEN_MODE_LABEL", "hidden_mode"),
+            ("HIDDEN_MODE_ENABLED", "enabled"),
+            ("MCP_RELAY_TRANSPORT_SSE", "sse"),
+            ("MCP_RELAY_TRANSPORT_STDIO", "stdio"),
+            ("TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT", 300),
+            ("MAX_DOWNSTREAM_SERVERS_DEFAULT", 32),
+            ("MAX_DOWNSTREAM_TOOLS_DEFAULT", 64),
+            ("TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO", "list_downstream_servers_info"),
+            ("TOOL_NAME_PAN_AISECURITY_INLINE_SCAN", "pan_inline_scan"),
+            ("EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH", 1),
+            ("SECURITY_SCAN_RESPONSE_ACTION_BLOCK", "block"),
+            ("SECURITY_SCAN_RESPONSE_ACTION_ALLOW", "allow"),
+        ],
+    )
     def test_constant_values(self, constant_name, expected_value):
         """Test that all constants have their expected values."""
         actual_value = getattr(constants, constant_name)

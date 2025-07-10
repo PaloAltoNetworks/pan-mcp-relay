@@ -1,4 +1,5 @@
 """Unit tests for Configuration class."""
+
 import json
 import tempfile
 import os
@@ -10,7 +11,7 @@ from pan_aisecurity_mcp.mcp_relay.configuration import Configuration
 class TestConfiguration:
     """Basic unit tests for Configuration class."""
 
-    @patch('pan_aisecurity_mcp.mcp_relay.configuration.load_dotenv')
+    @patch("pan_aisecurity_mcp.mcp_relay.configuration.load_dotenv")
     def test_init_calls_load_env(self, mock_load_dotenv):
         """Test that __init__ calls load_env method."""
         Configuration()
@@ -18,13 +19,9 @@ class TestConfiguration:
 
     def test_load_config_valid_json_file(self):
         """Test loading a valid JSON configuration file."""
-        test_config = {
-            "server_name": "test-server",
-            "port": 8080,
-            "debug": True
-        }
+        test_config = {"server_name": "test-server", "port": 8080, "debug": True}
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(test_config, f)
             temp_file_path = f.name
 
@@ -41,7 +38,3 @@ class TestConfiguration:
 
         with pytest.raises(FileNotFoundError):
             Configuration.load_config(non_existent_path)
-
-
-
-

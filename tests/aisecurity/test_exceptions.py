@@ -17,7 +17,7 @@ class TestErrorType(unittest.TestCase):
             "TOOL_NOT_FOUND": "AISEC_TOOL_NOT_FOUND",
             "SERVER_NOT_FOUND": "AISEC_SERVER_NOT_FOUND",
             "VALIDATION_ERROR": "AISEC_VALIDATION_ERROR",
-            "TOOL_REGISTRY_ERROR": "AISEC_TOOL_REGISTRY_ERROR"
+            "TOOL_REGISTRY_ERROR": "AISEC_TOOL_REGISTRY_ERROR",
         }
 
         for attr_name, expected_value in expected_values.items():
@@ -134,7 +134,6 @@ class TestAISecMcpRelayException(unittest.TestCase):
         self.assertEqual(content_item.type, "text")
         self.assertEqual(content_item.text, f"{error_type.value}:{message}")
 
-
     def test_to_mcp_format_with_message_only(self):
         """Test to_mcp_format method with message only."""
         message = "Generic error occurred"
@@ -205,5 +204,5 @@ class TestAISecMcpRelayException(unittest.TestCase):
                 self.assertEqual(mcp_result.content[0].text, expected_str)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

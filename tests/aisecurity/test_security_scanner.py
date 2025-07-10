@@ -18,7 +18,6 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         self.scanner = SecurityScanner(mock_pan_security_server)
         assert self.scanner.pan_security_server == mock_pan_security_server
 
-
     @patch(
         "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
         new_callable=AsyncMock,
@@ -36,12 +35,12 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
 
         mock_text_content = types.TextContent(
             type="text",  # Add the required type field
-            text=json.dumps(expected_scan_response.dict())
+            text=json.dumps(expected_scan_response.dict()),
         )
 
         # Create mock TextContent object
         mock_call_tool_result = types.CallToolResult(
-            content=[mock_text_content],isError= False
+            content=[mock_text_content], isError=False
         )
 
         # Create mock scan result
@@ -86,12 +85,12 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
 
         mock_text_content = types.TextContent(
             type="text",  # Add the required type field
-            text=json.dumps(expected_scan_response.dict())
+            text=json.dumps(expected_scan_response.dict()),
         )
 
         # Create mock TextContent object
         mock_call_tool_result = types.CallToolResult(
-            content=[mock_text_content],isError= False
+            content=[mock_text_content], isError=False
         )
 
         # Create mock scan result
@@ -123,10 +122,14 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
         new_callable=AsyncMock,
     )
-    async def test_perform_scan_error_initialize_raises_exception(self, mock_pan_security_server):
+    async def test_perform_scan_error_initialize_raises_exception(
+        self, mock_pan_security_server
+    ):
         """Test when initialize raises an exception."""
         # Setup mocks
-        mock_pan_security_server.initialize = AsyncMock(side_effect=Exception("Initialization failed"))
+        mock_pan_security_server.initialize = AsyncMock(
+            side_effect=Exception("Initialization failed")
+        )
         mock_pan_security_server.cleanup = AsyncMock()
 
         # Create scanner instance
@@ -146,7 +149,9 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
         new_callable=AsyncMock,
     )
-    async def test_perform_scan_error_empty_content_list(self, mock_pan_security_server):
+    async def test_perform_scan_error_empty_content_list(
+        self, mock_pan_security_server
+    ):
         """Test when scan_result.content is an empty list."""
         mock_scan_result = Mock()
         mock_scan_result.isError = False
@@ -174,12 +179,13 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
         new_callable=AsyncMock,
     )
-    async def test_perform_scan_error_scan_result_is_error(self, mock_pan_security_server):
+    async def test_perform_scan_error_scan_result_is_error(
+        self, mock_pan_security_server
+    ):
         """Test when scan_result.isError is True."""
         # Create mock error content
         mock_error_content = types.TextContent(
-            type="text",
-            text="Security scan failed due to invalid input"
+            type="text", text="Security scan failed due to invalid input"
         )
 
         mock_scan_result = Mock()
@@ -189,7 +195,9 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         # Setup mocks
         mock_pan_security_server.initialize = AsyncMock()
         mock_pan_security_server.execute_tool = AsyncMock(return_value=mock_scan_result)
-        mock_pan_security_server.extract_text_content = Mock(return_value="Security scan failed due to invalid input")
+        mock_pan_security_server.extract_text_content = Mock(
+            return_value="Security scan failed due to invalid input"
+        )
         mock_pan_security_server.cleanup = AsyncMock()
 
         # Create scanner instance
@@ -205,6 +213,3 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         assert result is None
         mock_pan_security_server.extract_text_content.assert_called_once()
         mock_pan_security_server.cleanup.assert_called_once()
-
-
-

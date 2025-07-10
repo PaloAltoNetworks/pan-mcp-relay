@@ -14,7 +14,7 @@ from pydantic import ConfigDict, Field
 
 class ToolState(str, Enum):
     """Tool state enumeration."""
-    
+
     ENABLED = "enabled"
     DISABLED_HIDDEN_MODE = "disabled - hidden_mode"
     DISABLED_DUPLICATE = "disabled - duplicate"
@@ -25,19 +25,21 @@ class ToolState(str, Enum):
 class BaseTool(types.Tool):
     """
     Base tool class with server info and state.
-    
+
     Extends MCP Tool with server name and state tracking.
     """
 
     server_name: str = Field(..., description="The server where this tool is deployed")
-    state: ToolState = Field(default=ToolState.ENABLED, description="The state of the tool")
+    state: ToolState = Field(
+        default=ToolState.ENABLED, description="The state of the tool"
+    )
 
     model_config = ConfigDict(extra="allow")
 
     def get_argument_descriptions(self) -> List[str]:
         """
         Get formatted argument descriptions from input schema.
-        
+
         Returns:
             List of argument description strings.
         """
@@ -51,26 +53,26 @@ class BaseTool(types.Tool):
                     line += " (required)"
                 args_desc.append(line)
         return args_desc
-    
+
     def to_mcp_tool(self) -> types.Tool:
         """
         Convert to standard MCP Tool.
-        
+
         Returns:
             Standard MCP Tool object.
         """
         return types.Tool(
-            name=self.name, 
-            description=self.description, 
-            inputSchema=self.inputSchema, 
-            annotations=self.annotations
+            name=self.name,
+            description=self.description,
+            inputSchema=self.inputSchema,
+            annotations=self.annotations,
         )
 
 
 class InternalTool(BaseTool):
     """
     Internal tool with hash-based identification.
-    
+
     Extends BaseTool with MD5 hash for tool identification and caching.
     """
 
@@ -83,7 +85,7 @@ class InternalTool(BaseTool):
     def compute_hash(self) -> str:
         """
         Compute MD5 hash of tool identity fields.
-        
+
         Returns:
             MD5 hash string.
         """
@@ -95,11 +97,11 @@ class InternalTool(BaseTool):
         }
         json_str = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.md5(json_str.encode("utf-8")).hexdigest()
-    
+
     def to_dict(self) -> dict[str, str]:
         """
         Convert tool to dictionary.
-        
+
         Returns:
             Dictionary representation of the tool.
         """
@@ -116,14 +118,14 @@ class InternalTool(BaseTool):
 class RelayTool(BaseTool):
     """
     Tool for LLM presentation and relay operations.
-    
+
     Extends BaseTool with formatting capabilities for LLM consumption.
     """
-    
+
     def format_for_llm(self) -> str:
         """
         Format tool information for LLM consumption.
-        
+
         Returns:
             Formatted string describing the tool.
         """
