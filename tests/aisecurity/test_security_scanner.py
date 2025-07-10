@@ -40,14 +40,14 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         )
 
         # Create mock TextContent object
-        mock_text_content = types.CallToolResult(
+        mock_call_tool_result = types.CallToolResult(
             content=[mock_text_content],isError= False
         )
 
         # Create mock scan result
         mock_scan_result = Mock()
-        mock_scan_result.isError = mock_text_content.isError
-        mock_scan_result.content = mock_text_content.content
+        mock_scan_result.isError = mock_call_tool_result.isError
+        mock_scan_result.content = mock_call_tool_result.content
 
         # Setup the mock chain
         mock_pan_security_server.initialize = AsyncMock()
@@ -58,7 +58,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"test_mock": "mock_scan"}
+        params = {"scan_request": "mock_scan"}
 
         # Execute the test
         result = await mock_scanner._perform_scan("mock_scan", params)
@@ -90,14 +90,14 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         )
 
         # Create mock TextContent object
-        mock_text_content = types.CallToolResult(
+        mock_call_tool_result = types.CallToolResult(
             content=[mock_text_content],isError= False
         )
 
         # Create mock scan result
         mock_scan_result = Mock()
-        mock_scan_result.isError = mock_text_content.isError
-        mock_scan_result.content = mock_text_content.content
+        mock_scan_result.isError = mock_call_tool_result.isError
+        mock_scan_result.content = mock_call_tool_result.content
 
         # Setup the mock chain
         mock_pan_security_server.initialize = AsyncMock()
@@ -108,7 +108,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"test_mock": "mock_scan"}
+        params = {"scan_request": "mock_scan"}
 
         # Execute the test
         result = await mock_scanner._perform_scan("mock_scan", params)
@@ -133,7 +133,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"test_mock": "mock_scan"}
+        params = {"scan_request": "mock_scan"}
 
         # Execute the test and expect exception
         with self.assertRaisesRegex(Exception, "Initialization failed"):
@@ -161,7 +161,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"test_mock": "mock_scan"}
+        params = {"scan_request": "mock_scan"}
 
         # Execute the test
         result = await mock_scanner._perform_scan("mock_scan", params)
@@ -196,7 +196,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"test_mock": "mock_scan"}
+        params = {"scan_request": "mock_scan"}
 
         # Execute the test
         result = await mock_scanner._perform_scan("mock_scan", params)
