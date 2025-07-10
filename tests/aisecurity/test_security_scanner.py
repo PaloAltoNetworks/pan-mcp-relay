@@ -24,14 +24,14 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
     )
     async def test_perform_scan_success_block(self, mock_pan_security_server):
-        """Test successful security scan with ALLOW action."""
+        """Test successful security scan with BLOCK action."""
 
         # Setup the expected ScanResponse
         expected_scan_response = ScanResponse(
             report_id="R12345678-1234-5678-9abc-123456789012",
-            scan_id="test_id",
-            category="malign",
-            action="block",  # Changed to "allow" to match test name
+            scan_id="12345678-1234-5678-9abc-123456789012",
+            category="malicious",
+            action="block",
         )
 
         mock_text_content = types.TextContent(
@@ -79,9 +79,9 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         # Setup the expected ScanResponse
         expected_scan_response = ScanResponse(
             report_id="R12345678-1234-5678-9abc-123456789012",
-            scan_id="test_id",
+            scan_id="12345678-1234-5678-9abc-123456789012",
             category="benign",
-            action="allow",  # Changed to "allow" to match test name
+            action="allow",
         )
 
         mock_text_content = types.TextContent(
