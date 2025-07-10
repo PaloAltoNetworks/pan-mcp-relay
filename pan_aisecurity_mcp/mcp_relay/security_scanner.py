@@ -5,13 +5,13 @@ from typing import Dict, Optional, Union
 from aisecurity.scan.asyncio.scanner import ScanResponse
 import mcp.types as types
 
-from constants import (
+from pan_aisecurity_mcp.mcp_relay.constants import (
     EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH,
     SECURITY_SCAN_RESPONSE_ACTION_ALLOW,
     SECURITY_SCAN_RESPONSE_ACTION_BLOCK,
     TOOL_NAME_PAN_AISECURITY_INLINE_SCAN,
 )
-from downstream_mcp_client import DownstreamMcpClient
+from pan_aisecurity_mcp.mcp_relay.downstream_mcp_client import DownstreamMcpClient
 
 
 class SecurityScanner:

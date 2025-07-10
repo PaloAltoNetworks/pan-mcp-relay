@@ -10,9 +10,9 @@ from typing import Dict, List, Optional
 import json
 import logging
 
-from constants import TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT, UNIX_EPOCH
-from tool import InternalTool, ToolState
-from exceptions import AISecMcpRelayException, ErrorType
+from pan_aisecurity_mcp.mcp_relay.constants import TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT, UNIX_EPOCH
+from pan_aisecurity_mcp.mcp_relay.tool import InternalTool, ToolState
+from pan_aisecurity_mcp.mcp_relay.exceptions import AISecMcpRelayException, ErrorType
 
 
 logger = logging.getLogger(__name__)
