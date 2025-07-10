@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch, Mock
 import mcp.types as types
-from aisecurity.mcp_relay.security_scanner import SecurityScanner
+from pan_aisecurity_mcp.mcp_relay.security_scanner import SecurityScanner
 from aisecurity.scan.asyncio.scanner import ScanResponse
 
 
@@ -10,7 +10,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
     """Test suite for SecurityScanner class."""
 
     @patch(
-        "mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+        "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
         new_callable=AsyncMock,
     )
     async def test_init(self, mock_pan_security_server):
@@ -20,38 +20,67 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
 
 
     @patch(
-        "mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+        "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
         new_callable=AsyncMock,
     )
-    async def test_perform_scan_success_allow(self,mock_pan_security_server):
-        """Test successful security scan with ALLOW action."""
-        # Setup mock response
-        mock_sync_scan_response = ScanResponse(
-            report_id="REP12345678910",
-            scan_id="test_id",
-            category="malign",
-            action="block",
-        )
-
-        mock_scanner = SecurityScanner(mock_pan_security_server)
-        mock_scanner.return_value = mock_sync_scan_response
-        params = {"test_mock" : "mock_scan"}
-        result = await mock_scanner._perform_scan("mock_scan",params)
-        print (result)
-        #self.assertIsInstance(result, ScanResponse)
-
-    @patch(
-        "mcp_relay.downstream_mcp_client.DownstreamMcpClient",
-        new_callable=AsyncMock,
-    )
-    async def test_perform_scan_success_allow1(self, mock_pan_security_server):
+    async def test_perform_scan_success_block(self, mock_pan_security_server):
         """Test successful security scan with ALLOW action."""
 
         # Setup the expected ScanResponse
         expected_scan_response = ScanResponse(
-            report_id="REP12345678910",
+            report_id="R12345678-1234-5678-9abc-123456789012",
             scan_id="test_id",
             category="malign",
+            action="block",  # Changed to "allow" to match test name
+        )
+
+        mock_text_content = types.TextContent(
+            type="text",  # Add the required type field
+            text=json.dumps(expected_scan_response.dict())
+        )
+
+        # Create mock TextContent object
+        mock_text_content = types.CallToolResult(
+            content=[mock_text_content],isError= False
+        )
+
+        # Create mock scan result
+        mock_scan_result = Mock()
+        mock_scan_result.isError = mock_text_content.isError
+        mock_scan_result.content = mock_text_content.content
+
+        # Setup the mock chain
+        mock_pan_security_server.initialize = AsyncMock()
+        mock_pan_security_server.execute_tool = AsyncMock(return_value=mock_scan_result)
+        mock_pan_security_server.cleanup = AsyncMock()
+
+        # Create scanner instance
+        mock_scanner = SecurityScanner(mock_pan_security_server)
+
+        # Test parameters
+        params = {"test_mock": "mock_scan"}
+
+        # Execute the test
+        result = await mock_scanner._perform_scan("mock_scan", params)
+
+        # Assertions
+        assert result is not None
+        assert isinstance(result, ScanResponse)
+        assert result.action == "block"
+        assert result.report_id == "R12345678-1234-5678-9abc-123456789012"
+
+    @patch(
+        "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+        new_callable=AsyncMock,
+    )
+    async def test_perform_scan_success_allow(self, mock_pan_security_server):
+        """Test successful security scan with ALLOW action."""
+
+        # Setup the expected ScanResponse
+        expected_scan_response = ScanResponse(
+            report_id="R12345678-1234-5678-9abc-123456789012",
+            scan_id="test_id",
+            category="benign",
             action="allow",  # Changed to "allow" to match test name
         )
 
@@ -88,10 +117,10 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         assert result is not None
         assert isinstance(result, ScanResponse)
         assert result.action == "allow"
-        assert result.report_id == "REP12345678910"
+        assert result.report_id == "R12345678-1234-5678-9abc-123456789012"
 
     @patch(
-        "mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+        "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
         new_callable=AsyncMock,
     )
     async def test_perform_scan_error_initialize_raises_exception(self, mock_pan_security_server):
@@ -114,7 +143,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_pan_security_server.cleanup.assert_not_called()
 
     @patch(
-        "mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+        "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
         new_callable=AsyncMock,
     )
     async def test_perform_scan_error_empty_content_list(self, mock_pan_security_server):
@@ -142,7 +171,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_pan_security_server.cleanup.assert_called_once()
 
     @patch(
-        "mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+        "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
         new_callable=AsyncMock,
     )
     async def test_perform_scan_error_scan_result_is_error(self, mock_pan_security_server):
