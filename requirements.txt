@@ -6,3 +6,4 @@ mcp[http]
 pan-aisecurity==0.4.0.5.post2
 httpx==0.27.2
 tenacity
+aiosqlite

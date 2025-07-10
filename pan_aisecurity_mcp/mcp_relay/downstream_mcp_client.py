@@ -151,7 +151,7 @@ class DownstreamMcpClient:
         """
         # Handle list of content items
         if isinstance(content, list):
-            return json.dumps([self.extract_text_content(item) for item in content])
+            return [self.extract_text_content(item) for item in content]
 
         # Handle specific MCP content types
         if isinstance(
