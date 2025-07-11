@@ -57,10 +57,10 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"scan_request": "mock_scan"}
+        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"}
 
         # Execute the test
-        result = await mock_scanner._perform_scan("mock_scan", params)
+        result = await mock_scanner._perform_scan("scan_request", params)
 
         # Assertions
         assert result is not None
@@ -107,10 +107,10 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"scan_request": "mock_scan"}
+        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"}
 
         # Execute the test
-        result = await mock_scanner._perform_scan("mock_scan", params)
+        result = await mock_scanner._perform_scan("scan_request", params)
 
         # Assertions
         assert result is not None
@@ -136,11 +136,11 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"scan_request": "mock_scan"}
+        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"}
 
         # Execute the test and expect exception
         with self.assertRaisesRegex(Exception, "Initialization failed"):
-            await mock_scanner._perform_scan("mock_scan", params)
+            await mock_scanner._perform_scan("scan_response", params)
 
         # Cleanup should still be called due to finally block
         mock_pan_security_server.cleanup.assert_not_called()
@@ -166,10 +166,10 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"scan_request": "mock_scan"}
+        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"}
 
         # Execute the test
-        result = await mock_scanner._perform_scan("mock_scan", params)
+        result = await mock_scanner._perform_scan("scan_request", params)
 
         # Assertions
         assert result is None
@@ -204,10 +204,10 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"scan_request": "mock_scan"}
+        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"}
 
         # Execute the test
-        result = await mock_scanner._perform_scan("mock_scan", params)
+        result = await mock_scanner._perform_scan("scan_response", params)
 
         # Assertions
         assert result is None
