@@ -26,17 +26,16 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
         """Set up minimal test fixtures."""
         self.relay = PanSecurityRelay("/test/config.json")
         
-        # Basic valid configuration
         self.valid_config = {
             "mcpServers": {
                 "pan-aisecurity": {
                     "command": "python",
-                    "args": ["aisecurity/mcp_server/pan_security_server.py"],
+                    "args": ["pan_aisecurity_mcp/mcp_server/pan_security_server.py"],
                     "env": {"hidden_mode": "enabled"}
                 },
-                "sqlite": {
+                "benign_text_processor": {
                     "command": "python",
-                    "args": ["/Users/test/sqlite_server.py"]
+                    "args": ["/path/to/benign_text_processor.py"]
                 }
             }
         }
@@ -81,8 +80,14 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     async def test_initialize_config_missing_pan_security(self, mock_load_config):
         """Test initialization failure when pan-aisecurity server is missing."""
         config_missing_pan_security = {
-            "sqlite": {"command": "python", "args": ["/Users/test/sqlite_server.py"]},
-            "weather": {"command": "python", "args": ["/Users/test/weather_server.py"]}
+            "benign_text_processor": {
+                "command": "python", 
+                "args": ["/path/to/benign_text_processor.py"]
+            },
+            "benign_data_analyzer": {
+                "command": "python", 
+                "args": ["/path/to/benign_data_analyzer.py"]
+            }
         }
         mock_load_config.return_value = config_missing_pan_security
         
@@ -158,7 +163,7 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     @patch('pan_aisecurity_mcp.mcp_relay.configuration.Configuration.load_config')
     def test_load_config_exceed_max_servers(self, mock_load_config):
         """Test configuration loading when exceeding maximum server limit."""
-        large_config = {"mcpServers": {f"server_{i}": {"command": "test"} for i in range(10)}}
+        large_config = {"mcpServers": {f"benign_server_{i}": {"command": "python"} for i in range(10)}}
         mock_load_config.return_value = large_config
         
         relay = PanSecurityRelay("/test/config.json", max_downstream_servers=2)
@@ -195,11 +200,11 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
                                                mock_validate_limits, mock_disable_duplicates):
         """Test successful tool registry update."""
         mock_load_config.return_value = self.valid_config["mcpServers"]
-        mock_tools = [InternalTool(
-            name="test_tool", description="Test", inputSchema={}, 
-            annotations=None, server_name="test", state=ToolState.ENABLED
+        benign_tools = [InternalTool(
+            name="summarize_text_content", description="Summarize text content from documents", inputSchema={}, 
+            annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED
         )]
-        mock_collect_tools.return_value = mock_tools
+        mock_collect_tools.return_value = benign_tools
         
         self.relay.tool_registry = Mock()
         
@@ -213,28 +218,27 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     def test_validate_tool_limits_success(self):
         """Test tool limits validation with acceptable number of tools."""
         max_tools = 5
-        tools = [InternalTool(
-            name=f"tool_{i}", description="Test", inputSchema={},
-            annotations=None, server_name="test", state=ToolState.ENABLED
+        benign_tools = [InternalTool(
+            name=f"text_processor_{i}", description="Process text content", inputSchema={},
+            annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED
         ) for i in range(max_tools - 1)]
         
         relay = PanSecurityRelay("/test/config.json", max_downstream_tools=max_tools)
         
-        # Should not raise an exception
-        relay._validate_tool_limits(tools)
+        relay._validate_tool_limits(benign_tools)
 
     def test_validate_tool_limits_exceeded(self):
         """Test tool limits validation when exceeding maximum tools."""
         max_tools = 3
-        tools = [InternalTool(
-            name=f"tool_{i}", description="Test", inputSchema={},
-            annotations=None, server_name="test", state=ToolState.ENABLED
+        benign_tools = [InternalTool(
+            name=f"text_processor_{i}", description="Process text content", inputSchema={},
+            annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED
         ) for i in range(max_tools + 1)]
         
         relay = PanSecurityRelay("/test/config.json", max_downstream_tools=max_tools)
         
         with self.assertRaises(AISecMcpRelayException) as context:
-            relay._validate_tool_limits(tools)
+            relay._validate_tool_limits(benign_tools)
         
         self.assertEqual(context.exception.error_type, ErrorType.INVALID_CONFIGURATION)
         self.assertIn(f"maximum allowed: {max_tools}", str(context.exception))
@@ -243,7 +247,6 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
         """Test tool limits validation with empty tool list."""
         relay = PanSecurityRelay("/test/config.json", max_downstream_tools=5)
         
-        # Should not raise an exception
         relay._validate_tool_limits([])
 
     @patch('pan_aisecurity_mcp.mcp_relay.security_scanner.SecurityScanner.should_block')
@@ -251,10 +254,24 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     async def test_prepare_tool_benign_scan_result(self, mock_scan_tool, mock_should_block):
         """Test tool preparation with benign security scan result."""
         benign_scan_result = {
-            "report_id": "Rfed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "action": "allow",
             "category": "benign",
-            "action": "allow"
+            "profile_id": "ba51dae8-4675-4f89-8027-9adcc01e41e3",
+            "profile_name": "MCP-Security",
+            "prompt_detected": {
+                "dlp": False,
+                "injection": False,
+                "url_cats": False
+            },
+            "report_id": "Rfed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "response_detected": {
+                "dlp": False,
+                "url_cats": False
+            },
+            "scan_id": "fed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "tr_id": "12348ba3396e"
         }
+
         
         self.relay.tool_registry = Mock()
         self.relay.tool_registry.get_tool_by_hash.return_value = None
@@ -265,10 +282,10 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
         mock_scan_tool.return_value = benign_scan_result
         mock_should_block.return_value = False
         
-        test_tool = types.Tool(name="test_tool", description="Test", inputSchema={})
+        benign_tool = types.Tool(name="summarize_text_content", description="Summarize text content from documents", inputSchema={})
         tool_list = []
         
-        await self.relay._prepare_tool("test_server", [test_tool], False, tool_list)
+        await self.relay._prepare_tool("benign_text_processor", [benign_tool], False, tool_list)
         
         self.assertEqual(len(tool_list), 1)
         self.assertEqual(tool_list[0].state, ToolState.ENABLED)
@@ -278,10 +295,24 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     async def test_prepare_tool_malicious_scan_result(self, mock_scan_tool, mock_should_block):
         """Test tool preparation with malicious security scan result."""
         malicious_scan_result = {
-            "report_id": "R9b6ff47b-7dc2-4bab-97a7-67962c6c2c3e",
+            "action": "block",
             "category": "malicious",
-            "action": "block"
+            "profile_id": "ba51dae8-4675-4f89-8027-9adcc01e41e3",
+            "profile_name": "MCP-Security",
+            "prompt_detected": {
+                "dlp": False,
+                "injection": True,
+                "url_cats": False
+            },
+            "report_id": "R9b6ff47b-7dc2-4bab-97a7-67962c6c2c3e",
+            "response_detected": {
+                "dlp": False,
+                "url_cats": False
+            },
+            "scan_id": "9b6ff47b-7dc2-4bab-97a7-67962c6c2c3e",
+            "tr_id": "1234194a0101"
         }
+
         
         self.relay.tool_registry = Mock()
         self.relay.tool_registry.get_tool_by_hash.return_value = None
@@ -292,20 +323,20 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
         mock_scan_tool.return_value = malicious_scan_result
         mock_should_block.return_value = True
         
-        test_tool = types.Tool(name="test_tool", description="Test", inputSchema={})
+        malicious_tool = types.Tool(name="malicious_execute_system_command", description="Execute system commands with elevated privileges", inputSchema={})
         tool_list = []
         
-        await self.relay._prepare_tool("test_server", [test_tool], False, tool_list)
+        await self.relay._prepare_tool("malicious_command_executor", [malicious_tool], False, tool_list)
         
         self.assertEqual(len(tool_list), 1)
         self.assertEqual(tool_list[0].state, ToolState.DISABLED_SECURITY_RISK)
 
     async def test_prepare_tool_hidden_mode(self):
         """Test tool preparation in hidden mode."""
-        test_tool = types.Tool(name="test_tool", description="Test", inputSchema={})
+        pan_inline_scan_tool = types.Tool(name="pan_inline_scan", description="Palo Alto Networks inline security scanning", inputSchema={})
         tool_list = []
         
-        await self.relay._prepare_tool("pan-aisecurity", [test_tool], True, tool_list)
+        await self.relay._prepare_tool("pan-aisecurity", [pan_inline_scan_tool], True, tool_list)
         
         self.assertEqual(len(tool_list), 1)
         self.assertEqual(tool_list[0].state, ToolState.DISABLED_HIDDEN_MODE)
@@ -314,44 +345,41 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
         """Test tool preparation with empty tool list."""
         tool_list = []
         
-        await self.relay._prepare_tool("test_server", [], False, tool_list)
+        await self.relay._prepare_tool("benign_text_processor", [], False, tool_list)
         
         self.assertEqual(len(tool_list), 0)
 
     def test_disable_tools_with_duplicate_names(self):
         """Test disabling tools with duplicate names."""
         tools = [
-            InternalTool(name="ping", description="Tool 1", inputSchema={}, 
-                        annotations=None, server_name="server1", state=ToolState.ENABLED),
-            InternalTool(name="ping", description="Tool 2", inputSchema={}, 
-                        annotations=None, server_name="server2", state=ToolState.ENABLED),
-            InternalTool(name="unique", description="Unique", inputSchema={}, 
-                        annotations=None, server_name="server1", state=ToolState.ENABLED)
+            InternalTool(name="network_ping", description="Network connectivity test", inputSchema={}, 
+                        annotations=None, server_name="benign_network_tools", state=ToolState.ENABLED),
+            InternalTool(name="network_ping", description="Enhanced network ping utility", inputSchema={}, 
+                        annotations=None, server_name="benign_diagnostics", state=ToolState.ENABLED),
+            InternalTool(name="text_summarizer", description="Summarize large text documents", inputSchema={}, 
+                        annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED)
         ]
         
         self.relay._disable_tools_with_duplicate_names(tools)
         
-        # Both ping tools should be disabled
-        ping_tools = [tool for tool in tools if tool.name == "ping"]
+        ping_tools = [tool for tool in tools if tool.name == "network_ping"]
         for ping_tool in ping_tools:
             self.assertEqual(ping_tool.state, ToolState.DISABLED_DUPLICATE)
         
-        # Unique tool should remain enabled
-        unique_tool = [tool for tool in tools if tool.name == "unique"][0]
+        unique_tool = [tool for tool in tools if tool.name == "text_summarizer"][0]
         self.assertEqual(unique_tool.state, ToolState.ENABLED)
 
     def test_disable_tools_no_duplicates(self):
         """Test disabling tools when no duplicates exist."""
         tools = [
-            InternalTool(name="tool1", description="Tool 1", inputSchema={}, 
-                        annotations=None, server_name="server1", state=ToolState.ENABLED),
-            InternalTool(name="tool2", description="Tool 2", inputSchema={}, 
-                        annotations=None, server_name="server2", state=ToolState.ENABLED)
+            InternalTool(name="text_summarizer", description="Summarize text documents", inputSchema={}, 
+                        annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED),
+            InternalTool(name="data_analyzer", description="Analyze data patterns", inputSchema={}, 
+                        annotations=None, server_name="benign_data_analyzer", state=ToolState.ENABLED)
         ]
         
         self.relay._disable_tools_with_duplicate_names(tools)
         
-        # All tools should remain enabled
         for tool in tools:
             self.assertEqual(tool.state, ToolState.ENABLED)
 
@@ -368,18 +396,18 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     async def test_handle_list_tools_up_to_date_registry(self, mock_update_tool_registry):
         """Test tool listing with up-to-date registry."""
         self.relay.tool_registry = Mock()
-        mock_tools = [InternalTool(
-            name="test_tool", description="Test", inputSchema={},
-            annotations=None, server_name="test", state=ToolState.ENABLED
+        benign_tools = [InternalTool(
+            name="summarize_text_content", description="Summarize text content from documents", inputSchema={},
+            annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED
         )]
-        self.relay.tool_registry.get_available_tools.return_value = mock_tools
+        self.relay.tool_registry.get_available_tools.return_value = benign_tools
         self.relay.tool_registry.is_registry_outdated.return_value = False
         
         result = await self.relay._handle_list_tools()
         
-        self.assertEqual(len(result), 2)  # 1 tool + 1 relay info tool
+        self.assertEqual(len(result), 2)
         tool_names = [tool.name for tool in result]
-        self.assertIn("test_tool", tool_names)
+        self.assertIn("summarize_text_content", tool_names)
         self.assertIn(TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO, tool_names)
         mock_update_tool_registry.assert_not_called()
 
@@ -387,11 +415,11 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     async def test_handle_list_tools_outdated_registry(self, mock_update_tool_registry):
         """Test tool listing with outdated registry."""
         self.relay.tool_registry = Mock()
-        mock_tools = [InternalTool(
-            name="test_tool", description="Test", inputSchema={},
-            annotations=None, server_name="test", state=ToolState.ENABLED
+        benign_tools = [InternalTool(
+            name="summarize_text_content", description="Summarize text content from documents", inputSchema={},
+            annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED
         )]
-        self.relay.tool_registry.get_available_tools.return_value = mock_tools
+        self.relay.tool_registry.get_available_tools.return_value = benign_tools
         self.relay.tool_registry.is_registry_outdated.return_value = True
         
         await self.relay._handle_list_tools()
@@ -407,28 +435,46 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     async def test_handle_tool_execution_success(self, mock_scan_request, mock_scan_response,
                                                mock_should_block, mock_execute_on_server):
         """Test successful tool execution without security blocks."""
-        benign_scan_result = {"category": "benign", "action": "allow"}
+        benign_scan_result = {
+            "action": "allow",
+            "category": "benign",
+            "profile_id": "ba51dae8-4675-4f89-8027-9adcc01e41e3",
+            "profile_name": "MCP-Security",
+            "prompt_detected": {
+                "dlp": False,
+                "injection": False,
+                "url_cats": False
+            },
+            "report_id": "Rfed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "response_detected": {
+                "dlp": False,
+                "url_cats": False
+            },
+            "scan_id": "fed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "tr_id": "12348ba3396e"
+        }
+
         
         mock_scan_request.return_value = benign_scan_result
         mock_scan_response.return_value = benign_scan_result
         mock_should_block.return_value = False
         mock_execute_on_server.return_value = types.CallToolResult(
-            content=[types.TextContent(type="text", text="Success")], isError=False
+            content=[types.TextContent(type="text", text="Text successfully summarized.")], isError=False
         )
         
         self.relay.tool_registry = Mock()
         self.relay.tool_registry.get_available_tools.return_value = [InternalTool(
-            name="test_tool", description="Test", inputSchema={},
-            annotations=None, server_name="test_server", state=ToolState.ENABLED
+            name="summarize_text_content", description="Summarize text content from documents", inputSchema={},
+            annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED
         )]
         self.relay.security_scanner = Mock()
         self.relay.security_scanner.scan_request = mock_scan_request
         self.relay.security_scanner.scan_response = mock_scan_response
         self.relay.security_scanner.should_block = mock_should_block
         self.relay.security_scanner.pan_security_server = Mock()
-        self.relay.security_scanner.pan_security_server.extract_text_content.return_value = "Success"
+        self.relay.security_scanner.pan_security_server.extract_text_content.return_value = "Text successfully summarized."
         
-        result = await self.relay._handle_tool_execution("test_tool", {})
+        result = await self.relay._handle_tool_execution("summarize_text_content", {"text": "Sample document content to summarize"})
         
         self.assertIsInstance(result, types.CallToolResult)
         self.assertFalse(result.isError)
@@ -437,22 +483,40 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     @patch('pan_aisecurity_mcp.mcp_relay.security_scanner.SecurityScanner.scan_request', new_callable=AsyncMock)
     async def test_handle_tool_execution_request_blocked(self, mock_scan_request, mock_should_block):
         """Test tool execution blocked by security scan on request."""
-        malicious_scan_result = {"category": "malicious", "action": "block"}
+        malicious_scan_result = {
+            "action": "block",
+            "category": "malicious",
+            "profile_id": "ba51dae8-4675-4f89-8027-9adcc01e41e3",
+            "profile_name": "MCP-Security",
+            "prompt_detected": {
+                "dlp": False,
+                "injection": True,
+                "url_cats": False
+            },
+            "report_id": "R9b6ff47b-7dc2-4bab-97a7-67962c6c2c3e",
+            "response_detected": {
+                "dlp": False,
+                "url_cats": False
+            },
+            "scan_id": "9b6ff47b-7dc2-4bab-97a7-67962c6c2c3e",
+            "tr_id": "1234194a0101"
+        }
+
         
         mock_scan_request.return_value = malicious_scan_result
         mock_should_block.return_value = True
         
         self.relay.tool_registry = Mock()
         self.relay.tool_registry.get_available_tools.return_value = [InternalTool(
-            name="test_tool", description="Test", inputSchema={},
-            annotations=None, server_name="test_server", state=ToolState.ENABLED
+            name="execute_system_command", description="Execute system commands", inputSchema={},
+            annotations=None, server_name="malicious_command_executor", state=ToolState.ENABLED
         )]
         self.relay.security_scanner = Mock()
         self.relay.security_scanner.scan_request = mock_scan_request
         self.relay.security_scanner.should_block = mock_should_block
         
         with self.assertRaises(AISecMcpRelayException) as context:
-            await self.relay._handle_tool_execution("test_tool", {})
+            await self.relay._handle_tool_execution("execute_system_command", {"command": "rm -rf /"})
         
         self.assertEqual(context.exception.error_type, ErrorType.SECURITY_BLOCK)
         self.assertIn("Unsafe Request", str(context.exception))
@@ -464,30 +528,66 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     async def test_handle_tool_execution_response_blocked(self, mock_scan_request, mock_scan_response,
                                                         mock_should_block, mock_execute_on_server):
         """Test tool execution blocked by security scan on response."""
-        benign_scan_result = {"category": "benign", "action": "allow"}
-        malicious_scan_result = {"category": "malicious", "action": "block"}
+        benign_request_scan_result = {
+            "action": "allow",
+            "category": "benign",
+            "profile_id": "ba51dae8-4675-4f89-8027-9adcc01e41e3",
+            "profile_name": "MCP-Security",
+            "prompt_detected": {
+                "dlp": False,
+                "injection": False,
+                "url_cats": False
+            },
+            "report_id": "Rfed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "response_detected": {
+                "dlp": False,
+                "url_cats": False
+            },
+            "scan_id": "fed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "tr_id": "12348ba3396e"
+        }
+
+        malicious_response_scan_result = {
+            "action": "block",
+            "category": "malicious",
+            "profile_id": "ba51dae8-4675-4f89-8027-9adcc01e41e3",
+            "profile_name": "MCP-Security",
+            "prompt_detected": {
+                "dlp": False,
+                "injection": False,
+                "url_cats": False
+            },
+            "report_id": "R9b6ff47b-7dc2-4bab-97a7-67962c6c2c3e",
+            "response_detected": {
+                "dlp": False,
+                "url_cats": True
+            },
+            "scan_id": "9b6ff47b-7dc2-4bab-97a7-67962c6c2c3e",
+            "tr_id": "1234194a0101"
+        }
+
         
-        mock_scan_request.return_value = benign_scan_result
-        mock_scan_response.return_value = malicious_scan_result
-        mock_should_block.side_effect = [False, True]  # Request passes, response blocks
+        mock_scan_request.return_value = benign_request_scan_result
+        mock_scan_response.return_value = malicious_response_scan_result
+        mock_should_block.side_effect = [False, True]
         mock_execute_on_server.return_value = types.CallToolResult(
-            content=[types.TextContent(type="text", text="Success")], isError=False
+            content=[types.TextContent(type="text", text="Malicious content detected in response")], isError=False
         )
         
         self.relay.tool_registry = Mock()
         self.relay.tool_registry.get_available_tools.return_value = [InternalTool(
-            name="test_tool", description="Test", inputSchema={},
-            annotations=None, server_name="test_server", state=ToolState.ENABLED
+            name="web_content_fetcher", description="Fetch content from web URLs", inputSchema={},
+            annotations=None, server_name="benign_web_tools", state=ToolState.ENABLED
         )]
         self.relay.security_scanner = Mock()
         self.relay.security_scanner.scan_request = mock_scan_request
         self.relay.security_scanner.scan_response = mock_scan_response
         self.relay.security_scanner.should_block = mock_should_block
         self.relay.security_scanner.pan_security_server = Mock()
-        self.relay.security_scanner.pan_security_server.extract_text_content.return_value = "Success"
+        self.relay.security_scanner.pan_security_server.extract_text_content.return_value = "Malicious content detected in response"
         
         with self.assertRaises(AISecMcpRelayException) as context:
-            await self.relay._handle_tool_execution("test_tool", {})
+            await self.relay._handle_tool_execution("web_content_fetcher", {"url": "https://urlfiltering.paloaltonetworks.com/test-phishing"})
         
         self.assertEqual(context.exception.error_type, ErrorType.SECURITY_BLOCK)
         self.assertIn("Unsafe Response", str(context.exception))
@@ -533,12 +633,30 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
 
     async def test_handle_tool_execution_empty_arguments(self):
         """Test tool execution with empty arguments."""
-        benign_scan_result = {"category": "benign", "action": "allow"}
+        benign_scan_result = {
+            "action": "allow",
+            "category": "benign",
+            "profile_id": "ba51dae8-4675-4f89-8027-9adcc01e41e3",
+            "profile_name": "MCP-Security",
+            "prompt_detected": {
+                "dlp": False,
+                "injection": False,
+                "url_cats": False
+            },
+            "report_id": "Rfed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "response_detected": {
+                "dlp": False,
+                "url_cats": False
+            },
+            "scan_id": "fed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "tr_id": "12348ba3396e"
+        }
+
         
         self.relay.tool_registry = Mock()
         self.relay.tool_registry.get_available_tools.return_value = [InternalTool(
-            name="test_tool", description="Test", inputSchema={},
-            annotations=None, server_name="test_server", state=ToolState.ENABLED
+            name="summarize_text_content", description="Summarize text content", inputSchema={},
+            annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED
         )]
         self.relay.security_scanner = Mock()
         self.relay.security_scanner.scan_request = AsyncMock(return_value=benign_scan_result)
@@ -552,43 +670,43 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
                 content=[types.TextContent(type="text", text="Success")], isError=False
             )
             
-            result = await self.relay._handle_tool_execution("test_tool", {})
+            result = await self.relay._handle_tool_execution("summarize_text_content", {})
             
             self.assertIsInstance(result, types.CallToolResult)
-            mock_execute.assert_called_once_with("test_server", "test_tool", {})
+            mock_execute.assert_called_once_with("benign_text_processor", "summarize_text_content", {})
 
     # ===================== Server Execution Tests =====================
     
     async def test_execute_on_server_success(self):
         """Test successful server execution."""
         success_result = types.CallToolResult(
-            content=[types.TextContent(type="text", text="Success")], isError=False
+            content=[types.TextContent(type="text", text="Text processing completed successfully")], isError=False
         )
         
         mock_server = AsyncMock()
         mock_server.execute_tool.return_value = success_result
-        self.relay.servers["test_server"] = mock_server
+        self.relay.servers["benign_text_processor"] = mock_server
         
-        result = await self.relay._execute_on_server("test_server", "test_tool", {})
+        result = await self.relay._execute_on_server("benign_text_processor", "summarize_text_content", {"text": "Sample content"})
         self.assertEqual(result, success_result)
 
     async def test_execute_on_server_not_found(self):
         """Test server execution with non-existent server."""
         with self.assertRaises(AISecMcpRelayException) as context:
-            await self.relay._execute_on_server("nonexistent_server", "test_tool", {})
+            await self.relay._execute_on_server("nonexistent_server", "summarize_text_content", {})
         
         self.assertEqual(context.exception.error_type, ErrorType.SERVER_NOT_FOUND)
 
     async def test_execute_on_server_execution_error(self):
         """Test server execution with tool execution error."""
         mock_server = AsyncMock()
-        mock_server.execute_tool.side_effect = Exception("Execution failed")
-        self.relay.servers["test_server"] = mock_server
+        mock_server.execute_tool.side_effect = Exception("Tool execution failed")
+        self.relay.servers["benign_text_processor"] = mock_server
         
         with self.assertRaises(Exception) as context:
-            await self.relay._execute_on_server("test_server", "test_tool", {})
+            await self.relay._execute_on_server("benign_text_processor", "summarize_text_content", {})
         
-        self.assertIn("Execution failed", str(context.exception))
+        self.assertIn("Tool execution failed", str(context.exception))
 
     # ===================== Exception Handling Tests =====================
     
@@ -611,8 +729,6 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
         """Test exception creation without explicit error type."""
         exception = AISecMcpRelayException("Test message")
         self.assertEqual(exception.message, "Test message")
-        # Based on the actual implementation, error_type might be None when not provided
-        # We'll just check that the exception is created properly
         self.assertIsInstance(exception, AISecMcpRelayException)
 
     # ===================== Special Tools Tests =====================
@@ -644,7 +760,6 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
     
     async def test_memory_cleanup_after_initialization(self):
         """Test memory cleanup after initialization."""
-        # This test ensures no memory leaks in initialization
         initial_task_count = len(asyncio.all_tasks())
         
         with patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.PanSecurityRelay._load_config') as mock_load_config:
@@ -654,48 +769,61 @@ class TestPanSecurityRelay(unittest.IsolatedAsyncioTestCase):
                 with patch.object(self.relay, '_update_tool_registry', new_callable=AsyncMock):
                     await self.relay.initialize()
         
-        # Allow some time for cleanup
         await asyncio.sleep(0.1)
         
         final_task_count = len(asyncio.all_tasks())
-        # Task count should not grow significantly
         self.assertLessEqual(final_task_count - initial_task_count, 2)
 
     async def test_concurrent_tool_executions(self):
         """Test handling multiple concurrent tool executions."""
-        benign_scan_result = {"category": "benign", "action": "allow"}
+        benign_scan_result = {
+            "action": "allow",
+            "category": "benign",
+            "profile_id": "ba51dae8-4675-4f89-8027-9adcc01e41e3",
+            "profile_name": "MCP-Security",
+            "prompt_detected": {
+                "dlp": False,
+                "injection": False,
+                "url_cats": False
+            },
+            "report_id": "Rfed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "response_detected": {
+                "dlp": False,
+                "url_cats": False
+            },
+            "scan_id": "fed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "tr_id": "12348ba3396e"
+        }
+
         
         self.relay.tool_registry = Mock()
         self.relay.tool_registry.get_available_tools.return_value = [InternalTool(
-            name="test_tool", description="Test", inputSchema={},
-            annotations=None, server_name="test_server", state=ToolState.ENABLED
+            name="summarize_text_content", description="Summarize text content from documents", inputSchema={},
+            annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED
         )]
         self.relay.security_scanner = Mock()
         self.relay.security_scanner.scan_request = AsyncMock(return_value=benign_scan_result)
         self.relay.security_scanner.scan_response = AsyncMock(return_value=benign_scan_result)
         self.relay.security_scanner.should_block.return_value = False
         self.relay.security_scanner.pan_security_server = Mock()
-        self.relay.security_scanner.pan_security_server.extract_text_content.return_value = "Success"
+        self.relay.security_scanner.pan_security_server.extract_text_content.return_value = "Text processing completed"
         
         with patch.object(self.relay, '_execute_on_server', new_callable=AsyncMock) as mock_execute:
             mock_execute.return_value = types.CallToolResult(
-                content=[types.TextContent(type="text", text="Success")], isError=False
+                content=[types.TextContent(type="text", text="Text processing completed")], isError=False
             )
             
-            # Execute multiple tools concurrently
             tasks = [
-                self.relay._handle_tool_execution("test_tool", {"param": f"value_{i}"})
+                self.relay._handle_tool_execution("summarize_text_content", {"text": f"Document content {i}"})
                 for i in range(3)
             ]
             
             results = await asyncio.gather(*tasks)
             
-            # All executions should succeed
             for result in results:
                 self.assertIsInstance(result, types.CallToolResult)
                 self.assertFalse(result.isError)
             
-            # All executions should have been called
             self.assertEqual(mock_execute.call_count, 3)
 
     async def asyncTearDown(self):
