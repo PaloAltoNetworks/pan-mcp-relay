@@ -1,426 +1,47 @@
 """
-Unit tests for the tool module in AI Security MCP Relay.
+Unit tests for the tool_registry module in AI Security MCP Relay.
 
-This module contains comprehensive tests for the tool classes including
-ToolState enum, BaseTool, InternalTool, and RelayTool classes used in
-AI security MCP relay operations for Palo Alto Networks AI Runtime Security (AIRS).
+This module contains comprehensive tests for the ToolRegistry class used in
+AI Runtime Security (AIRS) MCP server operations for managing and caching
+internal tools with expiration-based refresh logic.
 """
 
 import pytest
 import json
-import hashlib
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
+from typing import List
 
-import mcp.types as types
-from pydantic import ValidationError
-
-from pan_aisecurity_mcp.mcp_relay.tool import (
-    ToolState,
-    BaseTool,
-    InternalTool,
-    RelayTool
-)
+from pan_aisecurity_mcp.mcp_relay.tool_registry import ToolRegistry
+from pan_aisecurity_mcp.mcp_relay.tool import InternalTool, ToolState
+from pan_aisecurity_mcp.mcp_relay.exceptions import AISecMcpRelayException, ErrorType
+from pan_aisecurity_mcp.mcp_relay.constants import TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT, UNIX_EPOCH
 
 
-class TestToolState:
-    """Test suite for ToolState enum used in AI security scanning tools."""
-
-    def test_tool_state_values_for_security_compliance(self):
-        """Test that ToolState enum has correct security-related values for AIRS compliance."""
-        assert ToolState.ENABLED == "enabled"
-        assert ToolState.DISABLED_HIDDEN_MODE == "disabled - hidden_mode"
-        assert ToolState.DISABLED_DUPLICATE == "disabled - duplicate"
-        assert ToolState.DISABLED_SECURITY_RISK == "disabled - security risk"
-        assert ToolState.DISABLED_ERROR == "disabled - error"
-
-    def test_tool_state_string_inheritance_for_mcp_compatibility(self):
-        """Test that ToolState inherits from str for MCP server compatibility."""
-        assert isinstance(ToolState.ENABLED, str)
-        assert str(ToolState.ENABLED) == "ToolState.ENABLED"
-
-    def test_tool_state_for_airs_tool_management(self):
-        """Test ToolState usage in AIRS tool lifecycle management."""
-        # Test state transitions that might occur in AIRS tool management
-        security_states = [
-            ToolState.ENABLED,  # Normal AIRS scanning tool operation
-            ToolState.DISABLED_SECURITY_RISK,  # Tool flagged as security risk
-            ToolState.DISABLED_ERROR,  # Tool experiencing errors during scanning
-            ToolState.DISABLED_DUPLICATE,  # Duplicate AIRS tool detected
-            ToolState.DISABLED_HIDDEN_MODE  # Tool hidden for maintenance
-        ]
-
-        for state in security_states:
-            assert isinstance(state, str)
-            assert "disabled" in state or state == "enabled"
-
-
-class TestBaseTool:
-    """Test suite for BaseTool class used in AIRS MCP server operations."""
+class TestToolRegistry:
+    """Test suite for ToolRegistry class used in AIRS tool management."""
 
     @pytest.fixture
-    def pan_inline_scan_schema(self):
-        """Create input schema for pan_inline_scan tool from AIRS server."""
-        return {
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string",
-                    "description": "User prompt to be scanned for security threats"
-                },
-                "response": {
-                    "type": "string",
-                    "description": "AI model response to be scanned for security threats"
-                }
-            },
-            "anyOf": [
-                {"required": ["prompt"]},
-                {"required": ["response"]},
-                {"required": ["prompt", "response"]}
-            ]
-        }
-
-    @pytest.fixture
-    def pan_batch_scan_schema(self):
-        """Create input schema for pan_batch_scan tool from AIRS server."""
-        return {
-            "type": "object",
-            "properties": {
-                "scan_contents": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "prompt": {"type": "string"},
-                            "response": {"type": "string"}
-                        }
-                    },
-                    "description": "Array of scan content objects for batch processing",
-                    "maxItems": 5  # MAX_NUMBER_OF_BATCH_SCAN_OBJECTS
-                }
-            },
-            "required": ["scan_contents"]
-        }
-
-    @pytest.fixture
-    def airs_inline_scan_tool_data(self, pan_inline_scan_schema):
-        """Create AIRS inline scan tool data matching pan_security_server.py."""
-        return {
-            "name": "pan_inline_scan",
-            "description": "Submit a single Prompt and/or Model-Response to be scanned synchronously for security threats",
-            "inputSchema": pan_inline_scan_schema,
-            "server_name": "aisecurity-scan-server",
-            "state": ToolState.ENABLED
-        }
-
-    def test_base_tool_creation_for_airs_inline_scan(self, airs_inline_scan_tool_data):
-        """Test BaseTool creation for AIRS inline scanning tool."""
-        inline_scan_tool = BaseTool(**airs_inline_scan_tool_data)
-
-        assert inline_scan_tool.name == "pan_inline_scan"
-        assert "synchronously for security threats" in inline_scan_tool.description
-        assert inline_scan_tool.server_name == "aisecurity-scan-server"
-        assert inline_scan_tool.state == ToolState.ENABLED
-        assert "prompt" in inline_scan_tool.inputSchema["properties"]
-        assert "response" in inline_scan_tool.inputSchema["properties"]
-
-    def test_base_tool_creation_for_airs_batch_scan(self, pan_batch_scan_schema):
-        """Test BaseTool creation for AIRS batch scanning tool."""
-        batch_scan_tool = BaseTool(
-            name="pan_batch_scan",
-            description="Submit multiple Scan Contents for asynchronous batch scanning",
-            inputSchema=pan_batch_scan_schema,
-            server_name="aisecurity-scan-server"
-        )
-
-        assert batch_scan_tool.name == "pan_batch_scan"
-        assert "asynchronous batch scanning" in batch_scan_tool.description
-        assert batch_scan_tool.inputSchema["properties"]["scan_contents"]["maxItems"] == 5
-
-    def test_base_tool_creation_for_airs_scan_results(self):
-        """Test BaseTool creation for AIRS scan results retrieval tool."""
-        scan_results_schema = {
-            "type": "object",
-            "properties": {
-                "scan_ids": {
-                    "type": "array",
-                    "items": {"type": "string", "format": "uuid"},
-                    "description": "List of Scan IDs (UUID strings) to retrieve results for"
-                }
-            },
-            "required": ["scan_ids"]
-        }
-
-        scan_results_tool = BaseTool(
-            name="pan_get_scan_results",
-            description="Retrieve Scan Results with a list of Scan IDs",
-            inputSchema=scan_results_schema,
-            server_name="aisecurity-scan-server"
-        )
-
-        assert scan_results_tool.name == "pan_get_scan_results"
-        assert "uuid" in scan_results_tool.inputSchema["properties"]["scan_ids"]["items"]["format"]
-
-    def test_base_tool_creation_for_airs_scan_reports(self):
-        """Test BaseTool creation for AIRS scan reports retrieval tool."""
-        scan_reports_schema = {
-            "type": "object",
-            "properties": {
-                "report_ids": {
-                    "type": "array",
-                    "items": {"type": "string", "pattern": "^R[0-9a-f-]{36}$"},
-                    "description": "List of Scan Report IDs (UUID prefixed with 'R')"
-                }
-            },
-            "required": ["report_ids"]
-        }
-
-        scan_reports_tool = BaseTool(
-            name="pan_get_scan_reports",
-            description="Retrieve Scan Reports with a list of Scan Report IDs",
-            inputSchema=scan_reports_schema,
-            server_name="aisecurity-scan-server"
-        )
-
-        assert scan_reports_tool.name == "pan_get_scan_reports"
-        assert "R[0-9a-f-]{36}" in scan_reports_tool.inputSchema["properties"]["report_ids"]["items"]["pattern"]
-
-    def test_get_argument_descriptions_for_airs_tools(self, airs_inline_scan_tool_data):
-        """Test argument descriptions generation for AIRS scanning tools."""
-        airs_tool = BaseTool(**airs_inline_scan_tool_data)
-        descriptions = airs_tool.get_argument_descriptions()
-
-        # Should handle anyOf requirements properly
-        assert len(descriptions) == 2
-
-        prompt_desc = next((desc for desc in descriptions if "prompt" in desc), None)
-        response_desc = next((desc for desc in descriptions if "response" in desc), None)
-
-        assert prompt_desc is not None
-        assert response_desc is not None
-        assert "security threats" in prompt_desc
-        assert "security threats" in response_desc
-
-    def test_to_mcp_tool_conversion_for_airs_relay(self, airs_inline_scan_tool_data):
-        """Test conversion to MCP Tool for AIRS relay operations."""
-        airs_annotations = {
-            "ai_profile": "default",
-            "scan_type": "inline",
-            "api_endpoint": "https://ai-runtime-security.api.paloaltonetworks.com"
-        }
-        airs_inline_scan_tool_data["annotations"] = airs_annotations
-
-        airs_tool = BaseTool(**airs_inline_scan_tool_data)
-        mcp_tool = airs_tool.to_mcp_tool()
-
-        assert isinstance(mcp_tool, types.Tool)
-        assert mcp_tool.name == "pan_inline_scan"
-        assert mcp_tool.annotations.ai_profile == "default"
-        assert mcp_tool.annotations.scan_type == "inline"
-
-        # Server-specific fields should be removed for MCP relay
-        assert not hasattr(mcp_tool, "server_name")
-        assert not hasattr(mcp_tool, "state")
-
-    def test_base_tool_with_airs_security_states(self, airs_inline_scan_tool_data):
-        """Test BaseTool with different AIRS security states."""
-        # Test security states relevant to AIRS operations
-        airs_states_to_test = [
-            ToolState.ENABLED,  # Normal AIRS operation
-            ToolState.DISABLED_ERROR,  # AIRS API errors
-            ToolState.DISABLED_SECURITY_RISK  # Tool flagged by security policy
-        ]
-
-        for state in airs_states_to_test:
-            airs_inline_scan_tool_data["state"] = state
-            airs_tool = BaseTool(**airs_inline_scan_tool_data)
-            assert airs_tool.state == state
-
-
-class TestInternalTool:
-    """Test suite for InternalTool class used in AIRS tool registry management."""
-
-    @pytest.fixture
-    def airs_batch_scan_tool_data(self):
-        """Create AIRS batch scan tool data for testing."""
-        return {
-            "name": "pan_batch_scan",
-            "description": "Submit multiple Scan Contents containing prompts/model-responses for asynchronous scanning",
-            "inputSchema": {
+    def airs_inline_scan_tool(self):
+        """Create AIRS inline scan tool for testing."""
+        return InternalTool(
+            name="pan_inline_scan",
+            description="Submit a single Prompt and/or Model-Response to be scanned synchronously",
+            inputSchema={
                 "type": "object",
                 "properties": {
-                    "scan_contents": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "prompt": {"type": "string"},
-                                "response": {"type": "string"}
-                            }
-                        },
-                        "maxItems": 5  # MAX_NUMBER_OF_BATCH_SCAN_OBJECTS
-                    }
-                },
-                "required": ["scan_contents"]
-            },
-            "server_name": "aisecurity-scan-server",
-            "state": ToolState.ENABLED
-        }
-
-    def test_internal_tool_creation_with_airs_batch_scan(self, airs_batch_scan_tool_data):
-        """Test InternalTool creation for AIRS batch scanning with hash generation."""
-        batch_scan_tool = InternalTool(**airs_batch_scan_tool_data)
-
-        assert batch_scan_tool.name == "pan_batch_scan"
-        assert "asynchronous scanning" in batch_scan_tool.description
-        assert batch_scan_tool.server_name == "aisecurity-scan-server"
-        assert batch_scan_tool.state == ToolState.ENABLED
-        assert batch_scan_tool.md5_hash != ""
-        assert len(batch_scan_tool.md5_hash) == 32
-
-    def test_internal_tool_hash_computation_for_airs_deduplication(self, airs_batch_scan_tool_data):
-        """Test MD5 hash computation for AIRS tool deduplication."""
-        batch_scan_tool = InternalTool(**airs_batch_scan_tool_data)
-
-        # Manually compute expected hash for AIRS tool verification
-        payload = {
-            "server_name": "aisecurity-scan-server",
-            "tool_name": "pan_batch_scan",
-            "description": "Submit multiple Scan Contents containing prompts/model-responses for asynchronous scanning",
-            "input_schema": airs_batch_scan_tool_data["inputSchema"],
-        }
-        json_str = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-        expected_hash = hashlib.md5(json_str.encode("utf-8")).hexdigest()
-
-        assert batch_scan_tool.md5_hash == expected_hash
-
-    def test_internal_tool_hash_consistency_for_airs_caching(self, airs_batch_scan_tool_data):
-        """Test that identical AIRS tools produce identical hashes for caching."""
-        airs_tool_1 = InternalTool(**airs_batch_scan_tool_data)
-        airs_tool_2 = InternalTool(**airs_batch_scan_tool_data)
-
-        assert airs_tool_1.md5_hash == airs_tool_2.md5_hash
-
-    def test_internal_tool_hash_uniqueness_for_different_airs_tools(self, airs_batch_scan_tool_data):
-        """Test that different AIRS tools produce different hashes."""
-        batch_scan_tool = InternalTool(**airs_batch_scan_tool_data)
-
-        # Create scan results tool with different configuration
-        scan_results_data = airs_batch_scan_tool_data.copy()
-        scan_results_data["name"] = "pan_get_scan_results"
-        scan_results_data["description"] = "Retrieve Scan Results with a list of Scan IDs"
-        scan_results_data["inputSchema"] = {
-            "type": "object",
-            "properties": {
-                "scan_ids": {
-                    "type": "array",
-                    "items": {"type": "string", "format": "uuid"}
+                    "prompt": {"type": "string"},
+                    "response": {"type": "string"}
                 }
             },
-            "required": ["scan_ids"]
-        }
-        scan_results_tool = InternalTool(**scan_results_data)
-
-        assert batch_scan_tool.md5_hash != scan_results_tool.md5_hash
-
-    def test_internal_tool_to_dict_for_airs_storage(self, airs_batch_scan_tool_data):
-        """Test conversion to dictionary for AIRS tool storage."""
-        airs_tool = InternalTool(**airs_batch_scan_tool_data)
-        storage_dict = airs_tool.to_dict()
-
-        expected_keys = ["name", "description", "input_schema", "server_name", "state", "md5_hash"]
-        assert all(key in storage_dict for key in expected_keys)
-
-        assert storage_dict["name"] == "pan_batch_scan"
-        assert storage_dict["server_name"] == "aisecurity-scan-server"
-        assert storage_dict["state"] == ToolState.ENABLED
-        assert storage_dict["md5_hash"] == airs_tool.md5_hash
-        assert storage_dict["input_schema"]["properties"]["scan_contents"]["maxItems"] == 5
-
-    def test_internal_tool_with_airs_api_constraints(self):
-        """Test InternalTool with AIRS API constraints and limits."""
-        # Test tool with MAX_NUMBER_OF_SCAN_IDS constraint
-        scan_ids_schema = {
-            "type": "object",
-            "properties": {
-                "scan_ids": {
-                    "type": "array",
-                    "items": {"type": "string", "format": "uuid"},
-                    "maxItems": 100,  # MAX_NUMBER_OF_SCAN_IDS
-                    "description": "List of Scan IDs (UUID strings)"
-                }
-            },
-            "required": ["scan_ids"]
-        }
-
-        airs_constraint_tool = InternalTool(
-            name="pan_get_scan_results",
-            description="Retrieve Scan Results with API batch size constraints",
-            inputSchema=scan_ids_schema,
-            server_name="aisecurity-scan-server"
+            server_name="aisecurity-scan-server",
+            state=ToolState.ENABLED
         )
 
-        assert airs_constraint_tool.md5_hash != ""
-        storage_dict = airs_constraint_tool.to_dict()
-        assert storage_dict["input_schema"]["properties"]["scan_ids"]["maxItems"] == 100
-
-
-class TestRelayTool:
-    """Test suite for RelayTool class used for AIRS LLM presentation."""
-
     @pytest.fixture
-    def airs_inline_scan_relay_data(self):
-        """Create AIRS inline scan relay tool data."""
-        return {
-            "name": "pan_inline_scan",
-            "description": "Submit a single Prompt and/or Model-Response to be scanned synchronously for security threats",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "prompt": {
-                        "type": "string",
-                        "description": "User prompt to be scanned for security threats"
-                    },
-                    "response": {
-                        "type": "string",
-                        "description": "AI model response to be scanned for security threats"
-                    }
-                },
-                "anyOf": [
-                    {"required": ["prompt"]},
-                    {"required": ["response"]},
-                    {"required": ["prompt", "response"]}
-                ]
-            },
-            "server_name": "aisecurity-scan-server",
-            "state": ToolState.ENABLED
-        }
-
-    def test_relay_tool_creation_for_airs_llm_presentation(self, airs_inline_scan_relay_data):
-        """Test RelayTool creation for AIRS LLM presentation."""
-        airs_relay_tool = RelayTool(**airs_inline_scan_relay_data)
-
-        assert airs_relay_tool.name == "pan_inline_scan"
-        assert "synchronously for security threats" in airs_relay_tool.description
-        assert airs_relay_tool.server_name == "aisecurity-scan-server"
-        assert airs_relay_tool.state == ToolState.ENABLED
-
-    def test_relay_tool_format_for_llm_airs_inline_scan(self, airs_inline_scan_relay_data):
-        """Test format_for_llm method with AIRS inline scan tool."""
-        airs_relay_tool = RelayTool(**airs_inline_scan_relay_data)
-        llm_formatted_output = airs_relay_tool.format_for_llm()
-
-        # Check AIRS-specific formatting for LLM consumption
-        assert "Tool: pan_inline_scan" in llm_formatted_output
-        assert "Server: aisecurity-scan-server" in llm_formatted_output
-        assert "synchronously for security threats" in llm_formatted_output
-        assert "Arguments:" in llm_formatted_output
-        assert "prompt:" in llm_formatted_output
-        assert "response:" in llm_formatted_output
-        assert "security threats" in llm_formatted_output
-
-    def test_relay_tool_format_for_llm_airs_batch_scan(self):
-        """Test format_for_llm with AIRS batch scan tool."""
-        airs_batch_relay_tool = RelayTool(
+    def airs_batch_scan_tool(self):
+        """Create AIRS batch scan tool for testing."""
+        return InternalTool(
             name="pan_batch_scan",
             description="Submit multiple Scan Contents for asynchronous batch scanning",
             inputSchema={
@@ -428,153 +49,8 @@ class TestRelayTool:
                 "properties": {
                     "scan_contents": {
                         "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "prompt": {"type": "string"},
-                                "response": {"type": "string"}
-                            }
-                        },
-                        "description": "Array of scan content objects for batch processing"
-                    }
-                },
-                "required": ["scan_contents"]
-            },
-            server_name="aisecurity-scan-server"
-        )
-
-        llm_formatted_output = airs_batch_relay_tool.format_for_llm()
-
-        assert "Tool: pan_batch_scan" in llm_formatted_output
-        assert "asynchronous batch scanning" in llm_formatted_output
-        assert "scan_contents:" in llm_formatted_output
-        assert "(required)" in llm_formatted_output
-        assert "batch processing" in llm_formatted_output
-
-    def test_relay_tool_format_for_llm_airs_scan_results(self):
-        """Test format_for_llm with AIRS scan results retrieval tool."""
-        airs_results_relay_tool = RelayTool(
-            name="pan_get_scan_results",
-            description="Retrieve Scan Results with a list of Scan IDs",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "scan_ids": {
-                        "type": "array",
-                        "items": {"type": "string", "format": "uuid"},
-                        "description": "List of Scan IDs (UUID strings) to retrieve results for"
-                    }
-                },
-                "required": ["scan_ids"]
-            },
-            server_name="aisecurity-scan-server"
-        )
-
-        llm_formatted_output = airs_results_relay_tool.format_for_llm()
-
-        assert "Tool: pan_get_scan_results" in llm_formatted_output
-        assert "Retrieve Scan Results" in llm_formatted_output
-        assert "scan_ids:" in llm_formatted_output
-        assert "UUID strings" in llm_formatted_output
-        assert "(required)" in llm_formatted_output
-
-    def test_relay_tool_with_airs_error_states(self, airs_inline_scan_relay_data):
-        """Test RelayTool with AIRS error states for monitoring."""
-        airs_error_states = [
-            ToolState.ENABLED,
-            ToolState.DISABLED_ERROR,  # AIRS API errors
-            ToolState.DISABLED_SECURITY_RISK  # Security policy violations
-        ]
-
-        for state in airs_error_states:
-            airs_inline_scan_relay_data["state"] = state
-            airs_relay_tool = RelayTool(**airs_inline_scan_relay_data)
-
-            assert airs_relay_tool.state == state
-
-            # format_for_llm should work regardless of AIRS tool state
-            llm_formatted_output = airs_relay_tool.format_for_llm()
-            assert "Tool: pan_inline_scan" in llm_formatted_output
-
-
-class TestAIRSToolIntegration:
-    """Integration tests for AIRS tool classes working together."""
-
-    def test_all_airs_tool_types_with_same_data(self):
-        """Test that all tool types can be created with compatible AIRS data."""
-        common_airs_data = {
-            "name": "pan_integrated_airs_scanner",
-            "description": "Integrated AIRS scanning and analysis platform",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "content": {
-                        "type": "string",
-                        "description": "Content to scan for security threats via AIRS API"
-                    }
-                }
-            },
-            "server_name": "aisecurity-scan-server",
-            "state": ToolState.ENABLED
-        }
-
-        # Create all AIRS tool types
-        base_airs_tool = BaseTool(**common_airs_data)
-        internal_airs_tool = InternalTool(**common_airs_data)
-        relay_airs_tool = RelayTool(**common_airs_data)
-
-        # All should have same basic AIRS properties
-        airs_tools = [base_airs_tool, internal_airs_tool, relay_airs_tool]
-        for tool in airs_tools:
-            assert tool.name == "pan_integrated_airs_scanner"
-            assert "AIRS" in tool.description
-            assert tool.server_name == "aisecurity-scan-server"
-            assert tool.state == ToolState.ENABLED
-
-    def test_airs_tool_conversion_compatibility_for_mcp_relay(self):
-        """Test compatibility between AIRS tool types for MCP relay."""
-        # Create an InternalTool for AIRS scanning
-        internal_airs_tool = InternalTool(
-            name="pan_airs_converter",
-            description="AIRS threat analysis tool for MCP relay testing",
-            inputSchema={"type": "string"},
-            server_name="aisecurity-scan-server"
-        )
-
-        # Convert to MCP tool for relay
-        mcp_airs_tool = internal_airs_tool.to_mcp_tool()
-
-        # Create RelayTool from same AIRS data
-        relay_airs_tool = RelayTool(
-            name=internal_airs_tool.name,
-            description=internal_airs_tool.description,
-            inputSchema=internal_airs_tool.inputSchema,
-            server_name=internal_airs_tool.server_name,
-            state=internal_airs_tool.state
-        )
-
-        # Both should produce same MCP tool for relay
-        relay_mcp_airs_tool = relay_airs_tool.to_mcp_tool()
-
-        assert mcp_airs_tool.name == relay_mcp_airs_tool.name
-        assert mcp_airs_tool.description == relay_mcp_airs_tool.description
-        assert mcp_airs_tool.inputSchema == relay_mcp_airs_tool.inputSchema
-
-    def test_airs_tool_serialization_for_persistent_storage(self):
-        """Test AIRS tool serialization for persistent storage."""
-        original_airs_tool = InternalTool(
-            name="pan_airs_serialization_scanner",
-            description="AIRS scanner for serialization and storage testing",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "ai_profile": {
-                        "type": "string",
-                        "description": "AI Profile for AIRS scanning configuration"
-                    },
-                    "scan_content": {
-                        "type": "object",
-                        "description": "Content object for AIRS threat analysis"
+                        "items": {"type": "object"},
+                        "maxItems": 5
                     }
                 }
             },
@@ -582,78 +58,580 @@ class TestAIRSToolIntegration:
             state=ToolState.ENABLED
         )
 
-        # Serialize to dict for storage
-        airs_tool_dict = original_airs_tool.to_dict()
-
-        # Create new AIRS tool from dict (simulating database retrieval)
-        recreated_airs_tool = InternalTool(
-            name=airs_tool_dict["name"],
-            description=airs_tool_dict["description"],
-            inputSchema=airs_tool_dict["input_schema"],
-            server_name=airs_tool_dict["server_name"],
-            state=airs_tool_dict["state"]
-        )
-
-        # Should have same hash (same AIRS content)
-        assert original_airs_tool.md5_hash == recreated_airs_tool.md5_hash
-        assert original_airs_tool.name == recreated_airs_tool.name
-        assert original_airs_tool.state == recreated_airs_tool.state
-
-    def test_airs_tool_inheritance_chain_for_mcp_server(self):
-        """Test the inheritance chain of AIRS tool classes for MCP server operations."""
-        airs_mcp_tool = InternalTool(
-            name="pan_airs_mcp_scanner",
-            description="AIRS MCP server scanning tool",
-            inputSchema={},
-            server_name="aisecurity-scan-server"
-        )
-
-        # Should be instance of all parent classes for MCP integration
-        assert isinstance(airs_mcp_tool, InternalTool)
-        assert isinstance(airs_mcp_tool, BaseTool)
-        assert isinstance(airs_mcp_tool, types.Tool)
-
-        # Should have methods from all levels for AIRS functionality
-        assert hasattr(airs_mcp_tool, "compute_hash")  # InternalTool for registry
-        assert hasattr(airs_mcp_tool, "get_argument_descriptions")  # BaseTool for docs
-        assert hasattr(airs_mcp_tool, "to_mcp_tool")  # BaseTool for MCP relay
-
-        # Should have all required attributes for AIRS operations
-        assert hasattr(airs_mcp_tool, "md5_hash")  # InternalTool for deduplication
-        assert hasattr(airs_mcp_tool, "server_name")  # BaseTool for server tracking
-        assert hasattr(airs_mcp_tool, "state")  # BaseTool for AIRS state management
-        assert hasattr(airs_mcp_tool, "name")  # types.Tool for identification
-        assert hasattr(airs_mcp_tool, "description")  # types.Tool for documentation
-        assert hasattr(airs_mcp_tool, "inputSchema")  # types.Tool for MCP understanding
-
-    def test_airs_tool_with_simple_scan_content_type(self):
-        """Test AIRS tools with SimpleScanContent TypedDict structure."""
-        # Test tool that matches SimpleScanContent from pan_security_server.py
-        simple_scan_content_schema = {
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string",
-                    "description": "User prompt for AIRS scanning"
-                },
-                "response": {
-                    "type": "string",
-                    "description": "AI model response for AIRS scanning"
+    @pytest.fixture
+    def airs_scan_results_tool(self):
+        """Create AIRS scan results tool for testing."""
+        return InternalTool(
+            name="pan_get_scan_results",
+            description="Retrieve Scan Results with a list of Scan IDs",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "scan_ids": {
+                        "type": "array",
+                        "items": {"type": "string", "format": "uuid"}
+                    }
                 }
-            }
-        }
-
-        airs_simple_tool = RelayTool(
-            name="pan_simple_content_scanner",
-            description="AIRS tool using SimpleScanContent structure",
-            inputSchema=simple_scan_content_schema,
-            server_name="aisecurity-scan-server"
+            },
+            server_name="aisecurity-scan-server",
+            state=ToolState.ENABLED
         )
 
-        llm_output = airs_simple_tool.format_for_llm()
+    @pytest.fixture
+    def disabled_airs_tool(self):
+        """Create disabled AIRS tool for testing."""
+        return InternalTool(
+            name="pan_disabled_scanner",
+            description="Disabled AIRS scanning tool",
+            inputSchema={"type": "object"},
+            server_name="aisecurity-scan-server",
+            state=ToolState.DISABLED_ERROR
+        )
 
-        assert "pan_simple_content_scanner" in llm_output
-        assert "SimpleScanContent" in airs_simple_tool.description
-        assert "prompt:" in llm_output
-        assert "response:" in llm_output
-        assert "AIRS scanning" in llm_output
+    @pytest.fixture
+    def secondary_server_tool(self):
+        """Create tool from secondary server for testing."""
+        return InternalTool(
+            name="pan_secondary_scanner",
+            description="Scanner on secondary server",
+            inputSchema={"type": "object"},
+            server_name="aisecurity-backup-server",
+            state=ToolState.ENABLED
+        )
+
+    @pytest.fixture
+    def sample_airs_tool_list(self, airs_inline_scan_tool, airs_batch_scan_tool,
+                             airs_scan_results_tool, disabled_airs_tool, secondary_server_tool):
+        """Create list of sample AIRS tools for testing."""
+        return [
+            airs_inline_scan_tool,
+            airs_batch_scan_tool,
+            airs_scan_results_tool,
+            disabled_airs_tool,
+            secondary_server_tool
+        ]
+
+    def test_tool_registry_initialization_default_expiry(self):
+        """Test ToolRegistry initialization with default cache expiry."""
+        registry = ToolRegistry()
+
+        assert registry._internal_tool_list == []
+        assert registry._available_tool_list == []
+        assert registry._hash_to_tool_map == {}
+        assert registry._last_updated_at == UNIX_EPOCH
+        assert registry._expiry_in_seconds == TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT
+
+    def test_tool_registry_initialization_custom_expiry(self):
+        """Test ToolRegistry initialization with custom cache expiry."""
+        custom_expiry = 1800  # 30 minutes
+        registry = ToolRegistry(tool_registry_cache_expiry=custom_expiry)
+
+        assert registry._expiry_in_seconds == custom_expiry
+
+    def test_tool_registry_initialization_invalid_expiry(self):
+        """Test ToolRegistry initialization with invalid cache expiry."""
+        with pytest.raises(AISecMcpRelayException) as exc_info:
+            ToolRegistry(tool_registry_cache_expiry=0)
+
+        assert exc_info.value.error_type == ErrorType.VALIDATION_ERROR
+        assert "positive integer" in str(exc_info.value)
+
+        with pytest.raises(AISecMcpRelayException) as exc_info:
+            ToolRegistry(tool_registry_cache_expiry=-100)
+
+        assert exc_info.value.error_type == ErrorType.VALIDATION_ERROR
+
+    @patch('pan_aisecurity_mcp.mcp_relay.tool_registry.logger')
+    def test_tool_registry_initialization_logging(self, mock_logger):
+        """Test that initialization logs cache expiry information."""
+        expiry = 3600
+        ToolRegistry(tool_registry_cache_expiry=expiry)
+
+        mock_logger.info.assert_called_with(
+            "Tool registry initialized with cache expiry %d seconds.",
+            expiry
+        )
+
+    def test_update_registry_with_airs_tools(self, sample_airs_tool_list):
+        """Test updating registry with AIRS tools."""
+        registry = ToolRegistry()
+
+        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+            mock_now = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.now.return_value = mock_now
+
+            registry.update_registry(sample_airs_tool_list)
+
+        assert len(registry._internal_tool_list) == 5
+        assert len(registry._available_tool_list) == 4  # 4 enabled tools
+        assert len(registry._hash_to_tool_map) == 5
+        assert registry._last_updated_at == mock_now
+
+    def test_update_registry_none_tool_list(self):
+        """Test updating registry with None tool list."""
+        registry = ToolRegistry()
+
+        with pytest.raises(AISecMcpRelayException) as exc_info:
+            registry.update_registry(None)
+
+        assert exc_info.value.error_type == ErrorType.VALIDATION_ERROR
+        assert "cannot be None" in str(exc_info.value)
+
+    def test_update_registry_invalid_tool_list_type(self):
+        """Test updating registry with invalid tool list type."""
+        registry = ToolRegistry()
+
+        with pytest.raises(AISecMcpRelayException) as exc_info:
+            registry.update_registry("not_a_list")
+
+        assert exc_info.value.error_type == ErrorType.VALIDATION_ERROR
+        assert "must be a list" in str(exc_info.value)
+
+    def test_update_registry_exception_handling(self, sample_airs_tool_list):
+        """Test registry update exception handling."""
+        registry = ToolRegistry()
+
+        # Mock an exception during update
+        with patch.object(registry, '_update_available_tools', side_effect=Exception("Test error")):
+            with pytest.raises(AISecMcpRelayException) as exc_info:
+                registry.update_registry(sample_airs_tool_list)
+
+            assert exc_info.value.error_type == ErrorType.TOOL_REGISTRY_ERROR
+            assert "Failed to update tool registry" in str(exc_info.value)
+
+    @patch('pan_aisecurity_mcp.mcp_relay.tool_registry.logger')
+    def test_update_registry_logging(self, mock_logger, sample_airs_tool_list):
+        """Test that registry update logs information."""
+        registry = ToolRegistry()
+
+        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+            mock_now = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.now.return_value = mock_now
+
+            registry.update_registry(sample_airs_tool_list)
+
+        mock_logger.info.assert_called_with(
+            "Tool registry updated at %s with %d tools (%d available).",
+            mock_now,
+            5,  # total tools
+            4   # available tools
+        )
+
+    def test_update_available_tools_filtering(self, sample_airs_tool_list):
+        """Test that _update_available_tools filters enabled tools correctly."""
+        registry = ToolRegistry()
+        registry._internal_tool_list = sample_airs_tool_list
+
+        registry._update_available_tools()
+
+        # Should only include enabled tools
+        assert len(registry._available_tool_list) == 4
+        for tool in registry._available_tool_list:
+            assert tool.state == ToolState.ENABLED
+
+        # Check specific tools are included
+        tool_names = [tool.name for tool in registry._available_tool_list]
+        assert "pan_inline_scan" in tool_names
+        assert "pan_batch_scan" in tool_names
+        assert "pan_get_scan_results" in tool_names
+        assert "pan_secondary_scanner" in tool_names
+        assert "pan_disabled_scanner" not in tool_names
+
+    def test_update_hash_mapping(self, sample_airs_tool_list):
+        """Test that _update_hash_mapping creates correct hash mappings."""
+        registry = ToolRegistry()
+        registry._internal_tool_list = sample_airs_tool_list
+
+        registry._update_hash_mapping()
+
+        assert len(registry._hash_to_tool_map) == 5
+
+        # Verify each tool can be found by its hash
+        for tool in sample_airs_tool_list:
+            assert tool.md5_hash in registry._hash_to_tool_map
+            assert registry._hash_to_tool_map[tool.md5_hash] == tool
+
+    def test_update_hash_mapping_with_empty_hash(self):
+        """Test hash mapping with tool that has empty hash."""
+        registry = ToolRegistry()
+
+        # Create tool with empty hash (mock scenario)
+        tool_with_empty_hash = InternalTool(
+            name="test_tool",
+            description="Test tool",
+            inputSchema={},
+            server_name="test_server"
+        )
+        tool_with_empty_hash.md5_hash = ""  # Force empty hash
+
+        registry._internal_tool_list = [tool_with_empty_hash]
+        registry._update_hash_mapping()
+
+        # Tool with empty hash should not be in mapping
+        assert len(registry._hash_to_tool_map) == 0
+
+    def test_is_registry_outdated_fresh(self):
+        """Test is_registry_outdated with fresh registry."""
+        registry = ToolRegistry(tool_registry_cache_expiry=3600)  # 1 hour
+
+        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+            mock_now = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.now.return_value = mock_now
+
+            registry._last_updated_at = mock_now - timedelta(minutes=30)  # 30 minutes ago
+
+            assert not registry.is_registry_outdated()
+
+    def test_is_registry_outdated_expired(self):
+        """Test is_registry_outdated with expired registry."""
+        registry = ToolRegistry(tool_registry_cache_expiry=3600)  # 1 hour
+
+        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+            mock_now = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.now.return_value = mock_now
+
+            registry._last_updated_at = mock_now - timedelta(hours=2)  # 2 hours ago
+
+            assert registry.is_registry_outdated()
+
+    def test_is_registry_outdated_exactly_expired(self):
+        """Test is_registry_outdated at exact expiry time."""
+        registry = ToolRegistry(tool_registry_cache_expiry=3600)  # 1 hour
+
+        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+            mock_now = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.now.return_value = mock_now
+
+            registry._last_updated_at = mock_now - timedelta(seconds=3600)  # Exactly 1 hour ago
+
+            assert not registry.is_registry_outdated()  # Should be false at exact boundary
+
+    def test_get_available_tools(self, sample_airs_tool_list):
+        """Test retrieving available tools."""
+        registry = ToolRegistry()
+        registry.update_registry(sample_airs_tool_list)
+
+        available_tools = registry.get_available_tools()
+
+        assert len(available_tools) == 4
+        for tool in available_tools:
+            assert tool.state == ToolState.ENABLED
+
+        # Verify it returns the same list reference for efficiency
+        assert available_tools is registry._available_tool_list
+
+    def test_get_all_tools(self, sample_airs_tool_list):
+        """Test retrieving all tools regardless of state."""
+        registry = ToolRegistry()
+        registry.update_registry(sample_airs_tool_list)
+
+        all_tools = registry.get_all_tools()
+
+        assert len(all_tools) == 5
+        assert all_tools is registry._internal_tool_list
+
+        # Should include both enabled and disabled tools
+        states = [tool.state for tool in all_tools]
+        assert ToolState.ENABLED in states
+        assert ToolState.DISABLED_ERROR in states
+
+    def test_get_tool_by_hash_found(self, airs_inline_scan_tool):
+        """Test retrieving tool by hash when tool exists."""
+        registry = ToolRegistry()
+        registry.update_registry([airs_inline_scan_tool])
+
+        found_tool = registry.get_tool_by_hash(airs_inline_scan_tool.md5_hash)
+
+        assert found_tool is not None
+        assert found_tool == airs_inline_scan_tool
+        assert found_tool.name == "pan_inline_scan"
+
+    def test_get_tool_by_hash_not_found(self):
+        """Test retrieving tool by hash when tool doesn't exist."""
+        registry = ToolRegistry()
+        registry.update_registry([])
+
+        found_tool = registry.get_tool_by_hash("nonexistent_hash")
+
+        assert found_tool is None
+
+    def test_get_tool_by_hash_empty_hash(self):
+        """Test retrieving tool by empty hash."""
+        registry = ToolRegistry()
+
+        found_tool = registry.get_tool_by_hash("")
+
+        assert found_tool is None
+
+    def test_get_tool_by_hash_invalid_type(self):
+        """Test retrieving tool by hash with invalid type."""
+        registry = ToolRegistry()
+
+        with pytest.raises(AISecMcpRelayException) as exc_info:
+            registry.get_tool_by_hash(123)
+
+        assert exc_info.value.error_type == ErrorType.VALIDATION_ERROR
+        assert "must be a string" in str(exc_info.value)
+
+    def test_get_server_tool_map(self, sample_airs_tool_list):
+        """Test grouping tools by server name."""
+        registry = ToolRegistry()
+        registry.update_registry(sample_airs_tool_list)
+
+        server_tool_map = registry.get_server_tool_map()
+
+        assert len(server_tool_map) == 2  # Two different servers
+        assert "aisecurity-scan-server" in server_tool_map
+        assert "aisecurity-backup-server" in server_tool_map
+
+        # Check main server tools
+        main_server_tools = server_tool_map["aisecurity-scan-server"]
+        assert len(main_server_tools) == 4
+        tool_names = [tool.name for tool in main_server_tools]
+        assert "pan_inline_scan" in tool_names
+        assert "pan_batch_scan" in tool_names
+        assert "pan_get_scan_results" in tool_names
+        assert "pan_disabled_scanner" in tool_names
+
+        # Check backup server tools
+        backup_server_tools = server_tool_map["aisecurity-backup-server"]
+        assert len(backup_server_tools) == 1
+        assert backup_server_tools[0].name == "pan_secondary_scanner"
+
+    def test_get_server_tool_map_empty_registry(self):
+        """Test server tool map with empty registry."""
+        registry = ToolRegistry()
+
+        server_tool_map = registry.get_server_tool_map()
+
+        assert server_tool_map == {}
+
+    def test_get_server_tool_map_json(self, sample_airs_tool_list):
+        """Test getting server tool map as JSON."""
+        registry = ToolRegistry()
+        registry.update_registry(sample_airs_tool_list)
+
+        json_map = registry.get_server_tool_map_json()
+
+        # Should be valid JSON
+        parsed_json = json.loads(json_map)
+
+        assert "aisecurity-scan-server" in parsed_json
+        assert "aisecurity-backup-server" in parsed_json
+
+        # Each server's tools should be JSON strings
+        main_server_tools_json = parsed_json["aisecurity-scan-server"]
+        main_server_tools = json.loads(main_server_tools_json)
+
+        assert len(main_server_tools) == 4
+        assert all("name" in tool for tool in main_server_tools)
+        assert all("md5_hash" in tool for tool in main_server_tools)
+
+    def test_get_server_tool_map_json_serialization_error(self, sample_airs_tool_list):
+        """Test server tool map JSON with serialization error."""
+        registry = ToolRegistry()
+        registry.update_registry(sample_airs_tool_list)
+
+        # Mock to_dict to raise exception
+        with patch.object(InternalTool, 'to_dict', side_effect=AttributeError("Test error")):
+            with pytest.raises(AISecMcpRelayException) as exc_info:
+                registry.get_server_tool_map_json()
+
+            assert exc_info.value.error_type == ErrorType.TOOL_REGISTRY_ERROR
+            assert "Tool serialization failed" in str(exc_info.value)
+
+    def test_get_registry_stats(self, sample_airs_tool_list):
+        """Test getting registry statistics."""
+        registry = ToolRegistry(tool_registry_cache_expiry=1800)
+
+        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+            mock_now = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.now.return_value = mock_now
+
+            registry.update_registry(sample_airs_tool_list)
+
+            # Make registry appear outdated
+            registry._last_updated_at = mock_now - timedelta(seconds=2000)
+
+            stats = registry.get_registry_stats()
+
+        assert stats["total_tools"] == 5
+        assert stats["available_tools"] == 4
+        assert stats["server_count"] == 2
+        assert stats["last_updated"] == registry._last_updated_at.isoformat()
+        assert stats["is_outdated"] == True
+        assert stats["cache_expiry_seconds"] == 1800
+
+    def test_get_registry_stats_fresh_registry(self, sample_airs_tool_list):
+        """Test registry statistics with fresh registry."""
+        registry = ToolRegistry()
+
+        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+            mock_now = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.now.return_value = mock_now
+
+            registry.update_registry(sample_airs_tool_list)
+
+            stats = registry.get_registry_stats()
+
+        assert stats["is_outdated"] == False
+
+    def test_clear_registry(self, sample_airs_tool_list):
+        """Test clearing the registry."""
+        registry = ToolRegistry()
+        registry.update_registry(sample_airs_tool_list)
+
+        # Verify registry has data
+        assert len(registry._internal_tool_list) > 0
+        assert len(registry._available_tool_list) > 0
+        assert len(registry._hash_to_tool_map) > 0
+        assert registry._last_updated_at != UNIX_EPOCH
+
+        registry.clear_registry()
+
+        # Verify registry is cleared
+        assert len(registry._internal_tool_list) == 0
+        assert len(registry._available_tool_list) == 0
+        assert len(registry._hash_to_tool_map) == 0
+        assert registry._last_updated_at == UNIX_EPOCH
+
+    @patch('pan_aisecurity_mcp.mcp_relay.tool_registry.logger')
+    def test_clear_registry_logging(self, mock_logger):
+        """Test that clear registry logs information."""
+        registry = ToolRegistry()
+        registry.clear_registry()
+
+        mock_logger.info.assert_called_with("Tool registry cleared.")
+
+    def test_len_operator(self, sample_airs_tool_list):
+        """Test __len__ operator for registry."""
+        registry = ToolRegistry()
+
+        assert len(registry) == 0
+
+        registry.update_registry(sample_airs_tool_list)
+
+        assert len(registry) == 5
+
+    def test_contains_operator(self, airs_inline_scan_tool):
+        """Test __contains__ operator for registry."""
+        registry = ToolRegistry()
+
+        assert airs_inline_scan_tool.md5_hash not in registry
+
+        registry.update_registry([airs_inline_scan_tool])
+
+        assert airs_inline_scan_tool.md5_hash in registry
+        assert "nonexistent_hash" not in registry
+
+    def test_repr_operator(self, sample_airs_tool_list):
+        """Test __repr__ operator for registry."""
+        registry = ToolRegistry()
+
+        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+            mock_now = datetime(2024, 1, 15, 12, 0, 0)
+            mock_datetime.now.return_value = mock_now
+
+            registry.update_registry(sample_airs_tool_list)
+
+            repr_str = repr(registry)
+
+        expected_str = (
+            f"ToolRegistry(total_tools=5, "
+            f"available_tools=4, "
+            f"last_updated={mock_now})"
+        )
+        assert repr_str == expected_str
+
+    def test_registry_workflow_integration(self, sample_airs_tool_list):
+        """Test complete registry workflow integration."""
+        registry = ToolRegistry(tool_registry_cache_expiry=60)
+
+        # Initial state
+        assert len(registry) == 0
+        assert registry.is_registry_outdated()
+
+        # Update registry
+        registry.update_registry(sample_airs_tool_list)
+
+        # Verify registry state
+        assert len(registry) == 5
+        assert len(registry.get_available_tools()) == 4
+        assert not registry.is_registry_outdated()
+
+        # Test tool lookup
+        inline_scan_tool = next(
+            tool for tool in sample_airs_tool_list
+            if tool.name == "pan_inline_scan"
+        )
+        found_tool = registry.get_tool_by_hash(inline_scan_tool.md5_hash)
+        assert found_tool == inline_scan_tool
+
+        # Test server mapping
+        server_map = registry.get_server_tool_map()
+        assert len(server_map) == 2
+
+        # Test statistics
+        stats = registry.get_registry_stats()
+        assert stats["total_tools"] == 5
+        assert stats["available_tools"] == 4
+
+        # Clear and verify
+        registry.clear_registry()
+        assert len(registry) == 0
+        assert len(registry.get_available_tools()) == 0
+
+    def test_concurrent_updates_scenario(self, sample_airs_tool_list):
+        """Test scenario with multiple registry updates."""
+        registry = ToolRegistry()
+
+        # First update
+        registry.update_registry(sample_airs_tool_list[:3])
+        assert len(registry) == 3
+
+        # Second update with different tools
+        registry.update_registry(sample_airs_tool_list[3:])
+        assert len(registry) == 2
+
+        # Third update with all tools
+        registry.update_registry(sample_airs_tool_list)
+        assert len(registry) == 5
+
+        # Verify hash mappings are correct after multiple updates
+        for tool in sample_airs_tool_list:
+            found_tool = registry.get_tool_by_hash(tool.md5_hash)
+            assert found_tool == tool
+
+    def test_performance_considerations_large_tool_set(self):
+        """Test registry performance with large tool set."""
+        registry = ToolRegistry()
+
+        # Create large set of tools
+        large_tool_list = []
+        for i in range(100):
+            tool = InternalTool(
+                name=f"pan_tool_{i}",
+                description=f"AIRS tool number {i}",
+                inputSchema={"type": "object"},
+                server_name=f"server_{i % 10}",  # 10 different servers
+                state=ToolState.ENABLED if i % 2 == 0 else ToolState.DISABLED_ERROR
+            )
+            large_tool_list.append(tool)
+
+        # Update registry
+        registry.update_registry(large_tool_list)
+
+        # Verify operations are efficient
+        assert len(registry) == 100
+        assert len(registry.get_available_tools()) == 50  # Half are enabled
+
+        # Hash lookup should be O(1)
+        first_tool = large_tool_list[0]
+        found_tool = registry.get_tool_by_hash(first_tool.md5_hash)
+        assert found_tool == first_tool
+
+        # Server mapping should group correctly
+        server_map = registry.get_server_tool_map()
+        assert len(server_map) == 10  # 10 different servers
+        for server_tools in server_map.values():
+            assert len(server_tools) == 10  # 10 tools per server
