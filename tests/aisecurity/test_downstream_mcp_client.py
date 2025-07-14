@@ -29,7 +29,7 @@ def airs_server_config():
         "args": ["run", "fastmcp", "run", "-t", "sse"],
         "env": {
             "PANW_AI_PROFILE_NAME": "default_ai_profile",
-            "PANW_AI_SEC_API_KEY": "test_api_key_12345",
+            "PANW_AI_SEC_API_KEY": "fake-api-key-for-testing",
             "PANW_AI_SEC_API_ENDPOINT": "https://ai-runtime-security.api.paloaltonetworks.com"
         }
     }
@@ -43,7 +43,7 @@ def airs_backup_server_config():
         "args": ["-m", "pan_aisecurity_mcp.mcp_server.pan_security_server"],
         "env": {
             "PANW_AI_PROFILE_ID": "backup_profile_uuid",
-            "PANW_AI_SEC_API_KEY": "backup_api_key_67890"
+            "PANW_AI_SEC_API_KEY": "fake-api-key-for-testing"
         }
     }
 
@@ -217,7 +217,7 @@ class TestDownstreamMcpClient:
                 expected_env = {
                     "EXISTING_VAR": "existing_value",
                     "PANW_AI_PROFILE_NAME": "default_ai_profile",
-                    "PANW_AI_SEC_API_KEY": "test_api_key_12345",
+                    "PANW_AI_SEC_API_KEY": "fake-api-key-for-testing",
                     "PANW_AI_SEC_API_ENDPOINT": "https://ai-runtime-security.api.paloaltonetworks.com"
                 }
 
