@@ -1,0 +1,37 @@
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pan-aisecurity-mcp"
+version = "0.1.0"
+description = "Palo Alto Networks AI Security MCP Relay"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pan-aisecurity",
+    "fastmcp",
+    "python-dotenv",
+    "mcp",
+    "pydantic",
+    "tenacity",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pan_aisecurity_mcp*"]
