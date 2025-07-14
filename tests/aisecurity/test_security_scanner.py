@@ -44,7 +44,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         )
 
         # Create mock scan result
-        mock_scan_result = Mock()
+        mock_scan_result = AsyncMock()
         mock_scan_result.isError = mock_call_tool_result.isError
         mock_scan_result.content = mock_call_tool_result.content
 
@@ -107,7 +107,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"}
+        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-news"}
 
         # Execute the test
         result = await mock_scanner._perform_scan("scan_request", params)
