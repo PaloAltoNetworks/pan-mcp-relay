@@ -225,6 +225,127 @@ class TestPanSecurityRelay:
         mock_validate_limits.assert_called_once()
         mock_disable_duplicates.assert_called_once()
         relay.tool_registry.update_registry.assert_called_once()
+    
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.cleanup', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.list_tools', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.initialize', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.PanSecurityRelay._prepare_tool', new_callable=AsyncMock)
+    async def test_collect_tools_from_servers_success(self, mock_prepare_tool, mock_initialize, 
+                                                    mock_list_tools, mock_cleanup, relay):
+        """Test successful collection of tools from multiple servers."""
+        servers_config = {
+            "benign_text_processor": {
+                "command": "python",
+                "args": ["/path/to/benign_text_processor.py"]
+            },
+            "benign_data_analyzer": {
+                "command": "python", 
+                "args": ["/path/to/benign_data_analyzer.py"],
+                "env": {"hidden_mode": "enabled"}
+            }
+        }
+        
+        text_processor_tools = [types.Tool(
+            name="summarize_text_content", description="Summarize text content", inputSchema={}
+        )]
+        data_analyzer_tools = [types.Tool(
+            name="analyze_data_patterns", description="Analyze data patterns", inputSchema={}
+        )]
+        
+        mock_initialize.return_value = None
+        mock_cleanup.return_value = None
+        mock_list_tools.side_effect = [text_processor_tools, data_analyzer_tools]
+        mock_prepare_tool.return_value = None
+        
+        result = await relay._collect_tools_from_servers(servers_config)
+        
+        assert mock_initialize.call_count == 2
+        assert mock_cleanup.call_count == 2
+        assert mock_list_tools.call_count == 2
+        assert mock_prepare_tool.call_count == 2
+        
+        assert "benign_text_processor" in relay.servers
+        assert "benign_data_analyzer" in relay.servers
+        
+        mock_prepare_tool.assert_any_call("benign_text_processor", text_processor_tools, False, [])
+        mock_prepare_tool.assert_any_call("benign_data_analyzer", data_analyzer_tools, True, [])
+
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.cleanup', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.list_tools', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.initialize', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.PanSecurityRelay._prepare_tool', new_callable=AsyncMock)
+    async def test_collect_tools_from_servers_empty_config(self, mock_prepare_tool, mock_initialize,
+                                                        mock_list_tools, mock_cleanup, relay):
+        """Test collection of tools with empty server configuration."""
+        servers_config = {}
+        
+        result = await relay._collect_tools_from_servers(servers_config)
+        
+        assert result == []
+        assert len(relay.servers) == 0
+        mock_initialize.assert_not_called()
+        mock_list_tools.assert_not_called()
+        mock_prepare_tool.assert_not_called()
+        mock_cleanup.assert_not_called()
+
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.cleanup', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.list_tools', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.initialize', new_callable=AsyncMock)
+    async def test_collect_tools_from_servers_initialization_failure(self, mock_initialize, 
+                                                                mock_list_tools, mock_cleanup, relay):
+        """Test collection of tools when server initialization fails."""
+        servers_config = {
+            "benign_text_processor": {
+                "command": "python",
+                "args": ["/path/to/benign_text_processor.py"]
+            }
+        }
+        
+        mock_initialize.side_effect = Exception("Server initialization failed")
+        mock_cleanup.return_value = None
+        
+        with pytest.raises(Exception) as exc_info:
+            await relay._collect_tools_from_servers(servers_config)
+        
+        assert "Server initialization failed" in str(exc_info.value)
+        mock_list_tools.assert_not_called()
+
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.cleanup', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.list_tools', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.initialize', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.PanSecurityRelay._prepare_tool', new_callable=AsyncMock)
+    async def test_collect_tools_from_servers_hidden_mode_detection(self, mock_prepare_tool, mock_initialize,
+                                                                mock_list_tools, mock_cleanup, relay):
+        """Test hidden mode detection in server configuration."""
+        servers_config = {
+            "benign_text_processor": {
+                "command": "python",
+                "args": ["/path/to/benign_text_processor.py"],
+                "env": {"hidden_mode": "enabled"}
+            },
+            "benign_data_analyzer": {
+                "command": "python",
+                "args": ["/path/to/benign_data_analyzer.py"],
+                "env": {"hidden_mode": "disabled"}
+            },
+            "benign_file_processor": {
+                "command": "python",
+                "args": ["/path/to/benign_file_processor.py"]
+            }
+        }
+        
+        mock_tools = [types.Tool(name="test_tool", description="Test tool", inputSchema={})]
+        mock_initialize.return_value = None
+        mock_cleanup.return_value = None
+        mock_list_tools.return_value = mock_tools
+        mock_prepare_tool.return_value = None
+        
+        await relay._collect_tools_from_servers(servers_config)
+        
+        mock_prepare_tool.assert_any_call("benign_text_processor", mock_tools, True, [])  # hidden_mode enabled
+        mock_prepare_tool.assert_any_call("benign_data_analyzer", mock_tools, False, [])  # hidden_mode disabled
+        mock_prepare_tool.assert_any_call("benign_file_processor", mock_tools, False, [])  # no env config
+
 
     def test_validate_tool_limits_success(self):
         """Test tool limits validation with acceptable number of tools."""
@@ -351,6 +472,37 @@ class TestPanSecurityRelay:
         
         assert len(tool_list) == 1
         assert tool_list[0].state == ToolState.DISABLED_HIDDEN_MODE
+    
+    async def test_prepare_tool_existing_tool_reuse_state(self, relay):
+        """Test tool preparation when tool already exists in registry with cached state."""
+
+        existing_tool = InternalTool(
+            name="summarize_text_content",
+            description="Summarize text content from documents", 
+            inputSchema={},
+            annotations=None, 
+            server_name="previous_text_processor", 
+            state=ToolState.DISABLED_SECURITY_RISK
+        )
+        
+        relay.tool_registry = Mock()
+        relay.tool_registry.get_tool_by_hash.return_value = existing_tool
+        
+        benign_tool = types.Tool(
+            name="summarize_text_content", 
+            description="Summarize text content from documents", 
+            inputSchema={}
+        )
+        tool_list = []
+        
+        await relay._prepare_tool("benign_text_processor", [benign_tool], False, tool_list)
+        
+        assert len(tool_list) == 1
+        assert tool_list[0].state == ToolState.DISABLED_SECURITY_RISK
+        assert tool_list[0].server_name == "benign_text_processor"
+
+        relay.tool_registry.get_tool_by_hash.assert_called_once()
+
 
     async def test_prepare_tool_empty_tool_list(self, relay):
         """Test tool preparation with empty tool list."""
