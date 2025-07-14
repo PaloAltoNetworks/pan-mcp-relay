@@ -94,7 +94,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         )
 
         # Create mock scan result
-        mock_scan_result = Mock()
+        mock_scan_result = AsyncMock()
         mock_scan_result.isError = mock_call_tool_result.isError
         mock_scan_result.content = mock_call_tool_result.content
 
