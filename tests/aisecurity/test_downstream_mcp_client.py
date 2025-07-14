@@ -20,7 +20,6 @@ from tenacity import RetryError
 
 from pan_aisecurity_mcp.mcp_relay.downstream_mcp_client import DownstreamMcpClient
 
-
 @pytest.fixture
 def airs_server_config():
     """Create AIRS server configuration matching pan_security_server.py setup."""
