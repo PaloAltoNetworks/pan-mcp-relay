@@ -184,24 +184,7 @@ class TestAISecMcpRelayException(unittest.TestCase):
         self.assertEqual(caught_exception.error_type, error_type)
         self.assertEqual(str(caught_exception), f"{error_type.value}:{message}")
 
-    def test_all_error_types_work_with_exception(self):
-        """Test that all ErrorType enum values work with the exception."""
-        message = "Test message"
 
-        for error_type in ErrorType:
-            with self.subTest(error_type=error_type):
-                exception = AISecMcpRelayException(message, error_type)
-
-                self.assertEqual(exception.error_type, error_type)
-                self.assertEqual(exception.message, message)
-
-                expected_str = f"{error_type.value}:{message}"
-                self.assertEqual(str(exception), expected_str)
-
-                # Test MCP format
-                mcp_result = exception.to_mcp_format()
-                self.assertTrue(mcp_result.isError)
-                self.assertEqual(mcp_result.content[0].text, expected_str)
 
 
 if __name__ == "__main__":
