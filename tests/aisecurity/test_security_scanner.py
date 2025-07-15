@@ -142,7 +142,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
 
         # Test parameters
         params = {
-            "prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"
+            "prompt": "This is test prompt"
         }
 
         # Execute the test and expect exception
@@ -214,7 +214,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
 
         # Test parameters
         params = {
-            "prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"
+            "prompt": "This is test prompt"
         }
 
         # Execute the test
