@@ -141,7 +141,7 @@ python pan_aisecurity_mcp/mcp_relay/pan_security_relay.py \
 Additional configuration options:
 
 ```sh
-python pan_aisecurity_mcp/mcp_relay/pan_security_relay.py \
+python -m pan_aisecurity_mcp/mcp_relay/pan_security_relay \
   --config-file=config/servers_config.json \
   --transport=stdio \
   --host=127.0.0.1 \
