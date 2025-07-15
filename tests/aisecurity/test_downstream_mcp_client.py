@@ -2,7 +2,7 @@
 Unit tests for the downstream_mcp_client module.
 
 This module contains comprehensive tests for the DownstreamMcpClient class using
-simulated external tools for testing purposes.
+simulated tools for testing purposes.
 """
 
 import pytest

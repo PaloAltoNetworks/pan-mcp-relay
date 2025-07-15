@@ -2,7 +2,7 @@
 Unit tests for the tool_registry module.
 
 This module contains comprehensive tests for the ToolRegistry class using
-simulated external tools for testing purposes.
+simulated tools for testing purposes.
 """
 
 import pytest

@@ -3,14 +3,15 @@ Unit tests for the tool module.
 
 This module contains comprehensive tests for the tool classes including
 ToolState enum, BaseTool, InternalTool, and RelayTool classes using
-external simulated tools for testing purposes.
+simulated tools for testing purposes.
 """
 
 import pytest
 import json
 import hashlib
-from unittest.mock import MagicMock, patch
-
+from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
+from typing import List
 import mcp.types as types
 from pydantic import ValidationError
 
@@ -458,10 +459,10 @@ class TestInternalTool:
     def test_internal_tool_hash_with_unicode_content(self):
         """Test hash computation with unicode characters in tool fields."""
         unicode_tool = InternalTool(
-            name="echo_tool_国际化",
-            description="International echo tool with unicode support: 📢 🔊",
+            name="echo_tool_Überprüfung",  # ü is Unicode
+            description="Internationales Echo-Tool mit Unicode-Unterstützung: 📢 🔊 ä ö ü ß",
             inputSchema={"type": "string"},
-            server_name="global_server_服务器"
+            server_name="globaler_Server_Prüfung"  # ü is Unicode
         )
 
         assert unicode_tool.md5_hash != ""
@@ -469,10 +470,10 @@ class TestInternalTool:
 
         # Hash should be reproducible for unicode content
         unicode_tool_2 = InternalTool(
-            name="echo_tool_国际化",
-            description="International echo tool with unicode support: 📢 🔊",
+            name="echo_tool_Überprüfung",
+            description="Internationales Echo-Tool mit Unicode-Unterstützung: 📢 🔊 ä ö ü ß",
             inputSchema={"type": "string"},
-            server_name="global_server_服务器"
+            server_name="globaler_Server_Prüfung"
         )
 
         assert unicode_tool.md5_hash == unicode_tool_2.md5_hash
@@ -1358,9 +1359,9 @@ class TestExternalToolValidationAndErrorHandling:
         # Test with various international character sets
         international_tools = [
             {
-                "name": "echo_tool_中文",
-                "description": "中文回声工具用于测试国际化支持",
-                "server_name": "中文服务器"
+                "name": "echo_tool_Überprüfung",
+                "description": "Deutsches Echo-Werkzeug für Internationalisierungs-Unterstützung mit ä ö ü ß",
+                "server_name": "Deutscher_Prüfungs_Server"
             },
             {
                 "name": "echo_tool_العربية",
