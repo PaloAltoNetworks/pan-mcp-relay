@@ -1,9 +1,8 @@
 """
-Unit tests for the tool_registry module in AI Security MCP Relay.
+Unit tests for the tool_registry module.
 
-This module contains comprehensive tests for the ToolRegistry class used in
-AI Runtime Security (AIRS) MCP server operations for managing and caching
-internal tools with expiration-based refresh logic.
+This module contains comprehensive tests for the ToolRegistry class using
+simulated external tools for testing purposes.
 """
 
 import pytest
@@ -19,96 +18,121 @@ from pan_aisecurity_mcp.mcp_relay.constants import TOOL_REGISTRY_CACHE_EXPIRY_DE
 
 
 class TestToolRegistry:
-    """Test suite for ToolRegistry class used in AIRS tool management."""
+    """Test suite for ToolRegistry class using simulated external tools."""
 
     @pytest.fixture
-    def airs_inline_scan_tool(self):
-        """Create AIRS inline scan tool for testing."""
+    def echo_tool(self):
+        """Create echo tool that returns input."""
         return InternalTool(
-            name="pan_inline_scan",
-            description="Submit a single Prompt and/or Model-Response to be scanned synchronously",
+            name="echo_tool",
+            description="Echo back the input text",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "prompt": {"type": "string"},
-                    "response": {"type": "string"}
-                }
+                    "text": {"type": "string"}
+                },
+                "required": ["text"]
             },
-            server_name="aisecurity-scan-server",
+            server_name="test-server",
             state=ToolState.ENABLED
         )
 
     @pytest.fixture
-    def airs_batch_scan_tool(self):
-        """Create AIRS batch scan tool for testing."""
+    def error_all_tool(self):
+        """Create tool that always returns isError=True."""
         return InternalTool(
-            name="pan_batch_scan",
-            description="Submit multiple Scan Contents for asynchronous batch scanning",
+            name="error_all_tool",
+            description="Always returns error response",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "scan_contents": {
-                        "type": "array",
-                        "items": {"type": "object"},
-                        "maxItems": 5
+                    "input": {"type": "string"}
+                }
+            },
+            server_name="test-server",
+            state=ToolState.ENABLED
+        )
+
+    @pytest.fixture
+    def slow_response_tool(self):
+        """Create latency simulator tool."""
+        return InternalTool(
+            name="slow_response_tool",
+            description="Simulates slow response with intentional delay",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "delay_seconds": {"type": "number", "minimum": 0},
+                    "content": {"type": "string"}
+                }
+            },
+            server_name="performance-server",
+            state=ToolState.ENABLED
+        )
+
+    @pytest.fixture
+    def fixed_response_tool(self):
+        """Create tool that returns fixed preset results."""
+        return InternalTool(
+            name="fixed_response_tool",
+            description="Returns predefined fixed response",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "response_type": {
+                        "type": "string",
+                        "enum": ["success", "warning", "info"]
                     }
                 }
             },
-            server_name="aisecurity-scan-server",
+            server_name="mock-server",
             state=ToolState.ENABLED
         )
 
     @pytest.fixture
-    def airs_scan_results_tool(self):
-        """Create AIRS scan results tool for testing."""
+    def passthrough_tool(self):
+        """Create tool that does nothing and returns directly."""
         return InternalTool(
-            name="pan_get_scan_results",
-            description="Retrieve Scan Results with a list of Scan IDs",
+            name="passthrough_tool",
+            description="Passthrough tool that returns input unchanged",
+            inputSchema={
+                "type": "object",
+                "properties": {}
+            },
+            server_name="utility-server",
+            state=ToolState.ENABLED
+        )
+
+    @pytest.fixture
+    def failing_tool(self):
+        """Create tool that intentionally fails or throws exceptions."""
+        return InternalTool(
+            name="failing_tool",
+            description="Intentionally fails with errors",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "scan_ids": {
-                        "type": "array",
-                        "items": {"type": "string", "format": "uuid"}
+                    "failure_mode": {
+                        "type": "string",
+                        "enum": ["exception", "error_response", "timeout"]
                     }
                 }
             },
-            server_name="aisecurity-scan-server",
-            state=ToolState.ENABLED
-        )
-
-    @pytest.fixture
-    def disabled_airs_tool(self):
-        """Create disabled AIRS tool for testing."""
-        return InternalTool(
-            name="pan_disabled_scanner",
-            description="Disabled AIRS scanning tool",
-            inputSchema={"type": "object"},
-            server_name="aisecurity-scan-server",
+            server_name="test-server",
             state=ToolState.DISABLED_ERROR
         )
 
     @pytest.fixture
-    def secondary_server_tool(self):
-        """Create tool from secondary server for testing."""
-        return InternalTool(
-            name="pan_secondary_scanner",
-            description="Scanner on secondary server",
-            inputSchema={"type": "object"},
-            server_name="aisecurity-backup-server",
-            state=ToolState.ENABLED
-        )
-
-    @pytest.fixture
-    def sample_airs_tool_list(self, airs_inline_scan_tool, airs_batch_scan_tool,
-                             airs_scan_results_tool, disabled_airs_tool, secondary_server_tool):
-        """Create list of sample AIRS tools for testing."""
+    def sample_tool_list(self, echo_tool, error_all_tool, slow_response_tool,
+                         fixed_response_tool, passthrough_tool, failing_tool):
+        """Create list of sample tools for testing."""
         return [
-            airs_inline_scan_tool,
-            airs_batch_scan_tool,
-            airs_scan_results_tool,
-            disabled_airs_tool,
-            secondary_server_tool
+            echo_tool,
+            error_all_tool,
+            slow_response_tool,
+            fixed_response_tool,
+            passthrough_tool,
+            failing_tool
         ]
 
     def test_tool_registry_initialization_default_expiry(self):
@@ -152,19 +176,19 @@ class TestToolRegistry:
             expiry
         )
 
-    def test_update_registry_with_airs_tools(self, sample_airs_tool_list):
-        """Test updating registry with AIRS tools."""
+    def test_update_registry_with_simulated_tools(self, sample_tool_list):
+        """Test updating registry with simulated tools."""
         registry = ToolRegistry()
 
         with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
-            registry.update_registry(sample_airs_tool_list)
+            registry.update_registry(sample_tool_list)
 
-        assert len(registry._internal_tool_list) == 5
-        assert len(registry._available_tool_list) == 4  # 4 enabled tools
-        assert len(registry._hash_to_tool_map) == 5
+        assert len(registry._internal_tool_list) == 6
+        assert len(registry._available_tool_list) == 5  # 5 enabled tools (failing_tool is disabled)
+        assert len(registry._hash_to_tool_map) == 6
         assert registry._last_updated_at == mock_now
 
     def test_update_registry_none_tool_list(self):
@@ -187,20 +211,20 @@ class TestToolRegistry:
         assert exc_info.value.error_type == ErrorType.VALIDATION_ERROR
         assert "must be a list" in str(exc_info.value)
 
-    def test_update_registry_exception_handling(self, sample_airs_tool_list):
+    def test_update_registry_exception_handling(self, sample_tool_list):
         """Test registry update exception handling."""
         registry = ToolRegistry()
 
         # Mock an exception during update
         with patch.object(registry, '_update_available_tools', side_effect=Exception("Test error")):
             with pytest.raises(AISecMcpRelayException) as exc_info:
-                registry.update_registry(sample_airs_tool_list)
+                registry.update_registry(sample_tool_list)
 
             assert exc_info.value.error_type == ErrorType.TOOL_REGISTRY_ERROR
             assert "Failed to update tool registry" in str(exc_info.value)
 
     @patch('pan_aisecurity_mcp.mcp_relay.tool_registry.logger')
-    def test_update_registry_logging(self, mock_logger, sample_airs_tool_list):
+    def test_update_registry_logging(self, mock_logger, sample_tool_list):
         """Test that registry update logs information."""
         registry = ToolRegistry()
 
@@ -208,46 +232,47 @@ class TestToolRegistry:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
-            registry.update_registry(sample_airs_tool_list)
+            registry.update_registry(sample_tool_list)
 
         mock_logger.info.assert_called_with(
             "Tool registry updated at %s with %d tools (%d available).",
             mock_now,
-            5,  # total tools
-            4   # available tools
+            6,  # total tools
+            5  # available tools (excluding failing_tool which is disabled)
         )
 
-    def test_update_available_tools_filtering(self, sample_airs_tool_list):
+    def test_update_available_tools_filtering(self, sample_tool_list):
         """Test that _update_available_tools filters enabled tools correctly."""
         registry = ToolRegistry()
-        registry._internal_tool_list = sample_airs_tool_list
+        registry._internal_tool_list = sample_tool_list
 
         registry._update_available_tools()
 
         # Should only include enabled tools
-        assert len(registry._available_tool_list) == 4
+        assert len(registry._available_tool_list) == 5
         for tool in registry._available_tool_list:
             assert tool.state == ToolState.ENABLED
 
-        # Check specific tools are included
+        # Check specific tools are included/excluded
         tool_names = [tool.name for tool in registry._available_tool_list]
-        assert "pan_inline_scan" in tool_names
-        assert "pan_batch_scan" in tool_names
-        assert "pan_get_scan_results" in tool_names
-        assert "pan_secondary_scanner" in tool_names
-        assert "pan_disabled_scanner" not in tool_names
+        assert "echo_tool" in tool_names
+        assert "error_all_tool" in tool_names
+        assert "slow_response_tool" in tool_names
+        assert "fixed_response_tool" in tool_names
+        assert "passthrough_tool" in tool_names
+        assert "failing_tool" not in tool_names  # This one is disabled
 
-    def test_update_hash_mapping(self, sample_airs_tool_list):
+    def test_update_hash_mapping(self, sample_tool_list):
         """Test that _update_hash_mapping creates correct hash mappings."""
         registry = ToolRegistry()
-        registry._internal_tool_list = sample_airs_tool_list
+        registry._internal_tool_list = sample_tool_list
 
         registry._update_hash_mapping()
 
-        assert len(registry._hash_to_tool_map) == 5
+        assert len(registry._hash_to_tool_map) == 6
 
         # Verify each tool can be found by its hash
-        for tool in sample_airs_tool_list:
+        for tool in sample_tool_list:
             assert tool.md5_hash in registry._hash_to_tool_map
             assert registry._hash_to_tool_map[tool.md5_hash] == tool
 
@@ -306,28 +331,28 @@ class TestToolRegistry:
 
             assert not registry.is_registry_outdated()  # Should be false at exact boundary
 
-    def test_get_available_tools(self, sample_airs_tool_list):
+    def test_get_available_tools(self, sample_tool_list):
         """Test retrieving available tools."""
         registry = ToolRegistry()
-        registry.update_registry(sample_airs_tool_list)
+        registry.update_registry(sample_tool_list)
 
         available_tools = registry.get_available_tools()
 
-        assert len(available_tools) == 4
+        assert len(available_tools) == 5
         for tool in available_tools:
             assert tool.state == ToolState.ENABLED
 
         # Verify it returns the same list reference for efficiency
         assert available_tools is registry._available_tool_list
 
-    def test_get_all_tools(self, sample_airs_tool_list):
+    def test_get_all_tools(self, sample_tool_list):
         """Test retrieving all tools regardless of state."""
         registry = ToolRegistry()
-        registry.update_registry(sample_airs_tool_list)
+        registry.update_registry(sample_tool_list)
 
         all_tools = registry.get_all_tools()
 
-        assert len(all_tools) == 5
+        assert len(all_tools) == 6
         assert all_tools is registry._internal_tool_list
 
         # Should include both enabled and disabled tools
@@ -335,16 +360,16 @@ class TestToolRegistry:
         assert ToolState.ENABLED in states
         assert ToolState.DISABLED_ERROR in states
 
-    def test_get_tool_by_hash_found(self, airs_inline_scan_tool):
+    def test_get_tool_by_hash_found(self, echo_tool):
         """Test retrieving tool by hash when tool exists."""
         registry = ToolRegistry()
-        registry.update_registry([airs_inline_scan_tool])
+        registry.update_registry([echo_tool])
 
-        found_tool = registry.get_tool_by_hash(airs_inline_scan_tool.md5_hash)
+        found_tool = registry.get_tool_by_hash(echo_tool.md5_hash)
 
         assert found_tool is not None
-        assert found_tool == airs_inline_scan_tool
-        assert found_tool.name == "pan_inline_scan"
+        assert found_tool == echo_tool
+        assert found_tool.name == "echo_tool"
 
     def test_get_tool_by_hash_not_found(self):
         """Test retrieving tool by hash when tool doesn't exist."""
@@ -373,30 +398,31 @@ class TestToolRegistry:
         assert exc_info.value.error_type == ErrorType.VALIDATION_ERROR
         assert "must be a string" in str(exc_info.value)
 
-    def test_get_server_tool_map(self, sample_airs_tool_list):
+    def test_get_server_tool_map(self, sample_tool_list):
         """Test grouping tools by server name."""
         registry = ToolRegistry()
-        registry.update_registry(sample_airs_tool_list)
+        registry.update_registry(sample_tool_list)
 
         server_tool_map = registry.get_server_tool_map()
 
-        assert len(server_tool_map) == 2  # Two different servers
-        assert "aisecurity-scan-server" in server_tool_map
-        assert "aisecurity-backup-server" in server_tool_map
+        assert len(server_tool_map) == 4  # Four different servers
+        assert "test-server" in server_tool_map
+        assert "performance-server" in server_tool_map
+        assert "mock-server" in server_tool_map
+        assert "utility-server" in server_tool_map
 
-        # Check main server tools
-        main_server_tools = server_tool_map["aisecurity-scan-server"]
-        assert len(main_server_tools) == 4
-        tool_names = [tool.name for tool in main_server_tools]
-        assert "pan_inline_scan" in tool_names
-        assert "pan_batch_scan" in tool_names
-        assert "pan_get_scan_results" in tool_names
-        assert "pan_disabled_scanner" in tool_names
+        # Check test-server tools (echo_tool, error_all_tool, failing_tool)
+        test_server_tools = server_tool_map["test-server"]
+        assert len(test_server_tools) == 3
+        tool_names = [tool.name for tool in test_server_tools]
+        assert "echo_tool" in tool_names
+        assert "error_all_tool" in tool_names
+        assert "failing_tool" in tool_names
 
-        # Check backup server tools
-        backup_server_tools = server_tool_map["aisecurity-backup-server"]
-        assert len(backup_server_tools) == 1
-        assert backup_server_tools[0].name == "pan_secondary_scanner"
+        # Check other servers have one tool each
+        assert len(server_tool_map["performance-server"]) == 1
+        assert len(server_tool_map["mock-server"]) == 1
+        assert len(server_tool_map["utility-server"]) == 1
 
     def test_get_server_tool_map_empty_registry(self):
         """Test server tool map with empty registry."""
@@ -406,31 +432,33 @@ class TestToolRegistry:
 
         assert server_tool_map == {}
 
-    def test_get_server_tool_map_json(self, sample_airs_tool_list):
+    def test_get_server_tool_map_json(self, sample_tool_list):
         """Test getting server tool map as JSON."""
         registry = ToolRegistry()
-        registry.update_registry(sample_airs_tool_list)
+        registry.update_registry(sample_tool_list)
 
         json_map = registry.get_server_tool_map_json()
 
         # Should be valid JSON
         parsed_json = json.loads(json_map)
 
-        assert "aisecurity-scan-server" in parsed_json
-        assert "aisecurity-backup-server" in parsed_json
+        assert "test-server" in parsed_json
+        assert "performance-server" in parsed_json
+        assert "mock-server" in parsed_json
+        assert "utility-server" in parsed_json
 
         # Each server's tools should be JSON strings
-        main_server_tools_json = parsed_json["aisecurity-scan-server"]
-        main_server_tools = json.loads(main_server_tools_json)
+        test_server_tools_json = parsed_json["test-server"]
+        test_server_tools = json.loads(test_server_tools_json)
 
-        assert len(main_server_tools) == 4
-        assert all("name" in tool for tool in main_server_tools)
-        assert all("md5_hash" in tool for tool in main_server_tools)
+        assert len(test_server_tools) == 3
+        assert all("name" in tool for tool in test_server_tools)
+        assert all("md5_hash" in tool for tool in test_server_tools)
 
-    def test_get_server_tool_map_json_serialization_error(self, sample_airs_tool_list):
+    def test_get_server_tool_map_json_serialization_error(self, sample_tool_list):
         """Test server tool map JSON with serialization error."""
         registry = ToolRegistry()
-        registry.update_registry(sample_airs_tool_list)
+        registry.update_registry(sample_tool_list)
 
         # Mock to_dict to raise exception
         with patch.object(InternalTool, 'to_dict', side_effect=AttributeError("Test error")):
@@ -440,7 +468,7 @@ class TestToolRegistry:
             assert exc_info.value.error_type == ErrorType.TOOL_REGISTRY_ERROR
             assert "Tool serialization failed" in str(exc_info.value)
 
-    def test_get_registry_stats(self, sample_airs_tool_list):
+    def test_get_registry_stats(self, sample_tool_list):
         """Test getting registry statistics."""
         registry = ToolRegistry(tool_registry_cache_expiry=1800)
 
@@ -448,21 +476,21 @@ class TestToolRegistry:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
-            registry.update_registry(sample_airs_tool_list)
+            registry.update_registry(sample_tool_list)
 
             # Make registry appear outdated
             registry._last_updated_at = mock_now - timedelta(seconds=2000)
 
             stats = registry.get_registry_stats()
 
-        assert stats["total_tools"] == 5
-        assert stats["available_tools"] == 4
-        assert stats["server_count"] == 2
+        assert stats["total_tools"] == 6
+        assert stats["available_tools"] == 5
+        assert stats["server_count"] == 4
         assert stats["last_updated"] == registry._last_updated_at.isoformat()
         assert stats["is_outdated"] == True
         assert stats["cache_expiry_seconds"] == 1800
 
-    def test_get_registry_stats_fresh_registry(self, sample_airs_tool_list):
+    def test_get_registry_stats_fresh_registry(self, sample_tool_list):
         """Test registry statistics with fresh registry."""
         registry = ToolRegistry()
 
@@ -470,16 +498,16 @@ class TestToolRegistry:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
-            registry.update_registry(sample_airs_tool_list)
+            registry.update_registry(sample_tool_list)
 
             stats = registry.get_registry_stats()
 
         assert stats["is_outdated"] == False
 
-    def test_clear_registry(self, sample_airs_tool_list):
+    def test_clear_registry(self, sample_tool_list):
         """Test clearing the registry."""
         registry = ToolRegistry()
-        registry.update_registry(sample_airs_tool_list)
+        registry.update_registry(sample_tool_list)
 
         # Verify registry has data
         assert len(registry._internal_tool_list) > 0
@@ -503,28 +531,28 @@ class TestToolRegistry:
 
         mock_logger.info.assert_called_with("Tool registry cleared.")
 
-    def test_len_operator(self, sample_airs_tool_list):
+    def test_len_operator(self, sample_tool_list):
         """Test __len__ operator for registry."""
         registry = ToolRegistry()
 
         assert len(registry) == 0
 
-        registry.update_registry(sample_airs_tool_list)
+        registry.update_registry(sample_tool_list)
 
-        assert len(registry) == 5
+        assert len(registry) == 6
 
-    def test_contains_operator(self, airs_inline_scan_tool):
+    def test_contains_operator(self, echo_tool):
         """Test __contains__ operator for registry."""
         registry = ToolRegistry()
 
-        assert airs_inline_scan_tool.md5_hash not in registry
+        assert echo_tool.md5_hash not in registry
 
-        registry.update_registry([airs_inline_scan_tool])
+        registry.update_registry([echo_tool])
 
-        assert airs_inline_scan_tool.md5_hash in registry
+        assert echo_tool.md5_hash in registry
         assert "nonexistent_hash" not in registry
 
-    def test_repr_operator(self, sample_airs_tool_list):
+    def test_repr_operator(self, sample_tool_list):
         """Test __repr__ operator for registry."""
         registry = ToolRegistry()
 
@@ -532,18 +560,18 @@ class TestToolRegistry:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
-            registry.update_registry(sample_airs_tool_list)
+            registry.update_registry(sample_tool_list)
 
             repr_str = repr(registry)
 
         expected_str = (
-            f"ToolRegistry(total_tools=5, "
-            f"available_tools=4, "
+            f"ToolRegistry(total_tools=6, "
+            f"available_tools=5, "
             f"last_updated={mock_now})"
         )
         assert repr_str == expected_str
 
-    def test_registry_workflow_integration(self, sample_airs_tool_list):
+    def test_registry_workflow_integration(self, sample_tool_list):
         """Test complete registry workflow integration."""
         registry = ToolRegistry(tool_registry_cache_expiry=60)
 
@@ -552,53 +580,53 @@ class TestToolRegistry:
         assert registry.is_registry_outdated()
 
         # Update registry
-        registry.update_registry(sample_airs_tool_list)
+        registry.update_registry(sample_tool_list)
 
         # Verify registry state
-        assert len(registry) == 5
-        assert len(registry.get_available_tools()) == 4
+        assert len(registry) == 6
+        assert len(registry.get_available_tools()) == 5
         assert not registry.is_registry_outdated()
 
         # Test tool lookup
-        inline_scan_tool = next(
-            tool for tool in sample_airs_tool_list
-            if tool.name == "pan_inline_scan"
+        echo_tool = next(
+            tool for tool in sample_tool_list
+            if tool.name == "echo_tool"
         )
-        found_tool = registry.get_tool_by_hash(inline_scan_tool.md5_hash)
-        assert found_tool == inline_scan_tool
+        found_tool = registry.get_tool_by_hash(echo_tool.md5_hash)
+        assert found_tool == echo_tool
 
         # Test server mapping
         server_map = registry.get_server_tool_map()
-        assert len(server_map) == 2
+        assert len(server_map) == 4
 
         # Test statistics
         stats = registry.get_registry_stats()
-        assert stats["total_tools"] == 5
-        assert stats["available_tools"] == 4
+        assert stats["total_tools"] == 6
+        assert stats["available_tools"] == 5
 
         # Clear and verify
         registry.clear_registry()
         assert len(registry) == 0
         assert len(registry.get_available_tools()) == 0
 
-    def test_concurrent_updates_scenario(self, sample_airs_tool_list):
+    def test_concurrent_updates_scenario(self, sample_tool_list):
         """Test scenario with multiple registry updates."""
         registry = ToolRegistry()
 
-        # First update
-        registry.update_registry(sample_airs_tool_list[:3])
+        # First update with subset of tools
+        registry.update_registry(sample_tool_list[:3])
         assert len(registry) == 3
 
         # Second update with different tools
-        registry.update_registry(sample_airs_tool_list[3:])
-        assert len(registry) == 2
+        registry.update_registry(sample_tool_list[3:])
+        assert len(registry) == 3
 
         # Third update with all tools
-        registry.update_registry(sample_airs_tool_list)
-        assert len(registry) == 5
+        registry.update_registry(sample_tool_list)
+        assert len(registry) == 6
 
         # Verify hash mappings are correct after multiple updates
-        for tool in sample_airs_tool_list:
+        for tool in sample_tool_list:
             found_tool = registry.get_tool_by_hash(tool.md5_hash)
             assert found_tool == tool
 
@@ -606,15 +634,20 @@ class TestToolRegistry:
         """Test registry performance with large tool set."""
         registry = ToolRegistry()
 
-        # Create large set of tools
+        # Create large set of simulated tools
         large_tool_list = []
+        tool_types = ["echo", "error", "slow", "fixed", "passthrough", "failing"]
+
         for i in range(100):
+            tool_type = tool_types[i % len(tool_types)]
+            state = ToolState.ENABLED if i % 2 == 0 else ToolState.DISABLED_ERROR
+
             tool = InternalTool(
-                name=f"pan_tool_{i}",
-                description=f"AIRS tool number {i}",
+                name=f"{tool_type}_tool_{i}",
+                description=f"Simulated {tool_type} tool number {i}",
                 inputSchema={"type": "object"},
                 server_name=f"server_{i % 10}",  # 10 different servers
-                state=ToolState.ENABLED if i % 2 == 0 else ToolState.DISABLED_ERROR
+                state=state
             )
             large_tool_list.append(tool)
 
@@ -635,3 +668,58 @@ class TestToolRegistry:
         assert len(server_map) == 10  # 10 different servers
         for server_tools in server_map.values():
             assert len(server_tools) == 10  # 10 tools per server
+
+    def test_mixed_tool_states_handling(self):
+        """Test registry handling of tools with different states."""
+        registry = ToolRegistry()
+
+        # Create tools with different states
+        enabled_tool = InternalTool(
+            name="enabled_echo_tool",
+            description="Enabled echo tool",
+            inputSchema={"type": "object"},
+            server_name="test-server",
+            state=ToolState.ENABLED
+        )
+
+        disabled_tool = InternalTool(
+            name="disabled_error_tool",
+            description="Disabled error tool",
+            inputSchema={"type": "object"},
+            server_name="test-server",
+            state=ToolState.DISABLED_ERROR
+        )
+
+        tools = [enabled_tool, disabled_tool]
+        registry.update_registry(tools)
+
+        # Test filtering
+        assert len(registry.get_all_tools()) == 2
+        assert len(registry.get_available_tools()) == 1
+        assert registry.get_available_tools()[0].state == ToolState.ENABLED
+
+        # Test hash mapping includes all tools regardless of state
+        assert len(registry._hash_to_tool_map) == 2
+        assert enabled_tool.md5_hash in registry._hash_to_tool_map
+        assert disabled_tool.md5_hash in registry._hash_to_tool_map
+
+    def test_tool_registry_edge_cases(self):
+        """Test edge cases for tool registry operations."""
+        registry = ToolRegistry()
+
+        # Test with empty tool list
+        registry.update_registry([])
+        assert len(registry) == 0
+        assert len(registry.get_available_tools()) == 0
+        assert registry.get_server_tool_map() == {}
+
+        # Test statistics with empty registry
+        stats = registry.get_registry_stats()
+        assert stats["total_tools"] == 0
+        assert stats["available_tools"] == 0
+        assert stats["server_count"] == 0
+
+        # Test JSON serialization with empty registry
+        json_map = registry.get_server_tool_map_json()
+        parsed = json.loads(json_map)
+        assert parsed == {}

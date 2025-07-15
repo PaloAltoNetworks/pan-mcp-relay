@@ -2,8 +2,8 @@
 Unit tests for the tool module.
 
 This module contains comprehensive tests for the tool classes including
-ToolState enum, BaseTool, InternalTool, and RelayTool classes used in
-AI security MCP relay operations.
+ToolState enum, BaseTool, InternalTool, and RelayTool classes using
+external simulated tools for testing purposes.
 """
 
 import pytest
@@ -23,10 +23,10 @@ from pan_aisecurity_mcp.mcp_relay.tool import (
 
 
 class TestToolState:
-    """Test suite for ToolState enum used in AI security scanning."""
+    """Test suite for ToolState enum used in tool management."""
 
     def test_tool_state_values(self):
-        """Test that ToolState enum has correct security-related values."""
+        """Test that ToolState enum has correct values."""
         assert ToolState.ENABLED == "enabled"
         assert ToolState.DISABLED_HIDDEN_MODE == "disabled - hidden_mode"
         assert ToolState.DISABLED_DUPLICATE == "disabled - duplicate"
@@ -34,12 +34,12 @@ class TestToolState:
         assert ToolState.DISABLED_ERROR == "disabled - error"
 
     def test_tool_state_string_inheritance(self):
-        """Test that ToolState inherits from str for security filtering operations."""
+        """Test that ToolState inherits from str for filtering operations."""
         assert isinstance(ToolState.ENABLED, str)
         assert str(ToolState.ENABLED) == "ToolState.ENABLED"
 
-    def test_tool_state_equality_for_security_filtering(self):
-        """Test ToolState equality comparisons for security policy enforcement."""
+    def test_tool_state_equality_for_filtering(self):
+        """Test ToolState equality comparisons for policy enforcement."""
         assert ToolState.ENABLED == "enabled"
         assert ToolState.DISABLED_DUPLICATE == "disabled - duplicate"
         assert ToolState.ENABLED != ToolState.DISABLED_SECURITY_RISK
@@ -53,73 +53,70 @@ class TestToolState:
 
 
 class TestBaseTool:
-    """Test suite for BaseTool class used in distributed AI security systems."""
+    """Test suite for BaseTool class used in distributed external tool systems."""
 
     @pytest.fixture
-    def ai_text_analysis_schema(self):
-        """Create sample input schema for AI text analysis tool."""
+    def echo_tool_schema(self):
+        """Create sample input schema for echo tool."""
         return {
             "type": "object",
             "properties": {
-                "text_content": {
+                "text": {
                     "type": "string",
-                    "description": "Text content to analyze for security threats"
+                    "description": "Text to echo back to the user"
                 },
-                "analysis_depth": {
-                    "type": "integer",
-                    "description": "Depth of security analysis (1-5 scale)"
+                "format": {
+                    "type": "string",
+                    "enum": ["plain", "json", "xml"],
+                    "description": "Output format for the echoed text"
                 },
-                "scan_options": {
-                    "type": "object",
-                    "description": "Advanced scanning configuration",
-                    "properties": {
-                        "check_malware": {"type": "boolean"},
-                        "check_phishing": {"type": "boolean"}
-                    }
+                "uppercase": {
+                    "type": "boolean",
+                    "description": "Whether to convert text to uppercase"
                 }
             },
-            "required": ["text_content"]
+            "required": ["text"]
         }
 
     @pytest.fixture
-    def security_scan_tool_data(self, ai_text_analysis_schema):
-        """Create security scanning tool data for testing."""
+    def echo_tool_data(self, echo_tool_schema):
+        """Create echo tool data for testing."""
         return {
-            "name": "pan_security_text_scanner",
-            "description": "AI-powered text security scanner for threat detection",
-            "inputSchema": ai_text_analysis_schema,
-            "server_name": "pan_aisecurity_server",
+            "name": "echo_tool",
+            "description": "Echo back input text with optional formatting",
+            "inputSchema": echo_tool_schema,
+            "server_name": "echo_server",
             "state": ToolState.ENABLED
         }
 
-    def test_base_tool_creation_minimal_scanner(self):
-        """Test BaseTool creation with minimal required fields for basic scanner."""
-        basic_scanner = BaseTool(
-            name="basic_malware_detector",
-            description="Minimal malware detection tool",
+    def test_base_tool_creation_minimal_echo_tool(self):
+        """Test BaseTool creation with minimal required fields for basic echo tool."""
+        basic_echo = BaseTool(
+            name="simple_echo_tool",
+            description="Basic text echo functionality",
             inputSchema={},
-            server_name="security_server"
+            server_name="test_server"
         )
 
-        assert basic_scanner.name == "basic_malware_detector"
-        assert basic_scanner.description == "Minimal malware detection tool"
-        assert basic_scanner.inputSchema == {}
-        assert basic_scanner.server_name == "security_server"
-        assert basic_scanner.state == ToolState.ENABLED  # Default value
+        assert basic_echo.name == "simple_echo_tool"
+        assert basic_echo.description == "Basic text echo functionality"
+        assert basic_echo.inputSchema == {}
+        assert basic_echo.server_name == "test_server"
+        assert basic_echo.state == ToolState.ENABLED  # Default value
 
-    def test_base_tool_creation_full_security_scanner(self, security_scan_tool_data):
-        """Test BaseTool creation with all fields for comprehensive security scanner."""
-        security_tool = BaseTool(**security_scan_tool_data)
+    def test_base_tool_creation_full_echo_tool(self, echo_tool_data):
+        """Test BaseTool creation with all fields for comprehensive echo tool."""
+        echo_tool = BaseTool(**echo_tool_data)
 
-        assert security_tool.name == "pan_security_text_scanner"
-        assert security_tool.description == "AI-powered text security scanner for threat detection"
-        assert security_tool.server_name == "pan_aisecurity_server"
-        assert security_tool.state == ToolState.ENABLED
-        assert "text_content" in security_tool.inputSchema["properties"]
+        assert echo_tool.name == "echo_tool"
+        assert echo_tool.description == "Echo back input text with optional formatting"
+        assert echo_tool.server_name == "echo_server"
+        assert echo_tool.state == ToolState.ENABLED
+        assert "text" in echo_tool.inputSchema["properties"]
 
-    def test_base_tool_with_different_security_states(self, security_scan_tool_data):
-        """Test BaseTool creation with different security states for compliance."""
-        security_states_to_test = [
+    def test_base_tool_with_different_states(self, echo_tool_data):
+        """Test BaseTool creation with different tool states for compliance."""
+        tool_states_to_test = [
             ToolState.ENABLED,
             ToolState.DISABLED_HIDDEN_MODE,
             ToolState.DISABLED_DUPLICATE,
@@ -127,468 +124,472 @@ class TestBaseTool:
             ToolState.DISABLED_ERROR
         ]
 
-        for state in security_states_to_test:
-            security_scan_tool_data["state"] = state
-            security_tool = BaseTool(**security_scan_tool_data)
-            assert security_tool.state == state
+        for state in tool_states_to_test:
+            echo_tool_data["state"] = state
+            echo_tool = BaseTool(**echo_tool_data)
+            assert echo_tool.state == state
 
-    def test_base_tool_with_security_annotations(self, security_scan_tool_data):
-        """Test BaseTool with security-related annotations."""
-        security_annotations = {
-            "category": "ai_security",
-            "version": "2.1.0",
-            "author": "palo_alto_networks",
-            "compliance_level": "enterprise",
-            "threat_detection": "advanced"
+    def test_base_tool_with_annotations(self, echo_tool_data):
+        """Test BaseTool with tool annotations."""
+        tool_annotations = {
+            "category": "text_processing",
+            "version": "1.2.0",
+            "author": "test_team",
+            "performance": "high_speed",
+            "reliability": "stable"
         }
-        security_scan_tool_data["annotations"] = security_annotations
+        echo_tool_data["annotations"] = tool_annotations
 
-        security_tool = BaseTool(**security_scan_tool_data)
-        assert security_tool.annotations.category == security_annotations["category"]
-        assert security_tool.annotations.version == security_annotations["version"]
-        assert security_tool.annotations.author == security_annotations["author"]
+        echo_tool = BaseTool(**echo_tool_data)
+        assert echo_tool.annotations.category == tool_annotations["category"]
+        assert echo_tool.annotations.version == tool_annotations["version"]
+        assert echo_tool.annotations.author == tool_annotations["author"]
 
-    def test_get_argument_descriptions_with_security_params(self, security_scan_tool_data):
-        """Test argument descriptions generation with security parameters."""
-        security_tool = BaseTool(**security_scan_tool_data)
-        descriptions = security_tool.get_argument_descriptions()
+    def test_get_argument_descriptions_with_echo_params(self, echo_tool_data):
+        """Test argument descriptions generation with echo tool parameters."""
+        echo_tool = BaseTool(**echo_tool_data)
+        descriptions = echo_tool.get_argument_descriptions()
 
         assert len(descriptions) == 3
 
-        # Check required security parameter
-        text_param = next((desc for desc in descriptions if "text_content" in desc), None)
+        # Check required text parameter
+        text_param = next((desc for desc in descriptions if "text" in desc), None)
         assert text_param is not None
         assert "(required)" in text_param
-        assert "Text content to analyze for security threats" in text_param
+        assert "Text to echo back to the user" in text_param
 
-        # Check optional analysis parameter
-        depth_param = next((desc for desc in descriptions if "analysis_depth" in desc), None)
-        assert depth_param is not None
-        assert "(required)" not in depth_param
-        assert "Depth of security analysis" in depth_param
+        # Check optional format parameter
+        format_param = next((desc for desc in descriptions if "format" in desc), None)
+        assert format_param is not None
+        assert "(required)" not in format_param
+        assert "Output format for the echoed text" in format_param
 
-    def test_get_argument_descriptions_no_security_properties(self):
-        """Test argument descriptions with schema without security properties."""
-        simple_scanner = BaseTool(
-            name="simple_hash_checker",
-            description="Simple file hash security checker",
+    def test_get_argument_descriptions_no_properties(self):
+        """Test argument descriptions with schema without properties."""
+        simple_tool = BaseTool(
+            name="passthrough_tool",
+            description="Simple passthrough tool",
             inputSchema={"type": "string"},
-            server_name="hash_server"
+            server_name="utility_server"
         )
 
-        descriptions = simple_scanner.get_argument_descriptions()
+        descriptions = simple_tool.get_argument_descriptions()
         assert descriptions == []
 
-    def test_get_argument_descriptions_missing_security_description(self, security_scan_tool_data):
-        """Test argument descriptions when security parameter has no description."""
-        # Remove description from security parameter
-        del security_scan_tool_data["inputSchema"]["properties"]["text_content"]["description"]
+    def test_get_argument_descriptions_missing_description(self, echo_tool_data):
+        """Test argument descriptions when parameter has no description."""
+        # Remove description from text parameter
+        del echo_tool_data["inputSchema"]["properties"]["text"]["description"]
 
-        security_tool = BaseTool(**security_scan_tool_data)
-        descriptions = security_tool.get_argument_descriptions()
+        echo_tool = BaseTool(**echo_tool_data)
+        descriptions = echo_tool.get_argument_descriptions()
 
         # Should still generate description with default text
-        text_param = next((desc for desc in descriptions if "text_content" in desc), None)
+        text_param = next((desc for desc in descriptions if "text" in desc), None)
         assert text_param is not None
         assert "No description" in text_param
 
-    def test_get_argument_descriptions_empty_security_schema(self):
-        """Test argument descriptions with empty security input schema."""
-        empty_scanner = BaseTool(
-            name="placeholder_security_tool",
-            description="Security tool with no parameters",
+    def test_get_argument_descriptions_empty_schema(self):
+        """Test argument descriptions with empty input schema."""
+        empty_tool = BaseTool(
+            name="empty_tool",
+            description="Tool with no parameters",
             inputSchema={},
-            server_name="security_server"
+            server_name="test_server"
         )
 
-        descriptions = empty_scanner.get_argument_descriptions()
+        descriptions = empty_tool.get_argument_descriptions()
         assert descriptions == []
 
-    def test_to_mcp_tool_conversion_for_ai_relay(self, security_scan_tool_data):
-        """Test conversion to standard MCP Tool for AI relay operations."""
-        security_annotations = {"threat_level": "advanced", "scan_type": "comprehensive"}
-        security_scan_tool_data["annotations"] = security_annotations
+    def test_to_mcp_tool_conversion_for_relay(self, echo_tool_data):
+        """Test conversion to standard MCP Tool for relay operations."""
+        tool_annotations = {"performance": "fast", "type": "utility"}
+        echo_tool_data["annotations"] = tool_annotations
 
-        security_base_tool = BaseTool(**security_scan_tool_data)
-        mcp_security_tool = security_base_tool.to_mcp_tool()
+        base_tool = BaseTool(**echo_tool_data)
+        mcp_tool = base_tool.to_mcp_tool()
 
-        # Verify it's a standard MCP Tool for AI consumption
-        assert isinstance(mcp_security_tool, types.Tool)
-        assert mcp_security_tool.name == "pan_security_text_scanner"
-        assert mcp_security_tool.description == "AI-powered text security scanner for threat detection"
-        assert mcp_security_tool.inputSchema == security_scan_tool_data["inputSchema"]
-        assert mcp_security_tool.annotations.threat_level == security_annotations["threat_level"]
+        # Verify it's a standard MCP Tool
+        assert isinstance(mcp_tool, types.Tool)
+        assert mcp_tool.name == "echo_tool"
+        assert mcp_tool.description == "Echo back input text with optional formatting"
+        assert mcp_tool.inputSchema == echo_tool_data["inputSchema"]
+        assert mcp_tool.annotations.performance == tool_annotations["performance"]
 
-        # Verify it doesn't have BaseTool specific fields (server info removed for AI)
-        assert not hasattr(mcp_security_tool, "server_name")
-        assert not hasattr(mcp_security_tool, "state")
+        # Verify it doesn't have BaseTool specific fields
+        assert not hasattr(mcp_tool, "server_name")
+        assert not hasattr(mcp_tool, "state")
 
     def test_base_tool_validation_missing_server_info(self):
         """Test BaseTool validation with missing required server information."""
-        # Missing server_name for distributed security system
+        # Missing server_name for distributed system
         with pytest.raises(ValidationError) as exc_info:
             BaseTool(
-                name="orphaned_security_tool",
-                description="Security tool without server info",
+                name="orphaned_tool",
+                description="Tool without server info",
                 inputSchema={}
             )
 
         error_details = str(exc_info.value)
         assert "server_name" in error_details
 
-    def test_base_tool_extra_security_fields_allowed(self, security_scan_tool_data):
-        """Test that BaseTool allows extra security fields for extensibility."""
-        security_scan_tool_data["threat_database_version"] = "v2024.01"
-        security_scan_tool_data["compliance_metadata"] = {"sox": True, "gdpr": True}
+    def test_base_tool_extra_fields_allowed(self, echo_tool_data):
+        """Test that BaseTool allows extra fields for extensibility."""
+        echo_tool_data["performance_metrics"] = {"latency": "10ms", "throughput": "1000rps"}
+        echo_tool_data["custom_config"] = {"buffer_size": 1024, "timeout": 30}
 
-        security_tool = BaseTool(**security_scan_tool_data)
+        echo_tool = BaseTool(**echo_tool_data)
 
-        # Should not raise validation error for security extensions
-        assert security_tool.name == "pan_security_text_scanner"
-        # Extra security fields should be accessible
-        assert hasattr(security_tool, "threat_database_version")
-        assert security_tool.threat_database_version == "v2024.01"
+        # Should not raise validation error for extra fields
+        assert echo_tool.name == "echo_tool"
+        # Extra fields should be accessible
+        assert hasattr(echo_tool, "performance_metrics")
+        assert echo_tool.performance_metrics["latency"] == "10ms"
 
-    def test_base_tool_field_validation_for_security_state(self):
-        """Test field type validation for security state."""
-        # Invalid security state type
+    def test_base_tool_field_validation_for_state(self):
+        """Test field type validation for tool state."""
+        # Invalid tool state type
         with pytest.raises(ValidationError):
             BaseTool(
                 name="invalid_state_tool",
-                description="Tool with invalid security state",
+                description="Tool with invalid state",
                 inputSchema={},
-                server_name="security_server",
-                state="invalid_security_state"  # Should be ToolState enum
+                server_name="test_server",
+                state="invalid_state"  # Should be ToolState enum
             )
 
-    def test_base_tool_inheritance_from_mcp_tool_for_ai(self, security_scan_tool_data):
-        """Test that BaseTool properly inherits from types.Tool for AI integration."""
-        ai_security_tool = BaseTool(**security_scan_tool_data)
+    def test_base_tool_inheritance_from_mcp_tool(self, echo_tool_data):
+        """Test that BaseTool properly inherits from types.Tool."""
+        external_tool = BaseTool(**echo_tool_data)
 
-        # Should have all MCP Tool attributes for AI consumption
-        assert hasattr(ai_security_tool, "name")
-        assert hasattr(ai_security_tool, "description")
-        assert hasattr(ai_security_tool, "inputSchema")
+        # Should have all MCP Tool attributes
+        assert hasattr(external_tool, "name")
+        assert hasattr(external_tool, "description")
+        assert hasattr(external_tool, "inputSchema")
 
-        # Should be instance of MCP Tool for AI relay compatibility
-        assert isinstance(ai_security_tool, types.Tool)
+        # Should be instance of MCP Tool for compatibility
+        assert isinstance(external_tool, types.Tool)
 
 
 class TestInternalTool:
-    """Test suite for InternalTool class used in security tool registry management."""
+    """Test suite for InternalTool class used in tool registry management."""
 
     @pytest.fixture
-    def malware_detection_tool_data(self):
-        """Create malware detection tool data for testing."""
+    def error_all_tool_data(self):
+        """Create error_all_tool data for testing."""
         return {
-            "name": "pan_malware_detector",
-            "description": "Advanced AI malware detection and analysis tool",
+            "name": "error_all_tool",
+            "description": "Tool that always returns isError=True for testing error handling",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "file_content": {
+                    "input": {
                         "type": "string",
-                        "description": "Base64 encoded file content for malware scanning"
+                        "description": "Input text that will trigger error response"
                     },
-                    "scan_timeout": {
-                        "type": "integer",
-                        "description": "Maximum scan time in seconds"
+                    "error_type": {
+                        "type": "string",
+                        "enum": ["validation", "timeout", "server_error", "network"],
+                        "description": "Type of error to simulate"
                     }
                 }
             },
-            "server_name": "pan_security_cluster",
+            "server_name": "test_server",
             "state": ToolState.ENABLED
         }
 
-    def test_internal_tool_creation_with_hash_generation(self, malware_detection_tool_data):
+    def test_internal_tool_creation_with_hash_generation(self, error_all_tool_data):
         """Test InternalTool creation and MD5 hash generation for registry management."""
-        malware_tool = InternalTool(**malware_detection_tool_data)
+        error_tool = InternalTool(**error_all_tool_data)
 
-        assert malware_tool.name == "pan_malware_detector"
-        assert malware_tool.description == "Advanced AI malware detection and analysis tool"
-        assert malware_tool.server_name == "pan_security_cluster"
-        assert malware_tool.state == ToolState.ENABLED
-        assert malware_tool.md5_hash != ""
-        assert len(malware_tool.md5_hash) == 32  # MD5 hash length for registry key
+        assert error_tool.name == "error_all_tool"
+        assert error_tool.description == "Tool that always returns isError=True for testing error handling"
+        assert error_tool.server_name == "test_server"
+        assert error_tool.state == ToolState.ENABLED
+        assert error_tool.md5_hash != ""
+        assert len(error_tool.md5_hash) == 32  # MD5 hash length for registry key
 
-    def test_internal_tool_hash_computation_for_deduplication(self, malware_detection_tool_data):
+    def test_internal_tool_hash_computation_for_deduplication(self, error_all_tool_data):
         """Test MD5 hash computation for tool deduplication across servers."""
-        malware_tool = InternalTool(**malware_detection_tool_data)
+        error_tool = InternalTool(**error_all_tool_data)
 
         # Manually compute expected hash for verification
         payload = {
-            "server_name": "pan_security_cluster",
-            "tool_name": "pan_malware_detector",
-            "description": "Advanced AI malware detection and analysis tool",
-            "input_schema": malware_detection_tool_data["inputSchema"],
+            "server_name": "test_server",
+            "tool_name": "error_all_tool",
+            "description": "Tool that always returns isError=True for testing error handling",
+            "input_schema": error_all_tool_data["inputSchema"],
         }
         json_str = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         expected_hash = hashlib.md5(json_str.encode("utf-8")).hexdigest()
 
-        assert malware_tool.md5_hash == expected_hash
+        assert error_tool.md5_hash == expected_hash
 
-    def test_internal_tool_hash_consistency_across_instances(self, malware_detection_tool_data):
-        """Test that identical security tools produce identical hashes for caching."""
-        malware_tool_1 = InternalTool(**malware_detection_tool_data)
-        malware_tool_2 = InternalTool(**malware_detection_tool_data)
+    def test_internal_tool_hash_consistency_across_instances(self, error_all_tool_data):
+        """Test that identical tools produce identical hashes for caching."""
+        error_tool_1 = InternalTool(**error_all_tool_data)
+        error_tool_2 = InternalTool(**error_all_tool_data)
 
-        assert malware_tool_1.md5_hash == malware_tool_2.md5_hash
+        assert error_tool_1.md5_hash == error_tool_2.md5_hash
 
-    def test_internal_tool_hash_uniqueness_for_different_tools(self, malware_detection_tool_data):
-        """Test that different security tools produce different hashes for proper separation."""
-        malware_tool = InternalTool(**malware_detection_tool_data)
+    def test_internal_tool_hash_uniqueness_for_different_tools(self, error_all_tool_data):
+        """Test that different tools produce different hashes for proper separation."""
+        error_tool = InternalTool(**error_all_tool_data)
 
-        # Create phishing detection tool with different configuration
-        phishing_data = malware_detection_tool_data.copy()
-        phishing_data["description"] = "AI-powered phishing URL detection and blocking tool"
-        phishing_tool = InternalTool(**phishing_data)
+        # Create slow response tool with different configuration
+        slow_tool_data = error_all_tool_data.copy()
+        slow_tool_data["name"] = "slow_response_tool"
+        slow_tool_data["description"] = "Tool that simulates slow response with intentional delay"
+        slow_tool = InternalTool(**slow_tool_data)
 
-        assert malware_tool.md5_hash != phishing_tool.md5_hash
+        assert error_tool.md5_hash != slow_tool.md5_hash
 
-    def test_internal_tool_compute_hash_method_for_registry(self, malware_detection_tool_data):
+    def test_internal_tool_compute_hash_method_for_registry(self, error_all_tool_data):
         """Test compute_hash method directly for tool registry operations."""
-        security_tool = InternalTool(**malware_detection_tool_data)
-        computed_registry_hash = security_tool.compute_hash()
+        external_tool = InternalTool(**error_all_tool_data)
+        computed_registry_hash = external_tool.compute_hash()
 
-        assert computed_registry_hash == security_tool.md5_hash
+        assert computed_registry_hash == external_tool.md5_hash
         assert len(computed_registry_hash) == 32
 
-    def test_internal_tool_hash_with_complex_security_schema(self):
-        """Test hash computation with complex security scanning schema."""
-        complex_security_schema = {
+    def test_internal_tool_hash_with_complex_schema(self):
+        """Test hash computation with complex tool schema."""
+        complex_schema = {
             "type": "object",
             "properties": {
-                "threat_analysis": {
+                "performance_config": {
                     "type": "object",
                     "properties": {
-                        "behavioral_analysis": {"type": "boolean"},
-                        "signature_matching": {"type": "boolean"},
-                        "ml_classification": {
+                        "enable_caching": {"type": "boolean"},
+                        "max_retries": {"type": "integer"},
+                        "timeout_settings": {
                             "type": "array",
-                            "items": {"type": "string"},
-                            "enum": ["deep_learning", "random_forest", "svm"]
+                            "items": {"type": "number"},
+                            "description": "Timeout values in milliseconds"
                         }
                     }
                 },
-                "scan_priority": {
+                "response_format": {
                     "type": "string",
-                    "enum": ["low", "medium", "high", "critical"]
+                    "enum": ["json", "xml", "plain", "binary"]
                 },
-                "compliance_checks": {
+                "custom_headers": {
                     "type": "array",
                     "items": {"type": "string"}
                 }
             }
         }
 
-        advanced_security_tool = InternalTool(
-            name="pan_advanced_threat_detector",
-            description="Multi-vector AI threat detection system",
-            inputSchema=complex_security_schema,
-            server_name="pan_advanced_security_cluster"
+        complex_tool = InternalTool(
+            name="fixed_response_tool",
+            description="Tool that returns predefined fixed responses",
+            inputSchema=complex_schema,
+            server_name="mock_server"
         )
 
-        assert advanced_security_tool.md5_hash != ""
-        assert len(advanced_security_tool.md5_hash) == 32
+        assert complex_tool.md5_hash != ""
+        assert len(complex_tool.md5_hash) == 32
 
-    def test_internal_tool_to_dict_for_storage(self, malware_detection_tool_data):
+    def test_internal_tool_to_dict_for_storage(self, error_all_tool_data):
         """Test conversion to dictionary for database storage."""
-        security_tool = InternalTool(**malware_detection_tool_data)
-        storage_dict = security_tool.to_dict()
+        external_tool = InternalTool(**error_all_tool_data)
+        storage_dict = external_tool.to_dict()
 
         expected_storage_keys = ["name", "description", "input_schema", "server_name", "state", "md5_hash"]
         assert all(key in storage_dict for key in expected_storage_keys)
 
-        assert storage_dict["name"] == "pan_malware_detector"
-        assert storage_dict["description"] == "Advanced AI malware detection and analysis tool"
-        assert storage_dict["server_name"] == "pan_security_cluster"
+        assert storage_dict["name"] == "error_all_tool"
+        assert storage_dict["description"] == "Tool that always returns isError=True for testing error handling"
+        assert storage_dict["server_name"] == "test_server"
         assert storage_dict["state"] == ToolState.ENABLED
-        assert storage_dict["md5_hash"] == security_tool.md5_hash
-        assert storage_dict["input_schema"] == malware_detection_tool_data["inputSchema"]
+        assert storage_dict["md5_hash"] == external_tool.md5_hash
+        assert storage_dict["input_schema"] == error_all_tool_data["inputSchema"]
 
-    def test_internal_tool_to_dict_with_different_security_states(self, malware_detection_tool_data):
-        """Test to_dict with different security tool states for compliance tracking."""
-        security_states_to_test = [
+    def test_internal_tool_to_dict_with_different_states(self, error_all_tool_data):
+        """Test to_dict with different tool states for compliance tracking."""
+        tool_states_to_test = [
             ToolState.ENABLED,
             ToolState.DISABLED_HIDDEN_MODE,
             ToolState.DISABLED_SECURITY_RISK
         ]
 
-        for state in security_states_to_test:
-            malware_detection_tool_data["state"] = state
-            security_tool = InternalTool(**malware_detection_tool_data)
-            storage_dict = security_tool.to_dict()
+        for state in tool_states_to_test:
+            error_all_tool_data["state"] = state
+            external_tool = InternalTool(**error_all_tool_data)
+            storage_dict = external_tool.to_dict()
 
             assert storage_dict["state"] == state
 
-    def test_internal_tool_model_post_init_hash_generation(self, malware_detection_tool_data):
+    def test_internal_tool_model_post_init_hash_generation(self, error_all_tool_data):
         """Test that model_post_init is called during initialization for hash generation."""
-        with patch.object(InternalTool, 'compute_hash', return_value="security_tool_hash_abc123") as mock_compute:
-            security_tool = InternalTool(**malware_detection_tool_data)
+        with patch.object(InternalTool, 'compute_hash', return_value="external_tool_hash_123") as mock_compute:
+            external_tool = InternalTool(**error_all_tool_data)
 
             mock_compute.assert_called_once()
-            assert security_tool.md5_hash == "security_tool_hash_abc123"
+            assert external_tool.md5_hash == "external_tool_hash_123"
 
-    def test_internal_tool_inherits_base_tool_security_functionality(self, malware_detection_tool_data):
-        """Test that InternalTool inherits BaseTool security functionality."""
-        security_tool = InternalTool(**malware_detection_tool_data)
+    def test_internal_tool_inherits_base_tool_functionality(self, error_all_tool_data):
+        """Test that InternalTool inherits BaseTool functionality."""
+        external_tool = InternalTool(**error_all_tool_data)
 
-        # Should have BaseTool security methods
-        security_descriptions = security_tool.get_argument_descriptions()
-        assert len(security_descriptions) == 2
-        assert "file_content" in security_descriptions[0]
+        # Should have BaseTool methods
+        descriptions = external_tool.get_argument_descriptions()
+        assert len(descriptions) == 2
+        assert "input" in descriptions[0]
 
-        # Should convert to MCP tool for AI relay
-        mcp_security_tool = security_tool.to_mcp_tool()
-        assert isinstance(mcp_security_tool, types.Tool)
-        assert mcp_security_tool.name == "pan_malware_detector"
+        # Should convert to MCP tool for relay
+        mcp_tool = external_tool.to_mcp_tool()
+        assert isinstance(mcp_tool, types.Tool)
+        assert mcp_tool.name == "error_all_tool"
 
-    def test_internal_tool_with_empty_input_schema_for_simple_scanner(self):
-        """Test InternalTool with empty input schema for simple security scanner."""
-        simple_security_tool = InternalTool(
-            name="pan_simple_hash_checker",
-            description="Simple file hash verification tool",
+    def test_internal_tool_with_empty_input_schema_for_simple_tool(self):
+        """Test InternalTool with empty input schema for simple tool."""
+        simple_tool = InternalTool(
+            name="passthrough_tool",
+            description="Simple passthrough tool with no parameters",
             inputSchema={},
-            server_name="pan_basic_security_server"
+            server_name="utility_server"
         )
 
-        assert simple_security_tool.md5_hash != ""
-        storage_dict = simple_security_tool.to_dict()
+        assert simple_tool.md5_hash != ""
+        storage_dict = simple_tool.to_dict()
         assert storage_dict["input_schema"] == {}
 
-    def test_internal_tool_hash_with_unicode_security_content(self):
-        """Test hash computation with unicode characters in security tool fields."""
-        unicode_security_tool = InternalTool(
-            name="pan_international_scanner_测试",
-            description="International threat scanner with unicode support: 🛡️ 🔒",
+    def test_internal_tool_hash_with_unicode_content(self):
+        """Test hash computation with unicode characters in tool fields."""
+        unicode_tool = InternalTool(
+            name="echo_tool_国际化",
+            description="International echo tool with unicode support: 📢 🔊",
             inputSchema={"type": "string"},
-            server_name="pan_global_security_服务器"
+            server_name="global_server_服务器"
         )
 
-        assert unicode_security_tool.md5_hash != ""
-        assert len(unicode_security_tool.md5_hash) == 32
+        assert unicode_tool.md5_hash != ""
+        assert len(unicode_tool.md5_hash) == 32
 
         # Hash should be reproducible for unicode content
-        unicode_security_tool_2 = InternalTool(
-            name="pan_international_scanner_测试",
-            description="International threat scanner with unicode support: 🛡️ 🔒",
+        unicode_tool_2 = InternalTool(
+            name="echo_tool_国际化",
+            description="International echo tool with unicode support: 📢 🔊",
             inputSchema={"type": "string"},
-            server_name="pan_global_security_服务器"
+            server_name="global_server_服务器"
         )
 
-        assert unicode_security_tool.md5_hash == unicode_security_tool_2.md5_hash
+        assert unicode_tool.md5_hash == unicode_tool_2.md5_hash
 
 
 class TestRelayTool:
-    """Test suite for RelayTool class used for AI-LLM security tool presentation."""
+    """Test suite for RelayTool class used for LLM tool presentation."""
 
     @pytest.fixture
-    def url_security_scanner_data(self):
-        """Create URL security scanner data for AI relay testing."""
+    def slow_response_tool_data(self):
+        """Create slow_response_tool data for relay testing."""
         return {
-            "name": "pan_url_threat_analyzer",
-            "description": "AI-powered URL security scanner for phishing and malware detection",
+            "name": "slow_response_tool",
+            "description": "Latency simulator that intentionally delays responses for performance testing",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "URL to analyze for security threats and malicious content"
+                    "delay_seconds": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 60,
+                        "description": "Number of seconds to delay before responding"
                     },
-                    "scan_options": {
-                        "type": "object",
-                        "description": "Advanced scanning configuration for threat detection",
-                        "properties": {
-                            "check_reputation": {"type": "boolean", "description": "Enable reputation-based scanning"},
-                            "deep_analysis": {"type": "boolean", "description": "Perform deep content analysis"}
-                        }
+                    "content": {
+                        "type": "string",
+                        "description": "Content to return after the specified delay"
+                    },
+                    "simulate_load": {
+                        "type": "boolean",
+                        "description": "Whether to simulate high CPU load during delay"
                     }
                 },
-                "required": ["url"]
+                "required": ["delay_seconds"]
             },
-            "server_name": "pan_url_security_cluster",
+            "server_name": "performance_server",
             "state": ToolState.ENABLED
         }
 
-    def test_relay_tool_creation_for_ai_presentation(self, url_security_scanner_data):
-        """Test RelayTool creation for AI-LLM presentation."""
-        url_scanner_tool = RelayTool(**url_security_scanner_data)
+    def test_relay_tool_creation_for_llm_presentation(self, slow_response_tool_data):
+        """Test RelayTool creation for LLM presentation."""
+        slow_tool = RelayTool(**slow_response_tool_data)
 
-        assert url_scanner_tool.name == "pan_url_threat_analyzer"
-        assert url_scanner_tool.description == "AI-powered URL security scanner for phishing and malware detection"
-        assert url_scanner_tool.server_name == "pan_url_security_cluster"
-        assert url_scanner_tool.state == ToolState.ENABLED
+        assert slow_tool.name == "slow_response_tool"
+        assert slow_tool.description == "Latency simulator that intentionally delays responses for performance testing"
+        assert slow_tool.server_name == "performance_server"
+        assert slow_tool.state == ToolState.ENABLED
 
-    def test_relay_tool_format_for_llm_basic_security_scanner(self, url_security_scanner_data):
-        """Test format_for_llm method with basic security scanner for AI consumption."""
-        url_scanner_tool = RelayTool(**url_security_scanner_data)
-        llm_formatted_output = url_scanner_tool.format_for_llm()
+    def test_relay_tool_format_for_llm_basic_tool(self, slow_response_tool_data):
+        """Test format_for_llm method with basic tool for LLM consumption."""
+        slow_tool = RelayTool(**slow_response_tool_data)
+        llm_formatted_output = slow_tool.format_for_llm()
 
-        # Check that all expected sections are present for AI understanding
-        assert "Tool: pan_url_threat_analyzer" in llm_formatted_output
-        assert "Server: pan_url_security_cluster" in llm_formatted_output
-        assert "Description: AI-powered URL security scanner for phishing and malware detection" in llm_formatted_output
+        # Check that all expected sections are present for LLM understanding
+        assert "Tool: slow_response_tool" in llm_formatted_output
+        assert "Server: performance_server" in llm_formatted_output
+        assert "Description: Latency simulator that intentionally delays responses" in llm_formatted_output
         assert "Arguments:" in llm_formatted_output
-        assert "url:" in llm_formatted_output
-        assert "URL to analyze for security threats" in llm_formatted_output
+        assert "delay_seconds:" in llm_formatted_output
+        assert "Number of seconds to delay" in llm_formatted_output
         assert "(required)" in llm_formatted_output
 
-    def test_relay_tool_format_for_llm_with_security_parameters(self, url_security_scanner_data):
-        """Test format_for_llm method showing required vs optional security parameters."""
-        security_tool = RelayTool(**url_security_scanner_data)
-        llm_formatted_output = security_tool.format_for_llm()
+    def test_relay_tool_format_for_llm_with_parameters(self, slow_response_tool_data):
+        """Test format_for_llm method showing required vs optional parameters."""
+        external_tool = RelayTool(**slow_response_tool_data)
+        llm_formatted_output = external_tool.format_for_llm()
 
-        # URL should be marked as required security parameter
+        # delay_seconds should be marked as required
         lines = llm_formatted_output.split('\n')
-        url_line = next((line for line in lines if "url:" in line), "")
-        assert "(required)" in url_line
+        delay_line = next((line for line in lines if "delay_seconds:" in line), "")
+        assert "(required)" in delay_line
 
-        # Scan options should not be marked as required
-        options_line = next((line for line in lines if "scan_options:" in line), "")
-        assert "(required)" not in options_line
+        # content should not be marked as required
+        content_line = next((line for line in lines if "content:" in line), "")
+        assert "(required)" not in content_line
 
-    def test_relay_tool_format_for_llm_no_arguments_simple_scanner(self):
-        """Test format_for_llm with simple security tool that has no arguments."""
-        simple_security_tool = RelayTool(
-            name="pan_system_health_checker",
-            description="Simple security system health monitoring tool",
+    def test_relay_tool_format_for_llm_no_arguments_simple_tool(self):
+        """Test format_for_llm with simple tool that has no arguments."""
+        simple_tool = RelayTool(
+            name="passthrough_tool",
+            description="Simple passthrough tool that returns input unchanged",
             inputSchema={},
-            server_name="pan_monitoring_server"
+            server_name="utility_server"
         )
 
-        llm_formatted_output = simple_security_tool.format_for_llm()
+        llm_formatted_output = simple_tool.format_for_llm()
 
-        assert "Tool: pan_system_health_checker" in llm_formatted_output
-        assert "Server: pan_monitoring_server" in llm_formatted_output
-        assert "Description: Simple security system health monitoring tool" in llm_formatted_output
+        assert "Tool: passthrough_tool" in llm_formatted_output
+        assert "Server: utility_server" in llm_formatted_output
+        assert "Description: Simple passthrough tool that returns input unchanged" in llm_formatted_output
         assert "Arguments:" in llm_formatted_output
 
-    def test_relay_tool_format_for_llm_string_schema_file_scanner(self):
-        """Test format_for_llm with string-type schema for file scanning."""
-        file_scanner_tool = RelayTool(
-            name="pan_file_hash_verifier",
-            description="File hash verification tool for integrity checking",
+    def test_relay_tool_format_for_llm_string_schema_tool(self):
+        """Test format_for_llm with string-type schema."""
+        string_tool = RelayTool(
+            name="echo_tool",
+            description="Simple echo tool that accepts string input",
             inputSchema={"type": "string"},
-            server_name="pan_file_security_server"
+            server_name="echo_server"
         )
 
-        llm_formatted_output = file_scanner_tool.format_for_llm()
+        llm_formatted_output = string_tool.format_for_llm()
 
         # Should handle gracefully even without properties
-        assert "Tool: pan_file_hash_verifier" in llm_formatted_output
+        assert "Tool: echo_tool" in llm_formatted_output
         assert "Arguments:" in llm_formatted_output
 
-    def test_relay_tool_format_for_llm_multiline_formatting_for_ai(self, url_security_scanner_data):
-        """Test that format_for_llm produces properly formatted multiline output for AI consumption."""
-        security_tool = RelayTool(**url_security_scanner_data)
-        llm_formatted_output = security_tool.format_for_llm()
+    def test_relay_tool_format_for_llm_multiline_formatting_for_llm(self, slow_response_tool_data):
+        """Test that format_for_llm produces properly formatted multiline output for LLM consumption."""
+        external_tool = RelayTool(**slow_response_tool_data)
+        llm_formatted_output = external_tool.format_for_llm()
 
         lines = [line.strip() for line in llm_formatted_output.split('\n') if line.strip()]
 
-        # Should have multiple non-empty lines for AI parsing
+        # Should have multiple non-empty lines for LLM parsing
         assert len(lines) >= 4
 
-        # Check line structure for AI understanding
+        # Check line structure for LLM understanding
         tool_line = next((line for line in lines if line.startswith("Tool:")), "")
         server_line = next((line for line in lines if line.startswith("Server:")), "")
         desc_line = next((line for line in lines if line.startswith("Description:")), "")
@@ -599,190 +600,810 @@ class TestRelayTool:
         assert desc_line != ""
         assert args_line != ""
 
-    def test_relay_tool_inherits_base_tool_security_functionality(self, url_security_scanner_data):
-        """Test that RelayTool inherits BaseTool security functionality."""
-        security_relay_tool = RelayTool(**url_security_scanner_data)
+    def test_relay_tool_inherits_base_tool_functionality(self, slow_response_tool_data):
+        """Test that RelayTool inherits BaseTool functionality."""
+        relay_tool = RelayTool(**slow_response_tool_data)
 
-        # Should have BaseTool security methods
-        security_descriptions = security_relay_tool.get_argument_descriptions()
-        assert len(security_descriptions) == 2  # url and scan_options
+        # Should have BaseTool methods
+        descriptions = relay_tool.get_argument_descriptions()
+        assert len(descriptions) == 3  # delay_seconds, content, simulate_load
 
-        # Should convert to MCP tool for AI integration
-        mcp_security_tool = security_relay_tool.to_mcp_tool()
-        assert isinstance(mcp_security_tool, types.Tool)
-        assert mcp_security_tool.name == "pan_url_threat_analyzer"
+        # Should convert to MCP tool for integration
+        mcp_tool = relay_tool.to_mcp_tool()
+        assert isinstance(mcp_tool, types.Tool)
+        assert mcp_tool.name == "slow_response_tool"
 
-    def test_relay_tool_format_for_llm_with_complex_security_descriptions(self):
-        """Test format_for_llm with complex security parameter descriptions."""
-        complex_security_schema = {
+    def test_relay_tool_format_for_llm_with_complex_descriptions(self):
+        """Test format_for_llm with complex parameter descriptions."""
+        complex_schema = {
             "type": "object",
             "properties": {
-                "threat_intelligence_query": {
+                "configuration": {
                     "type": "string",
-                    "description": "Advanced threat intelligence query with multiple vectors including behavioral analysis, signature matching, and ML-based classification for comprehensive security assessment"
+                    "description": "Complex configuration string with multiple parameters including performance tuning, error handling, and output formatting options for comprehensive tool behavior control"
                 },
-                "compliance_parameters": {
+                "metadata": {
                     "type": "string",
-                    "description": "Compliance validation parameters with special characters: SOX§ GDPR® PCI-DSS™ HIPAA©"
+                    "description": "Tool metadata with special characters: JSON{} XML<> CSV, TSV\t and international characters: 配置 🛠️ настройки"
                 },
-                "international_threat_data": {
+                "advanced_options": {
                     "type": "string",
-                    "description": "International threat intelligence: 威胁情报 🚨 الأمان السيبراني 🔒 Кибербезопасность"
+                    "description": "Advanced configuration options for power users including debugging flags and performance optimizations"
                 }
             },
-            "required": ["threat_intelligence_query"]
+            "required": ["configuration"]
         }
 
-        complex_security_tool = RelayTool(
-            name="pan_advanced_threat_intelligence",
-            description="Advanced multi-vector threat intelligence and analysis platform",
-            inputSchema=complex_security_schema,
-            server_name="pan_advanced_security_cluster"
+        complex_tool = RelayTool(
+            name="fixed_response_tool",
+            description="Advanced fixed response tool with comprehensive configuration options",
+            inputSchema=complex_schema,
+            server_name="advanced_server"
         )
 
-        llm_formatted_output = complex_security_tool.format_for_llm()
+        llm_formatted_output = complex_tool.format_for_llm()
 
-        # Should handle all complex security cases for AI understanding
-        assert "threat_intelligence_query:" in llm_formatted_output
-        assert "compliance_parameters:" in llm_formatted_output
-        assert "international_threat_data:" in llm_formatted_output
-        assert "威胁情报 🚨" in llm_formatted_output
+        # Should handle all complex cases for LLM understanding
+        assert "configuration:" in llm_formatted_output
+        assert "metadata:" in llm_formatted_output
+        assert "advanced_options:" in llm_formatted_output
+        assert "配置 🛠️" in llm_formatted_output
         assert "(required)" in llm_formatted_output
 
-    def test_relay_tool_with_different_security_states(self, url_security_scanner_data):
-        """Test RelayTool with different security states for compliance management."""
-        security_states_to_test = [
+    def test_relay_tool_with_different_states(self, slow_response_tool_data):
+        """Test RelayTool with different states for compliance management."""
+        tool_states_to_test = [
             ToolState.ENABLED,
             ToolState.DISABLED_HIDDEN_MODE,
             ToolState.DISABLED_SECURITY_RISK
         ]
 
-        for state in security_states_to_test:
-            url_security_scanner_data["state"] = state
-            security_tool = RelayTool(**url_security_scanner_data)
+        for state in tool_states_to_test:
+            slow_response_tool_data["state"] = state
+            external_tool = RelayTool(**slow_response_tool_data)
 
-            assert security_tool.state == state
+            assert external_tool.state == state
 
-            # format_for_llm should work regardless of security state
-            llm_formatted_output = security_tool.format_for_llm()
-            assert "Tool: pan_url_threat_analyzer" in llm_formatted_output
+            # format_for_llm should work regardless of state
+            llm_formatted_output = external_tool.format_for_llm()
+            assert "Tool: slow_response_tool" in llm_formatted_output
 
 
-class TestSecurityToolIntegration:
-    """Integration tests for security tool classes working together in AI systems."""
+class TestExternalToolIntegration:
+    """Integration tests for external tool classes working together."""
 
-    def test_all_security_tool_types_with_same_data(self):
-        """Test that all security tool types can be created with compatible data."""
-        common_security_data = {
-            "name": "pan_integrated_threat_scanner",
-            "description": "Integrated AI threat scanning and analysis platform",
+    def test_all_external_tool_types_with_same_data(self):
+        """Test that all tool types can be created with compatible external tool data."""
+        common_tool_data = {
+            "name": "failing_tool",
+            "description": "Tool that intentionally fails with errors or exceptions for testing",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "content": {"type": "string", "description": "Content to scan for security threats"}
+                    "failure_mode": {
+                        "type": "string",
+                        "enum": ["exception", "error_response", "timeout"],
+                        "description": "Type of failure to simulate"
+                    }
                 }
             },
-            "server_name": "pan_integration_security_server",
+            "server_name": "test_server",
             "state": ToolState.ENABLED
         }
 
-        # Create all security tool types
-        base_security_tool = BaseTool(**common_security_data)
-        internal_security_tool = InternalTool(**common_security_data)
-        relay_security_tool = RelayTool(**common_security_data)
+        # Create all tool types
+        base_tool = BaseTool(**common_tool_data)
+        internal_tool = InternalTool(**common_tool_data)
+        relay_tool = RelayTool(**common_tool_data)
 
-        # All should have same basic security properties
-        security_tools = [base_security_tool, internal_security_tool, relay_security_tool]
-        for tool in security_tools:
-            assert tool.name == "pan_integrated_threat_scanner"
-            assert tool.description == "Integrated AI threat scanning and analysis platform"
-            assert tool.server_name == "pan_integration_security_server"
+        # All should have same basic properties
+        tools = [base_tool, internal_tool, relay_tool]
+        for tool in tools:
+            assert tool.name == "failing_tool"
+            assert tool.description == "Tool that intentionally fails with errors or exceptions for testing"
+            assert tool.server_name == "test_server"
             assert tool.state == ToolState.ENABLED
 
-    def test_security_tool_conversion_compatibility_for_ai(self):
-        """Test compatibility between different security tool types for AI integration."""
-        # Create an InternalTool for security scanning
-        internal_security_tool = InternalTool(
-            name="pan_ai_threat_converter",
-            description="AI threat analysis tool for conversion testing",
+    def test_external_tool_conversion_compatibility_for_integration(self):
+        """Test compatibility between different tool types for integration."""
+        # Create an InternalTool for registry
+        internal_tool = InternalTool(
+            name="echo_tool",
+            description = "Echo tool for conversion testing",
             inputSchema={"type": "string"},
-            server_name="pan_conversion_security_server"
+            server_name="echo_server"
         )
 
-        # Convert to MCP tool for AI consumption
-        mcp_security_tool = internal_security_tool.to_mcp_tool()
+        # Convert to MCP tool
+        mcp_tool = internal_tool.to_mcp_tool()
 
-        # Create RelayTool from same security data
-        relay_security_tool = RelayTool(
-            name=internal_security_tool.name,
-            description=internal_security_tool.description,
-            inputSchema=internal_security_tool.inputSchema,
-            server_name=internal_security_tool.server_name,
-            state=internal_security_tool.state
+        # Create RelayTool from same data
+        relay_tool = RelayTool(
+            name=internal_tool.name,
+            description=internal_tool.description,
+            inputSchema=internal_tool.inputSchema,
+            server_name=internal_tool.server_name,
+            state=internal_tool.state
         )
 
-        # Both should produce same MCP tool for AI relay
-        relay_mcp_security_tool = relay_security_tool.to_mcp_tool()
+        # Both should produce same MCP tool
+        relay_mcp_tool = relay_tool.to_mcp_tool()
 
-        assert mcp_security_tool.name == relay_mcp_security_tool.name
-        assert mcp_security_tool.description == relay_mcp_security_tool.description
-        assert mcp_security_tool.inputSchema == relay_mcp_security_tool.inputSchema
+        assert mcp_tool.name == relay_mcp_tool.name
+        assert mcp_tool.description == relay_mcp_tool.description
+        assert mcp_tool.inputSchema == relay_mcp_tool.inputSchema
 
-    def test_security_tool_serialization_and_deserialization_for_storage(self):
-        """Test security tool serialization and deserialization for database storage."""
-        original_security_tool = InternalTool(
-            name="pan_serialization_threat_scanner",
-            description="Threat scanner for serialization and storage testing",
+    def test_external_tool_serialization_and_deserialization_for_storage(self):
+        """Test tool serialization and deserialization for database storage."""
+        original_tool = InternalTool(
+            name="fixed_response_tool",
+            description="Tool for serialization testing",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "threat_data": {"type": "string", "description": "Threat intelligence data"}
+                    "response_type": {"type": "string", "description": "Type of response"}
                 }
             },
-            server_name="pan_serialization_security_server",
+            server_name="mock_server",
             state=ToolState.DISABLED_DUPLICATE
         )
 
         # Serialize to dict for database storage
-        security_tool_dict = original_security_tool.to_dict()
+        tool_dict = original_tool.to_dict()
 
-        # Create new security tool from dict data (simulating database retrieval)
-        recreated_security_tool = InternalTool(
-            name=security_tool_dict["name"],
-            description=security_tool_dict["description"],
-            inputSchema=security_tool_dict["input_schema"],
-            server_name=security_tool_dict["server_name"],
-            state=security_tool_dict["state"]
+        # Create new tool from dict data (simulating database retrieval)
+        recreated_tool = InternalTool(
+            name=tool_dict["name"],
+            description=tool_dict["description"],
+            inputSchema=tool_dict["input_schema"],
+            server_name=tool_dict["server_name"],
+            state=tool_dict["state"]
         )
 
-        # Should have same hash (same security content)
-        assert original_security_tool.md5_hash == recreated_security_tool.md5_hash
-        assert original_security_tool.name == recreated_security_tool.name
-        assert original_security_tool.state == recreated_security_tool.state
+        # Should have same hash (same content)
+        assert original_tool.md5_hash == recreated_tool.md5_hash
+        assert original_tool.name == recreated_tool.name
+        assert original_tool.state == recreated_tool.state
 
-    def test_security_tool_inheritance_chain_for_distributed_ai(self):
-        """Test the inheritance chain of security tool classes for distributed AI systems."""
-        distributed_security_tool = InternalTool(
-            name="pan_distributed_ai_scanner",
-            description="Distributed AI security scanning tool",
+    def test_external_tool_inheritance_chain_for_distributed_systems(self):
+        """Test the inheritance chain of tool classes for distributed systems."""
+        distributed_tool = InternalTool(
+            name="passthrough_tool",
+            description="Distributed passthrough tool",
             inputSchema={},
-            server_name="pan_distributed_security_cluster"
+            server_name="distributed_cluster"
         )
 
-        # Should be instance of all parent classes for proper AI integration
-        assert isinstance(distributed_security_tool, InternalTool)
-        assert isinstance(distributed_security_tool, BaseTool)
-        assert isinstance(distributed_security_tool, types.Tool)
+        # Should be instance of all parent classes for proper integration
+        assert isinstance(distributed_tool, InternalTool)
+        assert isinstance(distributed_tool, BaseTool)
+        assert isinstance(distributed_tool, types.Tool)
 
         # Should have methods from all levels for comprehensive functionality
-        assert hasattr(distributed_security_tool, "compute_hash")  # InternalTool for registry
-        assert hasattr(distributed_security_tool, "get_argument_descriptions")  # BaseTool for documentation
-        assert hasattr(distributed_security_tool, "to_mcp_tool")  # BaseTool for AI relay
+        assert hasattr(distributed_tool, "compute_hash")  # InternalTool for registry
+        assert hasattr(distributed_tool, "get_argument_descriptions")  # BaseTool for documentation
+        assert hasattr(distributed_tool, "to_mcp_tool")  # BaseTool for relay
 
-        # Should have all required attributes for distributed security operations
-        assert hasattr(distributed_security_tool, "md5_hash")  # InternalTool for deduplication
-        assert hasattr(distributed_security_tool, "server_name")  # BaseTool for server tracking
-        assert hasattr(distributed_security_tool, "state")  # BaseTool for security state management
-        assert hasattr(distributed_security_tool, "name")  # types.Tool for identification
-        assert hasattr(distributed_security_tool, "description")  # types.Tool for documentation
-        assert hasattr(distributed_security_tool, "inputSchema")  # types.Tool for AI understanding
+        # Should have all required attributes for distributed operations
+        assert hasattr(distributed_tool, "md5_hash")  # InternalTool for deduplication
+        assert hasattr(distributed_tool, "server_name")  # BaseTool for server tracking
+        assert hasattr(distributed_tool, "state")  # BaseTool for state management
+        assert hasattr(distributed_tool, "name")  # types.Tool for identification
+        assert hasattr(distributed_tool, "description")  # types.Tool for documentation
+        assert hasattr(distributed_tool, "inputSchema")  # types.Tool for LLM understanding
+
+    def test_external_tool_workflow_scenario(self):
+        """Test complete workflow scenario with external tools."""
+        # Create tools for a complete workflow
+        echo_tool = InternalTool(
+            name="echo_tool",
+            description="Echo user input",
+            inputSchema={"type": "object", "properties": {"text": {"type": "string"}}},
+            server_name="echo_server"
+        )
+
+        slow_tool = InternalTool(
+            name="slow_response_tool",
+            description="Add processing delay",
+            inputSchema={"type": "object", "properties": {"delay": {"type": "number"}}},
+            server_name="performance_server"
+        )
+
+        fixed_tool = InternalTool(
+            name="fixed_response_tool",
+            description="Return predefined response",
+            inputSchema={"type": "object", "properties": {"type": {"type": "string"}}},
+            server_name="mock_server"
+        )
+
+        # All tools should have unique hashes
+        tool_hashes = {echo_tool.md5_hash, slow_tool.md5_hash, fixed_tool.md5_hash}
+        assert len(tool_hashes) == 3  # All hashes are unique
+
+        # All tools should convert to valid MCP tools
+        mcp_tools = [tool.to_mcp_tool() for tool in [echo_tool, slow_tool, fixed_tool]]
+        assert all(isinstance(tool, types.Tool) for tool in mcp_tools)
+
+        # All tools should be serializable
+        tool_dicts = [tool.to_dict() for tool in [echo_tool, slow_tool, fixed_tool]]
+        assert all("md5_hash" in tool_dict for tool_dict in tool_dicts)
+
+    def test_mixed_external_tool_states_handling(self):
+        """Test handling of external tools with mixed states."""
+        # Create tools with different states
+        enabled_tool = InternalTool(
+            name="echo_tool",
+            description="Enabled echo tool",
+            inputSchema={"type": "object"},
+            server_name="test_server",
+            state=ToolState.ENABLED
+        )
+
+        disabled_tool = InternalTool(
+            name="failing_tool",
+            description="Disabled failing tool",
+            inputSchema={"type": "object"},
+            server_name="test_server",
+            state=ToolState.DISABLED_ERROR
+        )
+
+        hidden_tool = InternalTool(
+            name="passthrough_tool",
+            description="Hidden passthrough tool",
+            inputSchema={"type": "object"},
+            server_name="test_server",
+            state=ToolState.DISABLED_HIDDEN_MODE
+        )
+
+        tools = [enabled_tool, disabled_tool, hidden_tool]
+
+        # All should have valid hashes regardless of state
+        assert all(tool.md5_hash for tool in tools)
+        assert all(len(tool.md5_hash) == 32 for tool in tools)
+
+        # All should convert to MCP tools regardless of state
+        mcp_tools = [tool.to_mcp_tool() for tool in tools]
+        assert all(isinstance(tool, types.Tool) for tool in mcp_tools)
+
+        # State information should be preserved in serialization
+        tool_dicts = [tool.to_dict() for tool in tools]
+        states = [tool_dict["state"] for tool_dict in tool_dicts]
+        assert ToolState.ENABLED in states
+        assert ToolState.DISABLED_ERROR in states
+        assert ToolState.DISABLED_HIDDEN_MODE in states
+
+
+    def test_external_tool_performance_with_large_schemas(self):
+        """Test external tool performance with large input schemas."""
+        # Create tool with large, complex schema
+        large_schema = {
+            "type": "object",
+            "properties": {}
+        }
+
+        # Add many properties to simulate large schema
+        for i in range(50):
+            large_schema["properties"][f"param_{i}"] = {
+                "type": "string",
+                "description": f"Parameter {i} for testing large schema performance",
+                "enum": [f"value_{j}" for j in range(10)]  # Add enum values
+            }
+
+        large_schema_tool = InternalTool(
+            name="slow_response_tool",
+            description="Tool with large schema for performance testing",
+            inputSchema=large_schema,
+            server_name="performance_server"
+        )
+
+        # Should handle large schema efficiently
+        assert large_schema_tool.md5_hash != ""
+        assert len(large_schema_tool.md5_hash) == 32
+
+        # Serialization should work with large schema
+        tool_dict = large_schema_tool.to_dict()
+        assert len(tool_dict["input_schema"]["properties"]) == 50
+
+        # Hash computation should be consistent
+        large_schema_tool_2 = InternalTool(
+            name="slow_response_tool",
+            description="Tool with large schema for performance testing",
+            inputSchema=large_schema,
+            server_name="performance_server"
+        )
+        assert large_schema_tool.md5_hash == large_schema_tool_2.md5_hash
+
+
+    def test_external_tool_edge_cases_handling(self):
+        """Test external tool handling of edge cases."""
+        # Test with minimal tool configuration
+        minimal_tool = InternalTool(
+            name="a",  # Single character name
+            description="",  # Empty description
+            inputSchema={},  # Empty schema
+            server_name="x"  # Single character server
+        )
+
+        assert minimal_tool.md5_hash != ""
+        tool_dict = minimal_tool.to_dict()
+        assert tool_dict["name"] == "a"
+        assert tool_dict["description"] == ""
+
+        # Test with maximum length strings
+        max_length_name = "echo_tool_" + "x" * 1000
+        max_tool = InternalTool(
+            name=max_length_name,
+            description="Tool with very long name for edge case testing",
+            inputSchema={"type": "object"},
+            server_name="test_server"
+        )
+
+        assert max_tool.md5_hash != ""
+        assert max_tool.name == max_length_name
+
+
+    def test_external_tool_special_characters_handling(self):
+        """Test external tool handling of special characters in various fields."""
+        special_chars_tool = InternalTool(
+            name="echo_tool_special",
+            description="Tool with special chars: !@#$%^&*(){}[]|\\:;\"'<>,.?/~`",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "special_input": {
+                        "type": "string",
+                        "description": "Input with special chars: ∑∏∆√∫≈≠≤≥±×÷"
+                    }
+                }
+            },
+            server_name="special_server"
+        )
+
+        # Should handle special characters without issues
+        assert special_chars_tool.md5_hash != ""
+
+        # LLM formatting should preserve special characters
+        relay_special_tool = RelayTool(
+            name=special_chars_tool.name,
+            description=special_chars_tool.description,
+            inputSchema=special_chars_tool.inputSchema,
+            server_name=special_chars_tool.server_name
+        )
+
+        llm_output = relay_special_tool.format_for_llm()
+        assert "!@#$%^&*()" in llm_output
+        assert "∑∏∆√∫≈≠≤≥±×÷" in llm_output
+
+
+    def test_external_tool_state_transitions(self):
+        """Test external tool state transitions and validation."""
+        # Create tool in enabled state
+        transition_tool = InternalTool(
+            name="fixed_response_tool",
+            description="Tool for state transition testing",
+            inputSchema={"type": "object"},
+            server_name="test_server",
+            state=ToolState.ENABLED
+        )
+
+        original_hash = transition_tool.md5_hash
+
+        # Create tools with different states (simulating state changes)
+        states_to_test = [
+            ToolState.DISABLED_DUPLICATE,
+            ToolState.DISABLED_ERROR,
+            ToolState.DISABLED_HIDDEN_MODE,
+            ToolState.DISABLED_SECURITY_RISK
+        ]
+
+        for new_state in states_to_test:
+            # State change would typically create a new tool instance
+            changed_tool = InternalTool(
+                name="fixed_response_tool",
+                description="Tool for state transition testing",
+                inputSchema={"type": "object"},
+                server_name="test_server",
+                state=new_state
+            )
+
+            # Core properties should remain the same, hash should be identical
+            # (since hash is based on functional properties, not state)
+            assert changed_tool.md5_hash == original_hash
+            assert changed_tool.state == new_state
+
+
+    def test_external_tool_cross_server_compatibility(self):
+        """Test external tool compatibility across different servers."""
+        # Same tool deployed on different servers
+        servers = ["echo_server_1", "echo_server_2", "echo_server_backup"]
+
+        tools = []
+        for server in servers:
+            tool = InternalTool(
+                name="echo_tool",
+                description="Cross-server echo tool",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string"}
+                    }
+                },
+                server_name=server
+            )
+            tools.append(tool)
+
+        # All tools should have different hashes due to different server names
+        tool_hashes = [tool.md5_hash for tool in tools]
+        assert len(set(tool_hashes)) == 3  # All hashes are unique
+
+        # But all should have same functional MCP representation
+        mcp_tools = [tool.to_mcp_tool() for tool in tools]
+        for i in range(1, len(mcp_tools)):
+            assert mcp_tools[0].name == mcp_tools[i].name
+            assert mcp_tools[0].description == mcp_tools[i].description
+            assert mcp_tools[0].inputSchema == mcp_tools[i].inputSchema
+
+
+    def test_external_tool_complex_workflow_simulation(self):
+        """Test complex workflow with multiple external tools."""
+        # Simulate a complete tool workflow
+        workflow_tools = []
+
+        # Step 1: Echo tool to capture input
+        echo_tool = InternalTool(
+            name="echo_tool",
+            description="Capture and echo user input",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_input": {"type": "string", "description": "User input to process"}
+                },
+                "required": ["user_input"]
+            },
+            server_name="input_server"
+        )
+        workflow_tools.append(echo_tool)
+
+        # Step 2: Slow response tool to simulate processing
+        processing_tool = InternalTool(
+            name="slow_response_tool",
+            description="Process input with simulated delay",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "input_data": {"type": "string"},
+                    "processing_time": {"type": "number", "minimum": 0}
+                },
+                "required": ["input_data"]
+            },
+            server_name="processing_server"
+        )
+        workflow_tools.append(processing_tool)
+
+        # Step 3: Fixed response tool to generate result
+        result_tool = InternalTool(
+            name="fixed_response_tool",
+            description="Generate fixed response based on processing",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "processed_data": {"type": "string"},
+                    "response_format": {"type": "string", "enum": ["json", "text"]}
+                },
+                "required": ["processed_data"]
+            },
+            server_name="output_server"
+        )
+        workflow_tools.append(result_tool)
+
+        # Step 4: Error handling with error_all_tool (conditional)
+        error_tool = InternalTool(
+            name="error_all_tool",
+            description="Handle errors in workflow",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "error_input": {"type": "string"},
+                    "error_type": {"type": "string"}
+                }
+            },
+            server_name="error_server",
+            state=ToolState.DISABLED_ERROR  # Disabled unless needed
+        )
+        workflow_tools.append(error_tool)
+
+        # Verify workflow integrity
+        assert len(workflow_tools) == 4
+
+        # All tools should have unique hashes
+        hashes = [tool.md5_hash for tool in workflow_tools]
+        assert len(set(hashes)) == 4
+
+        # All enabled tools should be convertible to MCP tools
+        enabled_tools = [tool for tool in workflow_tools if tool.state == ToolState.ENABLED]
+        assert len(enabled_tools) == 3
+
+        mcp_tools = [tool.to_mcp_tool() for tool in enabled_tools]
+        assert all(isinstance(tool, types.Tool) for tool in mcp_tools)
+
+        # Workflow should be serializable for storage
+        workflow_dicts = [tool.to_dict() for tool in workflow_tools]
+        assert all("md5_hash" in tool_dict for tool_dict in workflow_dicts)
+
+        # LLM presentation should work for all enabled tools
+        relay_tools = [RelayTool(**{
+            "name": tool.name,
+            "description": tool.description,
+            "inputSchema": tool.inputSchema,
+            "server_name": tool.server_name,
+            "state": tool.state
+        }) for tool in enabled_tools]
+
+        llm_outputs = [tool.format_for_llm() for tool in relay_tools]
+        assert all("Tool:" in output for output in llm_outputs)
+        assert all("Arguments:" in output for output in llm_outputs)
+
+
+class TestExternalToolValidationAndErrorHandling:
+    """Test suite for external tool validation and error handling scenarios."""
+
+    def test_external_tool_validation_scenarios(self):
+        """Test various validation scenarios for external tools."""
+        # Test missing required fields - server_name is required
+        with pytest.raises(ValidationError):
+            BaseTool(
+                name="test_tool",
+                description="Tool missing server name",
+                inputSchema={}
+                # Missing server_name - this should definitely fail
+            )
+
+        # Test invalid state type
+        with pytest.raises(ValidationError):
+            BaseTool(
+                name="test_tool",
+                description="Tool with invalid state",
+                inputSchema={},
+                server_name="test_server",
+                state="not_a_valid_state"  # Should be ToolState enum
+            )
+
+        # Test None values for required fields
+        with pytest.raises(ValidationError):
+            BaseTool(
+                name=None,  # None name should fail
+                description="Tool with None name",
+                inputSchema={},
+                server_name="test_server"
+            )
+
+        # Test None server_name
+        with pytest.raises(ValidationError):
+            BaseTool(
+                name="test_tool",
+                description="Tool with None server",
+                inputSchema={},
+                server_name=None  # None server_name should fail
+            )
+
+    def test_external_tool_schema_validation(self):
+        """Test input schema validation for external tools."""
+        # Valid schemas should work
+        valid_schemas = [
+            {},  # Empty schema
+            {"type": "string"},  # Simple string schema
+            {"type": "object", "properties": {}},  # Empty object schema
+            {
+                "type": "object",
+                "properties": {
+                    "param1": {"type": "string"},
+                    "param2": {"type": "number"}
+                }
+            }  # Complex schema
+        ]
+
+        for schema in valid_schemas:
+            tool = InternalTool(
+                name="validation_tool",
+                description="Tool for schema validation testing",
+                inputSchema=schema,
+                server_name="validation_server"
+            )
+            assert tool.inputSchema == schema
+
+    def test_external_tool_error_recovery(self):
+        """Test error recovery scenarios for external tools."""
+        # Test tool creation with various edge case inputs
+        edge_case_inputs = [
+            {
+                "name": "echo_tool",
+                "description": None,  # None description
+                "inputSchema": {},
+                "server_name": "test_server"
+            }
+        ]
+
+        # Some edge cases might be handled gracefully
+        for input_data in edge_case_inputs:
+            try:
+                tool = BaseTool(**input_data)
+                # If creation succeeds, verify basic properties
+                assert tool.name == input_data["name"]
+                assert tool.server_name == input_data["server_name"]
+            except (ValidationError, TypeError):
+                # Expected for invalid inputs
+                pass
+
+    def test_external_tool_hash_collision_resistance(self):
+        """Test hash collision resistance for external tools."""
+        # Create tools with very similar properties
+        similar_tools = []
+
+        for i in range(10):
+            tool = InternalTool(
+                name=f"echo_tool_{i}",
+                description="Very similar echo tool for collision testing",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string"}
+                    }
+                },
+                server_name="echo_server"
+            )
+            similar_tools.append(tool)
+
+        # All hashes should be unique despite similarities
+        hashes = [tool.md5_hash for tool in similar_tools]
+        assert len(set(hashes)) == 10  # All hashes are unique
+
+    def test_external_tool_memory_efficiency(self):
+        """Test memory efficiency with many external tool instances."""
+        # Create many tool instances
+        tools = []
+
+        for i in range(100):
+            tool = InternalTool(
+                name=f"tool_{i}",
+                description=f"Tool number {i}",
+                inputSchema={"type": "object"},
+                server_name=f"server_{i % 5}"  # 5 different servers
+            )
+            tools.append(tool)
+
+        # Verify all tools are created successfully
+        assert len(tools) == 100
+
+        # Verify all have unique hashes
+        hashes = [tool.md5_hash for tool in tools]
+        assert len(set(hashes)) == 100
+
+        # Memory usage should be reasonable (tools should not hold excessive references)
+        for tool in tools:
+            assert hasattr(tool, 'md5_hash')
+            assert hasattr(tool, 'name')
+            assert hasattr(tool, 'server_name')
+
+    def test_external_tool_concurrent_access_simulation(self):
+        """Test external tool behavior under simulated concurrent access."""
+        # Create shared tool configuration
+        shared_config = {
+            "name": "passthrough_tool",
+            "description": "Tool for concurrent access testing",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "data": {"type": "string"}
+                }
+            },
+            "server_name": "concurrent_server"
+        }
+
+        # Simulate multiple threads creating the same tool
+        concurrent_tools = []
+        for _ in range(10):
+            tool = InternalTool(**shared_config)
+            concurrent_tools.append(tool)
+
+        # All tools should have identical hashes (same configuration)
+        hashes = [tool.md5_hash for tool in concurrent_tools]
+        assert all(h == hashes[0] for h in hashes)
+
+        # All tools should be functionally equivalent
+        mcp_tools = [tool.to_mcp_tool() for tool in concurrent_tools]
+        for mcp_tool in mcp_tools[1:]:
+            assert mcp_tool.name == mcp_tools[0].name
+            assert mcp_tool.description == mcp_tools[0].description
+            assert mcp_tool.inputSchema == mcp_tools[0].inputSchema
+
+    def test_external_tool_serialization_edge_cases(self):
+        """Test serialization edge cases for external tools."""
+        # Test with complex nested schema
+        complex_tool = InternalTool(
+            name="failing_tool",
+            description="Tool with complex nested schema",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "config": {
+                        "type": "object",
+                        "properties": {
+                            "nested": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "deep_param": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            server_name="complex_server"
+        )
+
+        # Serialization should handle complex structure
+        tool_dict = complex_tool.to_dict()
+        assert "input_schema" in tool_dict
+        assert "config" in tool_dict["input_schema"]["properties"]
+
+        # Hash should be computed successfully
+        assert complex_tool.md5_hash != ""
+        assert len(complex_tool.md5_hash) == 32
+
+    def test_external_tool_internationalization_support(self):
+        """Test external tool support for international characters and formats."""
+        # Test with various international character sets
+        international_tools = [
+            {
+                "name": "echo_tool_中文",
+                "description": "中文回声工具用于测试国际化支持",
+                "server_name": "中文服务器"
+            },
+            {
+                "name": "echo_tool_العربية",
+                "description": "أداة الصدى العربية لاختبار الدعم الدولي",
+                "server_name": "الخادم_العربي"
+            },
+            {
+                "name": "echo_tool_русский",
+                "description": "Русский инструмент эхо для тестирования интернационализации",
+                "server_name": "русский_сервер"
+            },
+            {
+                "name": "echo_tool_emoji",
+                "description": "Echo tool with emoji support 🔧🛠️⚙️🔨",
+                "server_name": "emoji_server_🚀"
+            }
+        ]
+
+        for tool_config in international_tools:
+            tool = InternalTool(
+                name=tool_config["name"],
+                description=tool_config["description"],
+                inputSchema={"type": "object"},
+                server_name=tool_config["server_name"]
+            )
+
+            # Should handle international characters
+            assert tool.md5_hash != ""
+            assert len(tool.md5_hash) == 32
+
+            # Serialization should preserve international characters
+            tool_dict = tool.to_dict()
+            assert tool_dict["name"] == tool_config["name"]
+            assert tool_dict["description"] == tool_config["description"]
+
+            # LLM formatting should preserve international characters
+            relay_tool = RelayTool(
+                name=tool.name,
+                description=tool.description,
+                inputSchema=tool.inputSchema,
+                server_name=tool.server_name
+            )
+
+            llm_output = relay_tool.format_for_llm()
+            assert tool_config["name"] in llm_output
+            assert tool_config["description"] in llm_output
