@@ -126,7 +126,7 @@ The relay supports two transport mechanisms:
 
 ```sh
 # Run with STDIO transport (default)
-python pan_aisecurity_mcp/mcp_relay/pan_security_relay.py \
+python -m pan_aisecurity_mcp/mcp_relay/pan_security_relay \
   --config-file=config/servers_config.json \
   --transport=stdio
 
