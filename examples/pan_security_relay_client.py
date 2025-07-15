@@ -278,7 +278,7 @@ async def main() -> None:
     )
     parser.add_argument("--port", type=int, default=8000, help="Port for SSE transport")
     parser.add_argument(
-        "--relay_module",
+        "--relay-module",
         type=str,
         default="pan_aisecurity_mcp.mcp_relay.pan_security_relay",
         help="Relay module path for STDIO transport",
