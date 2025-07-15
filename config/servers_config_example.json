@@ -10,6 +10,15 @@
         "sqlite": {
           "command": "python",
           "args": ["examples/server/sqlite_server.py"]
+        },
+        "test": {
+          "command": "python",
+          "args": ["examples/server/test_server.py"]
+        },
+        "time": {
+          "command": "python",
+          "args": ["examples/server/time_server.py"]
         }
+
     }
 }

@@ -91,8 +91,8 @@ def main(port: int, transport: str) -> int:
             result = await read_query(query)
             return [TextContent(type="text", text=str(result))]
 
-        elif name == "ping":
-            return [TextContent(type="text", text="pong")]
+        elif name == "health_check":
+            return [TextContent(type="text", text="ok")]
         else:
             raise ValueError(f"Unknown tool: {name}")
 
@@ -144,8 +144,8 @@ def main(port: int, transport: str) -> int:
                 },
             ),
             Tool(
-                name="ping",
-                description="sqlite ping pong",
+                name="health_check",
+                description="Sqlite server health check",
                 inputSchema={"type": "object", "properties": {}},
             ),
         ]
@@ -327,9 +327,9 @@ async def init_db() -> None:
             row = await cursor.fetchone()
             if row[0] == 0:
                 test_data = [
-                    ("search_engine", "www.google.com", 10),
-                    ("news", "www.reuters.com", 20),
-                    ("news", "www.cnn.com", 30),
+                    ("streaming-media", "https://urlfiltering.paloaltonetworks.com/test-streaming-media", 10),
+                    ("job-search", "https://urlfiltering.paloaltonetworks.com/test-job-search", 20),
+                    ("business-and-economy", "https://urlfiltering.paloaltonetworks.com/test-business-and-economy", 30),
                 ]
                 await db.executemany(
                     "INSERT INTO benign_url_table (name, content, value) VALUES (?, ?, ?);",
@@ -353,9 +353,9 @@ async def init_db() -> None:
             row = await cursor.fetchone()
             if row[0] == 0:
                 test_data = [
-                    ("unknown", "jukoxiu.dazoqao.xyz", 10),
-                    ("unknown", "www.reuters.com", 20),
-                    ("unknown", "www.cnn.com", 30),
+                    ("unknown", "https://urlfiltering.paloaltonetworks.com/test-malware", 10),
+                    ("unknown", "https://urlfiltering.paloaltonetworks.com/test-news", 20),
+                    ("unknown", "https://urlfiltering.paloaltonetworks.com/test-computer-and-internet-info", 30),
                 ]
                 await db.executemany(
                     "INSERT INTO unknown_url_table (name, content, value) VALUES (?, ?, ?);",
