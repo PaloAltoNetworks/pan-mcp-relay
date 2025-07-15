@@ -37,8 +37,8 @@ from mcp.server.sse import SseServerTransport
 from starlette.applications import Starlette
 from starlette.routing import Route
 
-from configuration import Configuration
-from constants import (
+from pan_aisecurity_mcp.mcp_relay.configuration import Configuration
+from pan_aisecurity_mcp.mcp_relay.constants import (
     ENVIRONMENT_CONFIG_LABEL,
     HIDDEN_MODE_ENABLED,
     HIDDEN_MODE_LABEL,
@@ -52,11 +52,11 @@ from constants import (
     MCP_RELAY_TRANSPORT_STDIO,
     MCP_RELAY_TRANSPORT_SSE,
 )
-from downstream_mcp_client import DownstreamMcpClient
-from exceptions import AISecMcpRelayException, ErrorType
-from security_scanner import SecurityScanner
-from tool import InternalTool, ToolState
-from tool_registry import ToolRegistry
+from pan_aisecurity_mcp.mcp_relay.downstream_mcp_client import DownstreamMcpClient
+from pan_aisecurity_mcp.mcp_relay.exceptions import AISecMcpRelayException, ErrorType
+from pan_aisecurity_mcp.mcp_relay.security_scanner import SecurityScanner
+from pan_aisecurity_mcp.mcp_relay.tool import InternalTool, ToolState
+from pan_aisecurity_mcp.mcp_relay.tool_registry import ToolRegistry
 
 
 logging.basicConfig(

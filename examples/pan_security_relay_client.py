@@ -44,13 +44,13 @@ class PanSecurityRelayClient:
         transport_type: str = "stdio",
         host: str = "127.0.0.1",
         port: int = 8000,
-        relay_file_path: Optional[str] = None,
+        relay_module: Optional[str] = None,
         config_file_path: Optional[str] = None,
     ):
         self.transport_type = transport_type
         self.host = host
         self.port = port
-        self.relay_file_path = relay_file_path
+        self.relay_module = relay_module
         self.config_file_path = config_file_path
         self.session: Optional[ClientSession] = None
         self._cleanup_lock: asyncio.Lock = asyncio.Lock()
@@ -81,14 +81,14 @@ class PanSecurityRelayClient:
     async def _initialize_stdio_transport(self) -> None:
         from mcp import stdio_client, StdioServerParameters
 
-        if not self.relay_file_path or not self.config_file_path:
+        if not self.relay_module or not self.config_file_path:
             raise ValueError(
-                "Both relay_file_path and config_file_path must be provided for stdio transport"
+                "Both relay_module and config_file_path must be provided for stdio transport"
             )
 
         server_params = StdioServerParameters(
             command="python",
-            args=[self.relay_file_path, f"--config-file={self.config_file_path}"],
+            args=["-m", self.relay_module, f"--config-file={self.config_file_path}"],
         )
         logging.info("Creating stdio transport...")
         stdio_transport = await self.exit_stack.enter_async_context(
@@ -278,10 +278,10 @@ async def main() -> None:
     )
     parser.add_argument("--port", type=int, default=8000, help="Port for SSE transport")
     parser.add_argument(
-        "--relay-file",
+        "--relay_module",
         type=str,
-        default="pan_aisecurity_mcp/mcp_relay/pan_security_relay.py",
-        help="Relay file path for STDIO transport",
+        default="pan_aisecurity_mcp.mcp_relay.pan_security_relay",
+        help="Relay module path for STDIO transport",
     )
     parser.add_argument(
         "--config-file",
@@ -303,20 +303,20 @@ async def main() -> None:
         print("\nExecution Examples:")
         print("1. List available tools:")
         print(
-            "   python examples/pan_security_relay_client.py --transport=stdio --relay-file=pan_aisecurity_mcp/mcp_relay/pan_security_relay.py --config-file=config/servers_config.json --list-tools"
+            "   python examples/pan_security_relay_client.py --transport=stdio --relay-module=pan_aisecurity_mcp.mcp_relay.pan_security_relay --config-file=config/servers_config.json --list-tools"
         )
         print("\n2. Call a specific tool:")
         print(
-            '   python examples/pan_security_relay_client.py --transport=stdio --relay-file=pan_aisecurity_mcp/mcp_relay/pan_security_relay.py --config-file=config/servers_config.json --tool <tool_name> --args \'{"param1": "value1"}\''
+            '   python examples/pan_security_relay_client.py --transport=stdio --relay-module=pan_aisecurity_mcp.mcp_relay.pan_security_relay --config-file=config/servers_config.json --tool <tool_name> --args \'{"param1": "value1"}\''
         )
         print("\n3. Interactive mode:")
         print(
-            "   python examples/pan_security_relay_client.py --transport=stdio --relay-file=pan_aisecurity_mcp/mcp_relay/pan_security_relay.py --config-file=config/servers_config.json"
+            "   python examples/pan_security_relay_client.py --transport=stdio --relay-module=pan_aisecurity_mcp.mcp_relay.pan_security_relay --config-file=config/servers_config.json"
         )
         return
 
     client = PanSecurityRelayClient(
-        args.transport, args.host, args.port, args.relay_file, args.config_file
+        args.transport, args.host, args.port, args.relay_module, args.config_file
     )
 
     try:

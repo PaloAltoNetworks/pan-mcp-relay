@@ -5,7 +5,6 @@ Manages connections and communication with downstream MCP servers.
 """
 
 import asyncio
-import json
 import logging
 import os
 from contextlib import AsyncExitStack
