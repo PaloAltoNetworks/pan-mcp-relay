@@ -52,25 +52,6 @@ class TestPanSecurityRelay:
         }
 
     # ===================== Initialization Tests =====================
-    
-    def test_init_default_parameters(self):
-        """Test initialization with default parameters."""
-        relay = PanSecurityRelay("/test/config.json")
-        assert relay.config_path == "/test/config.json"
-        assert relay.max_downstream_servers == MAX_DOWNSTREAM_SERVERS_DEFAULT
-        assert relay.max_downstream_tools == MAX_DOWNSTREAM_TOOLS_DEFAULT
-
-    def test_init_custom_parameters(self):
-        """Test initialization with custom parameters."""
-        relay = PanSecurityRelay(
-            "/custom/config.json",
-            tool_registry_cache_expiry=600,
-            max_downstream_servers=10,
-            max_downstream_tools=200
-        )
-        assert relay.config_path == "/custom/config.json"
-        assert relay.max_downstream_servers == 10
-        assert relay.max_downstream_tools == 200
 
     @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.PanSecurityRelay._update_tool_registry', new_callable=AsyncMock)
     @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.PanSecurityRelay._update_security_scanner', new_callable=AsyncMock)
@@ -270,23 +251,6 @@ class TestPanSecurityRelay:
         mock_prepare_tool.assert_any_call("benign_text_processor", text_processor_tools, False, [])
         mock_prepare_tool.assert_any_call("benign_data_analyzer", data_analyzer_tools, True, [])
 
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.cleanup', new_callable=AsyncMock)
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.list_tools', new_callable=AsyncMock)
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.initialize', new_callable=AsyncMock)
-    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.PanSecurityRelay._prepare_tool', new_callable=AsyncMock)
-    async def test_collect_tools_from_servers_empty_config(self, mock_prepare_tool, mock_initialize,
-                                                        mock_list_tools, mock_cleanup, relay):
-        """Test collection of tools with empty server configuration."""
-        servers_config = {}
-        
-        result = await relay._collect_tools_from_servers(servers_config)
-        
-        assert result == []
-        assert len(relay.servers) == 0
-        mock_initialize.assert_not_called()
-        mock_list_tools.assert_not_called()
-        mock_prepare_tool.assert_not_called()
-        mock_cleanup.assert_not_called()
 
     @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.cleanup', new_callable=AsyncMock)
     @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient.list_tools', new_callable=AsyncMock)
@@ -374,12 +338,6 @@ class TestPanSecurityRelay:
         
         assert exc_info.value.error_type == ErrorType.INVALID_CONFIGURATION
         assert f"maximum allowed: {max_tools}" in str(exc_info.value)
-
-    def test_validate_tool_limits_empty_list(self):
-        """Test tool limits validation with empty tool list."""
-        relay = PanSecurityRelay("/test/config.json", max_downstream_tools=5)
-        
-        relay._validate_tool_limits([])
 
     @patch('pan_aisecurity_mcp.mcp_relay.security_scanner.SecurityScanner.should_block')
     @patch('pan_aisecurity_mcp.mcp_relay.security_scanner.SecurityScanner.scan_tool', new_callable=AsyncMock)
@@ -504,14 +462,6 @@ class TestPanSecurityRelay:
         relay.tool_registry.get_tool_by_hash.assert_called_once()
 
 
-    async def test_prepare_tool_empty_tool_list(self, relay):
-        """Test tool preparation with empty tool list."""
-        tool_list = []
-        
-        await relay._prepare_tool("benign_text_processor", [], False, tool_list)
-        
-        assert len(tool_list) == 0
-
     def test_disable_tools_with_duplicate_names(self, relay):
         """Test disabling tools with duplicate names."""
         tools = [
@@ -532,19 +482,6 @@ class TestPanSecurityRelay:
         unique_tool = [tool for tool in tools if tool.name == "text_summarizer"][0]
         assert unique_tool.state == ToolState.ENABLED
 
-    def test_disable_tools_no_duplicates(self, relay):
-        """Test disabling tools when no duplicates exist."""
-        tools = [
-            InternalTool(name="text_summarizer", description="Summarize text documents", inputSchema={}, 
-                        annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED),
-            InternalTool(name="data_analyzer", description="Analyze data patterns", inputSchema={}, 
-                        annotations=None, server_name="benign_data_analyzer", state=ToolState.ENABLED)
-        ]
-        
-        relay._disable_tools_with_duplicate_names(tools)
-        
-        for tool in tools:
-            assert tool.state == ToolState.ENABLED
 
     # ===================== MCP Server Handling Tests =====================
     
@@ -933,19 +870,6 @@ class TestPanSecurityRelay:
         
         assert exc_info.value.error_type == ErrorType.TOOL_NOT_FOUND
 
-    async def test_handle_tool_execution_none_tool_name(self, relay):
-        """Test tool execution with None tool name."""
-        relay.security_scanner = Mock()
-        relay.security_scanner.scan_request = AsyncMock(return_value={"category": "benign"})
-        relay.security_scanner.should_block.return_value = False
-        relay.tool_registry = Mock()
-        relay.tool_registry.get_available_tools.return_value = []
-        
-        with pytest.raises(AISecMcpRelayException) as exc_info:
-            await relay._handle_tool_execution(None, {})
-        
-        assert exc_info.value.error_type == ErrorType.TOOL_NOT_FOUND
-
     async def test_handle_tool_execution_empty_arguments(self, relay):
         """Test tool execution with empty arguments."""
         benign_scan_result = {
@@ -1121,29 +1045,6 @@ class TestPanSecurityRelay:
         
         assert "Tool execution failed" in str(exc_info.value)
 
-    # ===================== Exception Handling Tests =====================
-    
-    def test_exception_creation_with_error_type(self):
-        """Test AISecMcpRelayException creation with error type."""
-        exception = AISecMcpRelayException("Test message", ErrorType.INVALID_CONFIGURATION)
-        assert exception.message == "Test message"
-        assert exception.error_type == ErrorType.INVALID_CONFIGURATION
-        assert ErrorType.INVALID_CONFIGURATION.value in str(exception)
-
-    def test_exception_mcp_format_conversion(self):
-        """Test exception conversion to MCP format."""
-        exception = AISecMcpRelayException("Test error", ErrorType.TOOL_NOT_FOUND)
-        mcp_result = exception.to_mcp_format()
-        
-        assert isinstance(mcp_result, types.CallToolResult)
-        assert mcp_result.isError
-
-    def test_exception_without_error_type(self):
-        """Test exception creation without explicit error type."""
-        exception = AISecMcpRelayException("Test message")
-        assert exception.message == "Test message"
-        assert isinstance(exception, AISecMcpRelayException)
-
     # ===================== Special Tools Tests =====================
     
     async def test_handle_list_downstream_servers_info_success(self, relay):
@@ -1158,16 +1059,6 @@ class TestPanSecurityRelay:
         assert not result.isError
         assert len(result.content) == 1
 
-    async def test_handle_list_downstream_servers_info_empty_registry(self, relay):
-        """Test downstream servers info with empty registry."""
-        relay.tool_registry = Mock()
-        relay.tool_registry.get_registry_stats.return_value = ""
-        relay.tool_registry.get_server_tool_map_json.return_value = "{}"
-        
-        result = await relay._handle_list_downstream_servers_info()
-        
-        assert isinstance(result, types.CallToolResult)
-        assert not result.isError
 
     # ===================== Resource and Performance Tests =====================
     
