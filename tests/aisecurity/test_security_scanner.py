@@ -230,7 +230,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
     )
     async def test_invalid_api_key_error(self, mock_pan_security_server):
-        """Test when scan_result.isError is True."""
+        """Test invalid api key"""
         # Create mock error content
         mock_error_content = types.TextContent(
             type="text",
@@ -270,7 +270,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
     )
     async def test_api_rate_limit_error(self, mock_pan_security_server):
-        """Test when scan_result.isError is True."""
+        """Test api rate limit error"""
         # Create mock error content
         mock_error_content = types.TextContent(
             type="text",
@@ -310,6 +310,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         new_callable=Mock,
     )
     def test_should_block(self, mock_pan_security_server):
+        """Test should block function from security scanner"""
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         expected_scan_response = ScanResponse(
