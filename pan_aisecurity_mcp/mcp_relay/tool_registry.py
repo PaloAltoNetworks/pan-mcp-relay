@@ -10,9 +10,9 @@ from typing import Dict, List, Optional
 import json
 import logging
 
-from constants import TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT, UNIX_EPOCH
-from tool import InternalTool, ToolState
-from exceptions import AISecMcpRelayException, ErrorType
+from pan_aisecurity_mcp.mcp_relay.constants import TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT, UNIX_EPOCH
+from pan_aisecurity_mcp.mcp_relay.tool import InternalTool, ToolState
+from pan_aisecurity_mcp.mcp_relay.exceptions import AISecMcpRelayException, ErrorType
 
 
 logger = logging.getLogger(__name__)
@@ -209,17 +209,11 @@ class ToolRegistry:
         """
         try:
             server_tool_map = self.get_server_tool_map()
-            server_tools_json_map: Dict[str, str] = {}
-            
-            for server_name, tools in server_tool_map.items():
-                tools_dict_list = [tool.to_dict() for tool in tools]
-                server_tools_json_map[server_name] = json.dumps(
-                    tools_dict_list, 
-                    indent=2,
-                    ensure_ascii=False
-                )
-
-            return json.dumps(server_tools_json_map, indent=2, ensure_ascii=False)
+            serializable = {
+                server_name: [tool.model_dump() for tool in tool_list]
+                for server_name, tool_list in server_tool_map.items()
+            }
+            return json.dumps(serializable, indent=2, ensure_ascii=False)
         
         except (AttributeError, TypeError) as e:
             logger.error("Failed to serialize tools to JSON: %s", e)
