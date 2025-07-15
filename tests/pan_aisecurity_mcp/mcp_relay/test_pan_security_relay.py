@@ -555,6 +555,158 @@ class TestPanSecurityRelay:
         assert server is not None
         assert isinstance(server, Server)
 
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.stdio_server')
+    async def test_run_stdio_server_success(self, mock_stdio_server, relay):
+        """Test successful stdio server startup."""
+        # Mock the stdio server context manager
+        mock_streams = (AsyncMock(), AsyncMock())
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__.return_value = mock_streams
+        mock_context_manager.__aexit__.return_value = None
+        mock_stdio_server.return_value = mock_context_manager
+        
+
+        mock_app = AsyncMock()
+        mock_app.run = AsyncMock()
+        mock_app.create_initialization_options = Mock(return_value={"test": "options"})
+        
+        await relay.run_stdio_server(mock_app)
+        
+        mock_stdio_server.assert_called_once()
+        
+        mock_context_manager.__aenter__.assert_called_once()
+        mock_context_manager.__aexit__.assert_called_once()
+        
+        mock_app.run.assert_called_once_with(
+            mock_streams[0], 
+            mock_streams[1], 
+            {"test": "options"}
+        )
+        mock_app.create_initialization_options.assert_called_once()
+
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.stdio_server')
+    async def test_run_stdio_server_initialization_failure(self, mock_stdio_server, relay):
+        """Test stdio server startup with initialization failure."""
+        mock_stdio_server.side_effect = Exception("Stdio server initialization failed")
+        
+        mock_app = AsyncMock()
+        
+        with pytest.raises(Exception) as exc_info:
+            await relay.run_stdio_server(mock_app)
+        
+        assert "Stdio server initialization failed" in str(exc_info.value)
+        mock_stdio_server.assert_called_once()
+
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.stdio_server')
+    async def test_run_stdio_server_app_run_failure(self, mock_stdio_server, relay):
+        """Test stdio server startup with app run failure."""
+        mock_streams = (AsyncMock(), AsyncMock())
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__.return_value = mock_streams
+        mock_context_manager.__aexit__.return_value = None
+        mock_stdio_server.return_value = mock_context_manager
+        
+        mock_app = AsyncMock()
+        mock_app.run.side_effect = Exception("App run failed")
+        mock_app.create_initialization_options = Mock(return_value={})
+        
+        with pytest.raises(Exception) as exc_info:
+            await relay.run_stdio_server(mock_app)
+        
+        assert "App run failed" in str(exc_info.value)
+        mock_app.run.assert_called_once()
+
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.uvicorn.Server')
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.uvicorn.Config')
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.Starlette')
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.Route')
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.MessagesEndpoint')
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.SseEndpoint')
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.SseServerTransport')
+    async def test_run_sse_server_success(self, mock_sse_transport, mock_sse_endpoint, 
+                                        mock_messages_endpoint, mock_route, mock_starlette,
+                                        mock_uvicorn_config, mock_uvicorn_server, relay):
+        """Test successful SSE server startup."""
+        mock_transport_instance = AsyncMock()
+        mock_sse_transport.return_value = mock_transport_instance
+        
+        mock_sse_endpoint_instance = AsyncMock()
+        mock_sse_endpoint.return_value = mock_sse_endpoint_instance
+        
+        mock_messages_endpoint_instance = AsyncMock()
+        mock_messages_endpoint.return_value = mock_messages_endpoint_instance
+        
+        mock_route_instances = [AsyncMock(), AsyncMock()]
+        mock_route.side_effect = mock_route_instances
+        
+        mock_starlette_app = AsyncMock()
+        mock_starlette.return_value = mock_starlette_app
+        
+        mock_config_instance = AsyncMock()
+        mock_uvicorn_config.return_value = mock_config_instance
+        
+        mock_server_instance = AsyncMock()
+        mock_server_instance.serve = AsyncMock()
+        mock_uvicorn_server.return_value = mock_server_instance
+        
+        mock_app = AsyncMock()
+        
+        await relay.run_sse_server(mock_app, "127.0.0.1", 8000)
+        
+        mock_sse_transport.assert_called_once_with("/messages")
+        
+        mock_sse_endpoint.assert_called_once_with(mock_transport_instance, mock_app)
+        mock_messages_endpoint.assert_called_once_with(mock_transport_instance)
+        
+        assert mock_route.call_count == 2
+        mock_route.assert_any_call("/sse", endpoint=mock_sse_endpoint_instance)
+        mock_route.assert_any_call("/messages", endpoint=mock_messages_endpoint_instance, methods=["POST"])
+        
+        mock_starlette.assert_called_once_with(routes=mock_route_instances)
+        
+        mock_uvicorn_config.assert_called_once_with(mock_starlette_app, host="127.0.0.1", port=8000)
+        mock_uvicorn_server.assert_called_once_with(mock_config_instance)
+        mock_server_instance.serve.assert_called_once()
+
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.uvicorn.Server')
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.uvicorn.Config')
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.Starlette')
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.SseServerTransport')
+    async def test_run_sse_server_uvicorn_failure(self, mock_sse_transport, mock_starlette,
+                                                mock_uvicorn_config, mock_uvicorn_server, relay):
+        """Test SSE server startup with uvicorn server failure."""
+        mock_sse_transport.return_value = AsyncMock()
+        mock_starlette.return_value = AsyncMock()
+        mock_uvicorn_config.return_value = AsyncMock()
+        
+        mock_server_instance = AsyncMock()
+        mock_server_instance.serve.side_effect = Exception("Uvicorn server startup failed")
+        mock_uvicorn_server.return_value = mock_server_instance
+        
+        mock_app = AsyncMock()
+        
+        with pytest.raises(Exception) as exc_info:
+            await relay.run_sse_server(mock_app, "127.0.0.1", 8000)
+        
+        assert "Uvicorn server startup failed" in str(exc_info.value)
+        mock_server_instance.serve.assert_called_once()
+
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.Starlette')
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.SseServerTransport')
+    async def test_run_sse_server_starlette_failure(self, mock_sse_transport, mock_starlette, relay):
+        """Test SSE server startup with Starlette app creation failure."""
+        mock_sse_transport.return_value = AsyncMock()
+        
+        mock_starlette.side_effect = Exception("Starlette app creation failed")
+        
+        mock_app = AsyncMock()
+        
+        with pytest.raises(Exception) as exc_info:
+            await relay.run_sse_server(mock_app, "127.0.0.1", 8000)
+        
+        assert "Starlette app creation failed" in str(exc_info.value)
+        mock_starlette.assert_called_once()
+
     @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.PanSecurityRelay._update_tool_registry', new_callable=AsyncMock)
     async def test_handle_list_tools_up_to_date_registry(self, mock_update_tool_registry, relay):
         """Test tool listing with up-to-date registry."""
@@ -837,6 +989,104 @@ class TestPanSecurityRelay:
             
             assert isinstance(result, types.CallToolResult)
             mock_execute.assert_called_once_with("benign_text_processor", "summarize_text_content", {})
+
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.PanSecurityRelay._handle_list_downstream_servers_info', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.security_scanner.SecurityScanner.should_block')
+    @patch('pan_aisecurity_mcp.mcp_relay.security_scanner.SecurityScanner.scan_request', new_callable=AsyncMock)
+    async def test_handle_tool_execution_special_relay_info_tool(self, mock_scan_request, mock_should_block, 
+                                                            mock_handle_relay_info, relay):
+        """Test tool execution for the special relay info tool."""
+        benign_scan_result = {
+            "action": "allow",
+            "category": "benign",
+            "profile_id": "ba51dae8-4675-4f89-8027-9adcc01e41e3",
+            "profile_name": "MCP-Security",
+            "prompt_detected": {
+                "dlp": False,
+                "injection": False,
+                "url_cats": False
+            },
+            "report_id": "Rfed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "response_detected": {
+                "dlp": False,
+                "url_cats": False
+            },
+            "scan_id": "fed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "tr_id": "12348ba3396e"
+        }
+
+        expected_result = types.CallToolResult(
+            content=[types.TextContent(type="text", text='{"servers": {"benign_text_processor": ["summarize_text_content"]}}')], 
+            isError=False
+        )
+        
+        mock_scan_request.return_value = benign_scan_result
+        mock_should_block.return_value = False
+        mock_handle_relay_info.return_value = expected_result
+        
+        relay.security_scanner = Mock()
+        relay.security_scanner.scan_request = mock_scan_request
+        relay.security_scanner.should_block = mock_should_block
+        
+        result = await relay._handle_tool_execution(TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO, {})
+        
+        assert isinstance(result, types.CallToolResult)
+        assert not result.isError
+        mock_handle_relay_info.assert_called_once()
+        mock_scan_request.assert_called_once_with(f"{TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO}: {{}}")
+
+    @patch('pan_aisecurity_mcp.mcp_relay.pan_security_relay.PanSecurityRelay._execute_on_server', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.security_scanner.SecurityScanner.should_block')
+    @patch('pan_aisecurity_mcp.mcp_relay.security_scanner.SecurityScanner.scan_response', new_callable=AsyncMock)
+    @patch('pan_aisecurity_mcp.mcp_relay.security_scanner.SecurityScanner.scan_request', new_callable=AsyncMock)
+    async def test_handle_tool_execution_server_returns_error(self, mock_scan_request, mock_scan_response,
+                                                            mock_should_block, mock_execute_on_server, relay):
+        """Test tool execution when downstream server returns an error result."""
+        benign_scan_result = {
+            "action": "allow",
+            "category": "benign",
+            "profile_id": "ba51dae8-4675-4f89-8027-9adcc01e41e3",
+            "profile_name": "MCP-Security",
+            "prompt_detected": {
+                "dlp": False,
+                "injection": False,
+                "url_cats": False
+            },
+            "report_id": "Rfed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "response_detected": {
+                "dlp": False,
+                "url_cats": False
+            },
+            "scan_id": "fed6481f-b349-44c0-b6cb-72a4219efbc6",
+            "tr_id": "12348ba3396e"
+        }
+
+        mock_scan_request.return_value = benign_scan_result
+        mock_scan_response.return_value = benign_scan_result
+        mock_should_block.return_value = False
+        mock_execute_on_server.return_value = types.CallToolResult(
+            content=[types.TextContent(type="text", text="Tool execution failed on downstream server")], 
+            isError=True
+        )
+        
+        relay.tool_registry = Mock()
+        relay.tool_registry.get_available_tools.return_value = [InternalTool(
+            name="summarize_text_content", description="Summarize text content from documents", inputSchema={},
+            annotations=None, server_name="benign_text_processor", state=ToolState.ENABLED
+        )]
+        relay.security_scanner = Mock()
+        relay.security_scanner.scan_request = mock_scan_request
+        relay.security_scanner.scan_response = mock_scan_response
+        relay.security_scanner.should_block = mock_should_block
+        relay.security_scanner.pan_security_server = Mock()
+        relay.security_scanner.pan_security_server.extract_text_content.return_value = "Tool execution failed on downstream server"
+        
+        with pytest.raises(AISecMcpRelayException) as exc_info:
+            await relay._handle_tool_execution("summarize_text_content", {"text": "Sample document content"})
+        
+        assert exc_info.value.error_type == ErrorType.TOOL_EXECUTION_ERROR
+        mock_execute_on_server.assert_called_once_with("benign_text_processor", "summarize_text_content", {"text": "Sample document content"})
+
 
     # ===================== Server Execution Tests =====================
     
