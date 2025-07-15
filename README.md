@@ -126,12 +126,12 @@ The relay supports two transport mechanisms:
 
 ```sh
 # Run with STDIO transport (default)
-python -m pan_aisecurity_mcp/mcp_relay/pan_security_relay \
+python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
   --config-file=config/servers_config.json \
   --transport=stdio
 
 # Run with SSE transport
-python pan_aisecurity_mcp/mcp_relay/pan_security_relay.py \
+python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
   --config-file=config/servers_config.json \
   --transport=sse \
   --host=127.0.0.1 \
@@ -141,7 +141,7 @@ python pan_aisecurity_mcp/mcp_relay/pan_security_relay.py \
 Additional configuration options:
 
 ```sh
-python -m pan_aisecurity_mcp/mcp_relay/pan_security_relay \
+python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
   --config-file=config/servers_config.json \
   --transport=stdio \
   --host=127.0.0.1 \
