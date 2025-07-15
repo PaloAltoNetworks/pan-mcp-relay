@@ -185,7 +185,5 @@ class TestAISecMcpRelayException(unittest.TestCase):
         self.assertEqual(str(caught_exception), f"{error_type.value}:{message}")
 
 
-
-
 if __name__ == "__main__":
     unittest.main()

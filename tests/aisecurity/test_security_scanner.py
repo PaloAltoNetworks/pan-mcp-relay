@@ -1,7 +1,8 @@
 import json
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch, Mock
+from unittest.mock import AsyncMock, patch, Mock
 import mcp.types as types
+
 from pan_aisecurity_mcp.mcp_relay.security_scanner import SecurityScanner
 from aisecurity.scan.asyncio.scanner import ScanResponse
 
@@ -57,7 +58,9 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"}
+        params = {
+            "prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"
+        }
 
         # Execute the test
         result = await mock_scanner._perform_scan("scan_request", params)
@@ -107,7 +110,9 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-news"}
+        params = {
+            "prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-news"
+        }
 
         # Execute the test
         result = await mock_scanner._perform_scan("scan_request", params)
@@ -136,7 +141,9 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"}
+        params = {
+            "prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"
+        }
 
         # Execute the test and expect exception
         with self.assertRaisesRegex(Exception, "Initialization failed"):
@@ -153,7 +160,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         self, mock_pan_security_server
     ):
         """Test when scan_result.content is an empty list."""
-        mock_scan_result = Mock()
+        mock_scan_result = AsyncMock()
         mock_scan_result.isError = False
         mock_scan_result.content = []  # Empty list
 
@@ -166,7 +173,9 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"}
+        params = {
+            "prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"
+        }
 
         # Execute the test
         result = await mock_scanner._perform_scan("scan_request", params)
@@ -188,7 +197,7 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
             type="text", text="Security scan failed due to invalid input"
         )
 
-        mock_scan_result = Mock()
+        mock_scan_result = AsyncMock()
         mock_scan_result.isError = True
         mock_scan_result.content = [mock_error_content]
 
@@ -204,7 +213,9 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         mock_scanner = SecurityScanner(mock_pan_security_server)
 
         # Test parameters
-        params = {"prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"}
+        params = {
+            "prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"
+        }
 
         # Execute the test
         result = await mock_scanner._perform_scan("scan_response", params)
@@ -213,3 +224,112 @@ class TestSecurityScanner(unittest.IsolatedAsyncioTestCase):
         assert result is None
         mock_pan_security_server.extract_text_content.assert_called_once()
         mock_pan_security_server.cleanup.assert_called_once()
+
+    @patch(
+        "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+        new_callable=AsyncMock,
+    )
+    async def test_invalid_api_key_error(self, mock_pan_security_server):
+        """Test when scan_result.isError is True."""
+        # Create mock error content
+        mock_error_content = types.TextContent(
+            type="text",
+            text="aisecurity.exceptions.AISecSDKException: AISEC_SERVER_SIDE_ERROR:(403) HTTP response body: {'error':{'message':Invalid API Key or Oauth Token}}",
+        )
+
+        mock_scan_result = AsyncMock()
+        mock_scan_result.isError = True
+        mock_scan_result.content = [mock_error_content]
+
+        # Setup mocks
+        mock_pan_security_server.initialize = AsyncMock()
+        mock_pan_security_server.execute_tool = AsyncMock(return_value=mock_scan_result)
+        mock_pan_security_server.extract_text_content = AsyncMock(
+            return_value="aisecurity.exceptions.AISecSDKException: AISEC_SERVER_SIDE_ERROR:(403) HTTP response body: {'error':{'message':Invalid API Key or Oauth Token}}"
+        )
+        mock_pan_security_server.cleanup = AsyncMock()
+
+        # Create scanner instance
+        mock_scanner = SecurityScanner(mock_pan_security_server)
+
+        # Test parameters
+        params = {
+            "prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"
+        }
+
+        # Execute the test
+        result = await mock_scanner._perform_scan("scan_response", params)
+
+        # Assertions
+        assert result is None
+        mock_pan_security_server.extract_text_content.assert_called_once()
+        mock_pan_security_server.cleanup.assert_called_once()
+
+    @patch(
+        "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+        new_callable=AsyncMock,
+    )
+    async def test_api_rate_limit_error(self, mock_pan_security_server):
+        """Test when scan_result.isError is True."""
+        # Create mock error content
+        mock_error_content = types.TextContent(
+            type="text",
+            text="Error during sync scan: AISEC_SERVER_SIDE_ERROR:(429)  HTTP response body: {'error':{'message':Rate limit exceeded}}",
+        )
+
+        mock_scan_result = AsyncMock()
+        mock_scan_result.isError = True
+        mock_scan_result.content = [mock_error_content]
+
+        # Setup mocks
+        mock_pan_security_server.initialize = AsyncMock()
+        mock_pan_security_server.execute_tool = AsyncMock(return_value=mock_scan_result)
+        mock_pan_security_server.extract_text_content = AsyncMock(
+            return_value="Error during sync scan: AISEC_SERVER_SIDE_ERROR:(429)  HTTP response body: {'error':{'message':Rate limit exceeded}}"
+        )
+        mock_pan_security_server.cleanup = AsyncMock()
+
+        # Create scanner instance
+        mock_scanner = SecurityScanner(mock_pan_security_server)
+
+        # Test parameters
+        params = {
+            "prompt": "visit and summarize the content of https://urlfiltering.paloaltonetworks.com/test-phishing"
+        }
+
+        # Execute the test
+        result = await mock_scanner._perform_scan("scan_response", params)
+
+        # Assertions
+        assert result is None
+        mock_pan_security_server.extract_text_content.assert_called_once()
+        mock_pan_security_server.cleanup.assert_called_once()
+
+    @patch(
+        "pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+        new_callable=Mock,
+    )
+    def test_should_block(self, mock_pan_security_server):
+        mock_scanner = SecurityScanner(mock_pan_security_server)
+
+        expected_scan_response = ScanResponse(
+            report_id="R12345678-1234-5678-9abc-123456789012",
+            scan_id="12345678-1234-5678-9abc-123456789012",
+            category="malicious",
+            action="block",
+        )
+
+        result = mock_scanner.should_block(scan_response=expected_scan_response)
+        self.assertEqual(True, result)
+        expected_scan_response = None
+        result = mock_scanner.should_block(scan_response=expected_scan_response)
+        self.assertEqual(False, result)
+
+        expected_scan_response = ScanResponse(
+            report_id="R12345678-1234-5678-9abc-123456789013",
+            scan_id="12345678-1234-5678-9abc-123456789013",
+            category="benign",
+            action="allow",
+        )
+        result = mock_scanner.should_block(scan_response=expected_scan_response)
+        self.assertEqual(False, result)
