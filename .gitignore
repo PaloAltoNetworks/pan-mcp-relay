@@ -98,3 +98,5 @@ bin/
 .idea/modules.xml
 .idea/*.iml
 aisecurity/__version__.py
+.idea/
+.vscode/

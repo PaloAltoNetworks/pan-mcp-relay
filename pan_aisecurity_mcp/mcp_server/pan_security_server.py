@@ -94,16 +94,24 @@ def pan_init():
     elif ai_profile_id := os.getenv("PANW_AI_PROFILE_ID"):
         ai_profile = AiProfile(profile_id=ai_profile_id)
     else:
-        raise ToolError("Missing AI Profile Name (PANW_AI_PROFILE_NAME) or AI Profile ID (PANW_AI_PROFILE_ID)")
+        raise ToolError(
+            "Missing AI Profile Name (PANW_AI_PROFILE_NAME) or AI Profile ID (PANW_AI_PROFILE_ID)"
+        )
     aisecurity.init(
-        api_key=os.getenv("PANW_AI_SEC_API_KEY"),  # Optional - shows default fallback behavior
-        api_endpoint=os.getenv("PANW_AI_SEC_API_ENDPOINT"),  # Optional - shows default fallback behavior
+        api_key=os.getenv(
+            "PANW_AI_SEC_API_KEY"
+        ),  # Optional - shows default fallback behavior
+        api_endpoint=os.getenv(
+            "PANW_AI_SEC_API_ENDPOINT"
+        ),  # Optional - shows default fallback behavior
     )
     setattr(pan_init, "__completed__", True)
 
 
 @mcp.tool()
-async def pan_inline_scan(prompt: str | None = None, response: str | None = None) -> ScanResponse:
+async def pan_inline_scan(
+    prompt: str | None = None, response: str | None = None
+) -> ScanResponse:
     """Submit a single Prompt and/or Model-Response (Scan Content) to be scanned synchronously.
 
     This is a blocking operation - the function will not return until the scan is complete
@@ -115,7 +123,9 @@ async def pan_inline_scan(prompt: str | None = None, response: str | None = None
     """
     pan_init()
     if not prompt and not response:
-        raise ToolError(f"Must provide at least one of prompt ({prompt}) and/or response ({response}).")
+        raise ToolError(
+            f"Must provide at least one of prompt ({prompt}) and/or response ({response})."
+        )
     scan_response = await scanner.sync_scan(
         ai_profile=ai_profile,
         content=Content(
@@ -148,21 +158,23 @@ async def pan_batch_scan(
     req_id = 0
     # Split into batches
     for batch in itertools.batched(scan_contents, MAX_NUMBER_OF_BATCH_SCAN_OBJECTS):
-        async_scan_batches.append([
-            AsyncScanObject(
-                req_id=(req_id := req_id + 1),
-                scan_req=ScanRequest(
-                    ai_profile=ai_profile,
-                    contents=[
-                        ScanRequestContentsInner(
-                            prompt=sc.get("prompt"),
-                            response=sc.get("response"),
-                        )
-                    ],
-                ),
-            )
-            for sc in batch
-        ])
+        async_scan_batches.append(
+            [
+                AsyncScanObject(
+                    req_id=(req_id := req_id + 1),
+                    scan_req=ScanRequest(
+                        ai_profile=ai_profile,
+                        contents=[
+                            ScanRequestContentsInner(
+                                prompt=sc.get("prompt"),
+                                response=sc.get("response"),
+                            )
+                        ],
+                    ),
+                )
+                for sc in batch
+            ]
+        )
 
     # Process each batch concurrently via asyncio
     scan_coros = [scanner.async_scan(batch) for batch in async_scan_batches]
@@ -186,7 +198,9 @@ async def pan_get_scan_results(scan_ids: list[str]) -> list[ScanIdResult]:
 
     # Process each batch concurrently via asyncio
     tasks = [scanner.query_by_scan_ids(batch) for batch in request_batches]
-    batch_results: list[list[ScanIdResult]] = await asyncio.gather(*tasks, return_exceptions=True)
+    batch_results: list[list[ScanIdResult]] = await asyncio.gather(
+        *tasks, return_exceptions=True
+    )
 
     # flatten nested list
     return safe_flatten(batch_results)

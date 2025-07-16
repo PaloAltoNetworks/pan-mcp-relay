@@ -42,5 +42,5 @@ class AISecMcpRelayException(Exception):
             types.CallToolResult: A structured error result
         """
         return types.CallToolResult(
-            isError=True, content=[types.TextContent(type="text", text=self.__str__)]
+            isError=True, content=[types.TextContent(type="text", text=self.__str__())]
         )
