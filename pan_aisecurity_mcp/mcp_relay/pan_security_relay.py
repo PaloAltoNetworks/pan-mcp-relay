@@ -37,7 +37,6 @@ from mcp.server.sse import SseServerTransport
 from starlette.applications import Starlette
 from starlette.routing import Route
 
-
 from pan_aisecurity_mcp.mcp_relay.configuration import Configuration
 from pan_aisecurity_mcp.mcp_relay.constants import (
     ENVIRONMENT_CONFIG_LABEL,
