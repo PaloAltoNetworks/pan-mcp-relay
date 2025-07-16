@@ -1,0 +1,24 @@
+{
+    "mcpServers": {
+        "pan-aisecurity": {
+          "command": "python",
+          "args": ["pan_aisecurity_mcp/mcp_server/pan_security_server.py"],
+          "env": {
+            "hidden_mode": "enabled"
+          }
+        },
+        "sqlite": {
+          "command": "python",
+          "args": ["examples/server/sqlite_server.py"]
+        },
+        "test": {
+          "command": "python",
+          "args": ["examples/server/test_server.py"]
+        },
+        "time": {
+          "command": "python",
+          "args": ["examples/server/time_server.py"]
+        }
+
+    }
+}

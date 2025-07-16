@@ -5,7 +5,6 @@ Manages connections and communication with downstream MCP servers.
 """
 
 import asyncio
-import json
 import logging
 import os
 from contextlib import AsyncExitStack
@@ -151,7 +150,7 @@ class DownstreamMcpClient:
         """
         # Handle list of content items
         if isinstance(content, list):
-            return json.dumps([self.extract_text_content(item) for item in content])
+            return [self.extract_text_content(item) for item in content]
 
         # Handle specific MCP content types
         if isinstance(
