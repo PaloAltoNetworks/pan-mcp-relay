@@ -79,7 +79,7 @@ class PanSecurityRelay:
     ) -> None:
         """
         Initialize the PanSecurityRelay.
-        
+
         Args:
             config_path: Path to the configuration file
             tool_registry_cache_expiry: Cache expiry time in seconds
@@ -153,7 +153,9 @@ class PanSecurityRelay:
 
     async def _update_security_scanner(self, servers_config: Dict[str, Any]) -> None:
         """Initialize and configure the security scanner for downstream servers."""
-        logging.info(f"MCP pan-aisecurity server init - Setting up security scanning configuration...")
+        logging.info(
+            f"MCP pan-aisecurity server init - Setting up security scanning configuration..."
+        )
         for server_name, server_config in servers_config.items():
             if server_name == SECURITY_SERVER_NAME:
                 server = DownstreamMcpClient(server_name, server_config)
@@ -240,7 +242,9 @@ class PanSecurityRelay:
                 if exist_tool is None:
                     # Security scan
                     logging.info(f"Scan tool info: {str(server_tool.model_dump())}")
-                    if self.security_scanner.should_block(await self.security_scanner.scan_tool(server_tool)):
+                    if self.security_scanner.should_block(
+                        await self.security_scanner.scan_tool(server_tool)
+                    ):
                         internal_tool.state = ToolState.DISABLED_SECURITY_RISK
                     else:
                         internal_tool.state = ToolState.ENABLED
@@ -345,7 +349,9 @@ class PanSecurityRelay:
 
         # Scan the request for security issues
         if self.security_scanner:
-            if self.security_scanner.should_block(await self.security_scanner.scan_request(input_text)):
+            if self.security_scanner.should_block(
+                await self.security_scanner.scan_request(input_text)
+            ):
                 raise AISecMcpRelayException(
                     "Unsafe Request: Security scan blocked this request",
                     ErrorType.SECURITY_BLOCK,
@@ -377,9 +383,11 @@ class PanSecurityRelay:
 
         if self.security_scanner:
             logging.info(f"scanning: {result_content}")
-            if self.security_scanner.should_block(await self.security_scanner.scan_response(
-                input_text, str(result_content)
-            )):
+            if self.security_scanner.should_block(
+                await self.security_scanner.scan_response(
+                    input_text, str(result_content)
+                )
+            ):
                 raise AISecMcpRelayException(
                     f"Unsafe Response: Security scan blocked this response",
                     ErrorType.SECURITY_BLOCK,
@@ -425,27 +433,31 @@ class PanSecurityRelay:
     async def run_stdio_server(self, app: Server) -> None:
         """Run the server with stdio transport."""
         logging.info("Starting server with stdio transport.")
+
         async def arun():
             async with stdio_server() as streams:
-                await app.run(streams[0], streams[1], app.create_initialization_options())
+                await app.run(
+                    streams[0], streams[1], app.create_initialization_options()
+                )
+
         await arun()
 
     async def run_sse_server(self, app: Server, host: str, port: int) -> None:
         """Run the server with SSE transport."""
         logging.info(f"Starting server with SSE transport on {host}:{port}")
-        
+
         sse_transport = SseServerTransport("/messages")
         # Use the wrapper classes for the endpoints
         sse_endpoint = SseEndpoint(sse_transport, app)
         messages_endpoint = MessagesEndpoint(sse_transport)
-        
+
         starlette_app = Starlette(
             routes=[
                 Route("/sse", endpoint=sse_endpoint),
                 Route("/messages", endpoint=messages_endpoint, methods=["POST"]),
             ]
         )
-        
+
         uvicorn_config = uvicorn.Config(starlette_app, host=host, port=port)
         uvicorn_server = uvicorn.Server(uvicorn_config)
         await uvicorn_server.serve()
@@ -453,17 +465,21 @@ class PanSecurityRelay:
 
 class SseEndpoint:
     """ASGI endpoint for handling the main SSE connection."""
+
     def __init__(self, transport: SseServerTransport, app: Server):
         self.transport = transport
         self.app = app
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         async with self.transport.connect_sse(scope, receive, send) as streams:
-            await self.app.run(streams[0], streams[1], self.app.create_initialization_options())
+            await self.app.run(
+                streams[0], streams[1], self.app.create_initialization_options()
+            )
 
 
 class MessagesEndpoint:
     """ASGI endpoint for handling incoming POST messages over SSE."""
+
     def __init__(self, transport: SseServerTransport):
         self.transport = transport
 
@@ -484,8 +500,16 @@ async def main() -> None:
     parser.add_argument(
         "--config-file", type=str, required=True, help="Path to config file"
     )
-    parser.add_argument("--transport", type=str, default="stdio", choices=["stdio", "sse"], help="Transport protocol to use")
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host for SSE server")
+    parser.add_argument(
+        "--transport",
+        type=str,
+        default="stdio",
+        choices=["stdio", "sse"],
+        help="Transport protocol to use",
+    )
+    parser.add_argument(
+        "--host", type=str, default="127.0.0.1", help="Host for SSE server"
+    )
     parser.add_argument("--port", type=int, default=8000, help="Port for SSE server")
     parser.add_argument(
         "--TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS",
@@ -525,7 +549,7 @@ async def main() -> None:
 
     # Create and run the MCP server
     app = await relay_server.launch_mcp_server()
-    
+
     if args.transport == MCP_RELAY_TRANSPORT_STDIO:
         await relay_server.run_stdio_server(app)
     elif args.transport == MCP_RELAY_TRANSPORT_SSE:

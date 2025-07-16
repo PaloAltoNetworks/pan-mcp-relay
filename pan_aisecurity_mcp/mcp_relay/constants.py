@@ -9,7 +9,7 @@ from datetime import datetime
 SECURITY_SERVER_NAME = "pan-aisecurity"
 MCP_RELAY_NAME = "pan-aisecurity-relay"
 
-# Configuration Labels  
+# Configuration Labels
 ENVIRONMENT_CONFIG_LABEL = "env"
 MCP_SERVER_CONFIG_LABEL = "mcpServers"
 HIDDEN_MODE_LABEL = "hidden_mode"

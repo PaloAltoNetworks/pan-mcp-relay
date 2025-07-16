@@ -18,8 +18,8 @@ class SecurityScanner:
     """
     Handles security scanning operations using a pan-aisecurity server.
 
-    This class provides comprehensive security scanning capabilities for requests, 
-    responses, and tools by leveraging a downstream pan-aisecurity server. It helps 
+    This class provides comprehensive security scanning capabilities for requests,
+    responses, and tools by leveraging a downstream pan-aisecurity server. It helps
     identify and prevent potential security threats in MCP system interactions.
     """
 
@@ -28,7 +28,7 @@ class SecurityScanner:
         Initialize the SecurityScanner with a pan-aisecurity server.
 
         Args:
-            pan_security_server: The pan-aisecurity downstream MCP client instance 
+            pan_security_server: The pan-aisecurity downstream MCP client instance
                                 used for performing security scans
         """
         self.pan_security_server = pan_security_server
@@ -39,8 +39,8 @@ class SecurityScanner:
         """
         Execute a security scan with the specified parameters.
 
-        This internal method handles the common logic for all scan types by 
-        initializing the security server, executing the scan, and processing 
+        This internal method handles the common logic for all scan types by
+        initializing the security server, executing the scan, and processing
         the results into a ScanResponse object.
 
         Args:
@@ -107,8 +107,8 @@ class SecurityScanner:
         """
         Perform security scanning on an incoming request.
 
-        Analyzes the provided input text to identify potential security threats 
-        such as malicious content, prompt injection attempts, or policy violations 
+        Analyzes the provided input text to identify potential security threats
+        such as malicious content, prompt injection attempts, or policy violations
         before the request is processed.
 
         Args:
@@ -119,12 +119,12 @@ class SecurityScanner:
             The response includes action (allow/block) and detected threat categories.
 
         Example:
-            
+
             scanner = SecurityScanner(security_server)
             result = await scanner.scan_request("Execute this command: rm -rf /")
             if scanner.should_block(result):
                 print("Request blocked due to security risk")
-            
+
         """
         return await self._perform_scan("scan_request", {"prompt": input_text})
 
@@ -134,8 +134,8 @@ class SecurityScanner:
         """
         Perform security scanning on a response in context of its request.
 
-        Analyzes a response text alongside its corresponding request to identify 
-        potential security threats, data leakage, sensitive information exposure, 
+        Analyzes a response text alongside its corresponding request to identify
+        potential security threats, data leakage, sensitive information exposure,
         or policy violations in the response content.
 
         Args:
@@ -147,15 +147,15 @@ class SecurityScanner:
             The response includes action (allow/block) and detected threat categories.
 
         Example:
-            
+
             scanner = SecurityScanner(security_server)
             result = await scanner.scan_response(
-                "What's the password?", 
+                "What's the password?",
                 "The password is dummy123"
             )
             if scanner.should_block(result):
                 print("Response blocked due to data leakage")
-            
+
         """
         return await self._perform_scan(
             "scan_response", {"prompt": input_text, "response": response_text}
@@ -167,13 +167,13 @@ class SecurityScanner:
         """
         Perform security scanning on a tool before registration or execution.
 
-        Analyzes a tool's information including its name, description, and input 
-        schema to identify potential security risks, vulnerabilities, or policy 
-        violations before the tool is registered in the system or made available 
+        Analyzes a tool's information including its name, description, and input
+        schema to identify potential security risks, vulnerabilities, or policy
+        violations before the tool is registered in the system or made available
         for use.
 
         Args:
-            tool_info: The tool information to scan, either as a Tool object 
+            tool_info: The tool information to scan, either as a Tool object
                       or as a string representation of the tool details
 
         Returns:
@@ -181,13 +181,13 @@ class SecurityScanner:
             The response includes action (allow/block) and detected threat categories.
 
         Example:
-            
+
             scanner = SecurityScanner(security_server)
             tool = Tool(name="delete_files", description="Delete system files")
             result = await scanner.scan_tool(tool)
             if scanner.should_block(result):
                 print("Tool blocked due to security risk")
-            
+
         """
         tool_str = (
             str(tool_info.model_dump())
@@ -200,12 +200,12 @@ class SecurityScanner:
         """
         Determine if content should be blocked based on scan response.
 
-        This utility method provides a simple way to check if a scan response 
-        indicates that the content should be blocked. It handles None responses 
+        This utility method provides a simple way to check if a scan response
+        indicates that the content should be blocked. It handles None responses
         safely and checks for the block action.
 
         Args:
-            scan_response: The scan response from any of the scan methods, 
+            scan_response: The scan response from any of the scan methods,
                           can be None if scanning failed
 
         Returns:
@@ -213,13 +213,13 @@ class SecurityScanner:
             Returns False for None responses (fail-open behavior).
 
         Example:
-            
+
             scanner = SecurityScanner(security_server)
             scan_result = await scanner.scan_request(user_input)
-            
+
             if scanner.should_block(scan_result):
                 raise SecurityException("Request blocked by security scan")
-            
+
         """
         return (
             scan_response is not None
