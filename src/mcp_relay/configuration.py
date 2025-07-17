@@ -40,5 +40,5 @@ class Configuration:
             FileNotFoundError: If the file does not exist at the given path.
             json.JSONDecodeError: If the file contains invalid JSON.
         """
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             return json.load(f)

@@ -4,10 +4,11 @@ Tool module for MCP Relay application.
 Defines tool classes and states for managing tools across different servers.
 """
 
-from enum import Enum
 import hashlib
 import json
+from enum import Enum
 from typing import Any, List
+
 import mcp.types as types
 from pydantic import ConfigDict, Field
 
@@ -30,9 +31,7 @@ class BaseTool(types.Tool):
     """
 
     server_name: str = Field(..., description="The server where this tool is deployed")
-    state: ToolState = Field(
-        default=ToolState.ENABLED, description="The state of the tool"
-    )
+    state: ToolState = Field(default=ToolState.ENABLED, description="The state of the tool")
 
     model_config = ConfigDict(extra="allow")
 

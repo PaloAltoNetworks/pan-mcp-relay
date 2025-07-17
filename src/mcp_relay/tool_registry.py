@@ -5,18 +5,17 @@ This module provides the ToolRegistry class for managing and caching internal to
 with expiration-based refresh logic and efficient lookup capabilities.
 """
 
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
 import json
 import logging
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
 
 from pan_aisecurity_mcp.mcp_relay.constants import (
     TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
     UNIX_EPOCH,
 )
-from pan_aisecurity_mcp.mcp_relay.tool import InternalTool, ToolState
 from pan_aisecurity_mcp.mcp_relay.exceptions import AISecMcpRelayException, ErrorType
-
+from pan_aisecurity_mcp.mcp_relay.tool import InternalTool, ToolState
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +34,11 @@ class ToolRegistry:
         hash_to_tool_map: Dictionary mapping MD5 hashes to tools for quick lookup
     """
 
-    def __init__(
-        self, tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT
-    ) -> None:
+    def __init__(self, tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT) -> None:
         """
         Initialize the ToolRegistry with empty collections and cache settings.
 
         Args:
-
             tool_registry_cache_expiry: Cache expiration time in seconds
                                       (default: TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT seconds)
 
@@ -81,14 +77,10 @@ class ToolRegistry:
                                     RegistryError: If registry update operation fails
         """
         if internal_tool_list is None:
-            raise AISecMcpRelayException(
-                "Tool list cannot be None", ErrorType.VALIDATION_ERROR
-            )
+            raise AISecMcpRelayException("Tool list cannot be None", ErrorType.VALIDATION_ERROR)
 
         if not isinstance(internal_tool_list, list):
-            raise AISecMcpRelayException(
-                "Tool list must be a list", ErrorType.VALIDATION_ERROR
-            )
+            raise AISecMcpRelayException("Tool list must be a list", ErrorType.VALIDATION_ERROR)
 
         try:
             self._internal_tool_list = internal_tool_list
@@ -103,15 +95,11 @@ class ToolRegistry:
                 len(self._available_tool_list),
             )
         except Exception as e:
-            raise AISecMcpRelayException(
-                f"Failed to update tool registry {e}", ErrorType.TOOL_REGISTRY_ERROR
-            )
+            raise AISecMcpRelayException(f"Failed to update tool registry {e}", ErrorType.TOOL_REGISTRY_ERROR)
 
     def _update_available_tools(self) -> None:
         """Update the available tools list with only enabled tools."""
-        self._available_tool_list = [
-            tool for tool in self._internal_tool_list if tool.state == ToolState.ENABLED
-        ]
+        self._available_tool_list = [tool for tool in self._internal_tool_list if tool.state == ToolState.ENABLED]
 
     def _update_hash_mapping(self) -> None:
         """Update the hash-to-tool mapping for quick lookups."""
@@ -165,9 +153,7 @@ class ToolRegistry:
             ValidationError: If md5_hash is invalid
         """
         if not isinstance(md5_hash, str):
-            raise AISecMcpRelayException(
-                "MD5 hash must be a string", ErrorType.VALIDATION_ERROR
-            )
+            raise AISecMcpRelayException("MD5 hash must be a string", ErrorType.VALIDATION_ERROR)
 
         if not md5_hash:
             return None
@@ -217,9 +203,7 @@ class ToolRegistry:
 
         except (AttributeError, TypeError) as e:
             logger.error("Failed to serialize tools to JSON: %s", e)
-            raise AISecMcpRelayException(
-                f"Tool serialization failed {e}", ErrorType.TOOL_REGISTRY_ERROR
-            )
+            raise AISecMcpRelayException(f"Tool serialization failed {e}", ErrorType.TOOL_REGISTRY_ERROR)
 
     def get_registry_stats(self) -> Dict[str, any]:
         """

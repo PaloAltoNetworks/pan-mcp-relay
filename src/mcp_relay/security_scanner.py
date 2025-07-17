@@ -2,9 +2,8 @@ import json
 import logging
 from typing import Dict, Optional, Union
 
-from aisecurity.scan.asyncio.scanner import ScanResponse
 import mcp.types as types
-
+from aisecurity.scan.asyncio.scanner import ScanResponse
 from pan_aisecurity_mcp.mcp_relay.constants import (
     EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH,
     SECURITY_SCAN_RESPONSE_ACTION_ALLOW,
@@ -33,9 +32,7 @@ class SecurityScanner:
         """
         self.pan_security_server = pan_security_server
 
-    async def _perform_scan(
-        self, scan_type: str, params: Dict[str, str]
-    ) -> Optional[ScanResponse]:
+    async def _perform_scan(self, scan_type: str, params: Dict[str, str]) -> Optional[ScanResponse]:
         """
         Execute a security scan with the specified parameters.
 
@@ -58,9 +55,7 @@ class SecurityScanner:
         await self.pan_security_server.initialize()
 
         try:
-            scan_result = await self.pan_security_server.execute_tool(
-                TOOL_NAME_PAN_AISECURITY_INLINE_SCAN, params
-            )
+            scan_result = await self.pan_security_server.execute_tool(TOOL_NAME_PAN_AISECURITY_INLINE_SCAN, params)
             if scan_result.isError:
                 logging.error(
                     f"Security scan failed: {self.pan_security_server.extract_text_content(scan_result.content)}"
@@ -68,22 +63,16 @@ class SecurityScanner:
                 return None
 
             if not isinstance(scan_result.content, list):
-                logging.error(
-                    f"Security scan result content should be a list, but: {type(scan_result.content)}"
-                )
+                logging.error(f"Security scan result content should be a list, but: {type(scan_result.content)}")
                 return None
 
             if len(scan_result.content) != EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH:
-                logging.error(
-                    f"Expected 1 item in scan result content, got: {len(scan_result.content)}"
-                )
+                logging.error(f"Expected 1 item in scan result content, got: {len(scan_result.content)}")
                 return None
 
             scan_result_item = scan_result.content[0]
             if not isinstance(scan_result_item, types.TextContent):
-                logging.error(
-                    f"Expected TextContent in scan result, got {type(scan_result_item)}"
-                )
+                logging.error(f"Expected TextContent in scan result, got {type(scan_result_item)}")
                 return None
 
             scan_text = scan_result_item.text
@@ -91,9 +80,7 @@ class SecurityScanner:
             scan_response = ScanResponse(**scan_dict)
 
             log_highlight = (
-                "\033[1;92m"
-                if scan_response.action == SECURITY_SCAN_RESPONSE_ACTION_ALLOW
-                else "\033[1;91m"
+                "\033[1;92m" if scan_response.action == SECURITY_SCAN_RESPONSE_ACTION_ALLOW else "\033[1;91m"
             )
             logging.info(
                 f"{log_highlight}Security Scan Result (security_scanner: pan_inline_scan):\033[0m\n {scan_response}"
@@ -119,7 +106,6 @@ class SecurityScanner:
             The response includes action (allow/block) and detected threat categories.
 
         Example:
-
             scanner = SecurityScanner(security_server)
             result = await scanner.scan_request("Execute this command: rm -rf /")
             if scanner.should_block(result):
@@ -128,9 +114,7 @@ class SecurityScanner:
         """
         return await self._perform_scan("scan_request", {"prompt": input_text})
 
-    async def scan_response(
-        self, input_text: str, response_text: str
-    ) -> Optional[ScanResponse]:
+    async def scan_response(self, input_text: str, response_text: str) -> Optional[ScanResponse]:
         """
         Perform security scanning on a response in context of its request.
 
@@ -147,7 +131,6 @@ class SecurityScanner:
             The response includes action (allow/block) and detected threat categories.
 
         Example:
-
             scanner = SecurityScanner(security_server)
             result = await scanner.scan_response(
                 "What's the password?",
@@ -157,13 +140,9 @@ class SecurityScanner:
                 print("Response blocked due to data leakage")
 
         """
-        return await self._perform_scan(
-            "scan_response", {"prompt": input_text, "response": response_text}
-        )
+        return await self._perform_scan("scan_response", {"prompt": input_text, "response": response_text})
 
-    async def scan_tool(
-        self, tool_info: Union[types.Tool, str]
-    ) -> Optional[ScanResponse]:
+    async def scan_tool(self, tool_info: Union[types.Tool, str]) -> Optional[ScanResponse]:
         """
         Perform security scanning on a tool before registration or execution.
 
@@ -181,7 +160,6 @@ class SecurityScanner:
             The response includes action (allow/block) and detected threat categories.
 
         Example:
-
             scanner = SecurityScanner(security_server)
             tool = Tool(name="delete_files", description="Delete system files")
             result = await scanner.scan_tool(tool)
@@ -189,11 +167,7 @@ class SecurityScanner:
                 print("Tool blocked due to security risk")
 
         """
-        tool_str = (
-            str(tool_info.model_dump())
-            if isinstance(tool_info, types.Tool)
-            else tool_info
-        )
+        tool_str = str(tool_info.model_dump()) if isinstance(tool_info, types.Tool) else tool_info
         return await self._perform_scan("scan_tool", {"prompt": tool_str})
 
     def should_block(self, scan_response: Optional[ScanResponse]) -> bool:
@@ -213,7 +187,6 @@ class SecurityScanner:
             Returns False for None responses (fail-open behavior).
 
         Example:
-
             scanner = SecurityScanner(security_server)
             scan_result = await scanner.scan_request(user_input)
 
@@ -221,7 +194,4 @@ class SecurityScanner:
                 raise SecurityException("Request blocked by security scan")
 
         """
-        return (
-            scan_response is not None
-            and scan_response.action == SECURITY_SCAN_RESPONSE_ACTION_BLOCK
-        )
+        return scan_response is not None and scan_response.action == SECURITY_SCAN_RESPONSE_ACTION_BLOCK

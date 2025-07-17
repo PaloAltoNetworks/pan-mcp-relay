@@ -55,21 +55,15 @@ class DownstreamMcpClient:
         if self.config.get("env"):
             env.update(self.config["env"])
 
-        server_params = StdioServerParameters(
-            command=self.config["command"], args=self.config["args"]
-        )
+        server_params = StdioServerParameters(command=self.config["command"], args=self.config["args"])
 
         try:
             # Set up communication with the server
-            stdio_transport = await self.exit_stack.enter_async_context(
-                stdio_client(server_params)
-            )
+            stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
             read, write = stdio_transport
 
             # Create and initialize session
-            session = await self.exit_stack.enter_async_context(
-                ClientSession(read, write)
-            )
+            session = await self.exit_stack.enter_async_context(ClientSession(read, write))
             await session.initialize()
             self.session = session
 
@@ -153,9 +147,7 @@ class DownstreamMcpClient:
             return [self.extract_text_content(item) for item in content]
 
         # Handle specific MCP content types
-        if isinstance(
-            content, (types.EmbeddedResource, types.ImageContent, types.TextContent)
-        ):
+        if isinstance(content, (types.EmbeddedResource, types.ImageContent, types.TextContent)):
             return content.model_dump_json()
 
         # Handle objects with text attribute

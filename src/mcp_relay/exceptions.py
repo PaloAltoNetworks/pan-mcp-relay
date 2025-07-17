@@ -1,6 +1,7 @@
 from enum import Enum
-import mcp.types as types
 from typing import Optional
+
+import mcp.types as types
 
 
 class ErrorType(Enum):
@@ -23,9 +24,7 @@ class ErrorType(Enum):
 class AISecMcpRelayException(Exception):
     """Base exception class for mcp-relay-related exceptions."""
 
-    def __init__(
-        self, message: str = "", error_type: Optional[ErrorType] = None
-    ) -> None:
+    def __init__(self, message: str = "", error_type: Optional[ErrorType] = None) -> None:
         self.message = message
         self.error_type = error_type
 
@@ -41,6 +40,4 @@ class AISecMcpRelayException(Exception):
         Returns:
             types.CallToolResult: A structured error result
         """
-        return types.CallToolResult(
-            isError=True, content=[types.TextContent(type="text", text=self.__str__())]
-        )
+        return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=self.__str__())])
