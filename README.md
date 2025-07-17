@@ -13,10 +13,15 @@ A implementation of a security-enhanced Model Context Protocol (MCP) relay serve
 - [Usage](#usage)
   - [Running the Relay Server](#running-the-relay-server)
     - [Command Line Arguments](#command-line-arguments)
+- [Examples](#examples)
+  - [Stdio Client Example](#stdio-client-example)
+  - [SSE Client Example Configuration](#sse-client-example-configuration)
 - [Error Handling \& Exceptions](#error-handling--exceptions)
 - [Legal](#legal)
 
 <!--TOC-->
+
+
 
 <a id="overview" aria-hidden="true" href="#overview">
 
@@ -165,8 +170,75 @@ python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
 
 
 
-<a id="example-mcp-servers" href="#example-mcp-servers">
 
+<a id="examples" href="#examples">
+
+# Examples
+
+</a>
+
+<a id="stdio-client-example" href="#stdio-client-example">
+
+## Stdio Client Example
+
+</a>
+
+This example demonstrates how to run the interactive client to communicate with the relay server using `stdio`.
+
+**1. Run the Interactive Client:**
+
+Run the `pan_security_relay_stdio_client.py` script. This script connects to the running relay and provides an interactive command prompt.
+
+```sh
+python examples/pan_security_relay_stdio_client.py \
+  --relay-module=pan_aisecurity_mcp.mcp_relay.pan_security_relay \
+  --config-file=config/servers_config_example.json
+```
+
+**2. Interact with the Client:**
+
+Once the client starts, you can use the following commands to interact with the downstream MCP servers through the relay:
+
+*   **`list`**: Displays all available tools from the downstream servers.
+*   **`call <tool_name> [json_arguments]`**: Executes a specific tool with the provided arguments. For example, `call list_downstream_servers_info`.
+*   **`servers`**: Shows a list of all configured downstream servers and their tools.
+*   **`quit`**: Exits the interactive client.
+
+Using these commands, you can test and debug the MCP relay and its connected downstream servers.
+
+<a id="sse-client-configuration" href="#sse-client-configuration">
+
+## SSE Client Example Configuration
+
+</a>
+
+To connect a client to the relay server when it's running in SSE mode, you need to first start the relay server with the transport set to `sse`.
+
+**1. Start the Relay Server in SSE Mode:**
+
+```sh
+python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
+  --config-file=config/servers_config.json \
+  --transport=sse \
+  --host=127.0.0.1 \
+  --port=8000
+```
+
+**2. Configure Your Client:**
+
+Then, in your client's configuration (for example, in a `config.json` or a similar file), add the following to connect to the SSE endpoint of the relay:
+```json
+{
+  "mcpServers": {
+    "pan_security_relay_SSE": {
+      "type": "sse",
+      "baseUrl": "http://127.0.0.1:8000/sse"
+    }
+  }
+}
+```
+
+This configuration tells your client how to find and communicate with the MCP Security Relay using the SSE protocol.
 
 # Error Handling & Exceptions
 
