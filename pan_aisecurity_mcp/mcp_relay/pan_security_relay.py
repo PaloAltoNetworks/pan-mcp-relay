@@ -49,8 +49,7 @@ from pan_aisecurity_mcp.mcp_relay.constants import (
     SECURITY_SERVER_NAME,
     TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO,
     TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
-    MCP_RELAY_TRANSPORT_STDIO,
-    MCP_RELAY_TRANSPORT_SSE,
+    TransportType,
 )
 from pan_aisecurity_mcp.mcp_relay.downstream_mcp_client import DownstreamMcpClient
 from pan_aisecurity_mcp.mcp_relay.exceptions import AISecMcpRelayException, ErrorType
@@ -549,9 +548,9 @@ async def main() -> None:
     # Create and run the MCP server
     app = await relay_server.launch_mcp_server()
 
-    if args.transport == MCP_RELAY_TRANSPORT_STDIO:
+    if args.transport == TransportType.STDIO:
         await relay_server.run_stdio_server(app)
-    elif args.transport == MCP_RELAY_TRANSPORT_SSE:
+    elif args.transport == TransportType.SSE:
         await relay_server.run_sse_server(app, args.host, args.port)
 
 

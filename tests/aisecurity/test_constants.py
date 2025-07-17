@@ -154,8 +154,6 @@ class TestConstantImmutability:
             ("MCP_SERVER_CONFIG_LABEL", "mcpServers"),
             ("HIDDEN_MODE_LABEL", "hidden_mode"),
             ("HIDDEN_MODE_ENABLED", "enabled"),
-            ("MCP_RELAY_TRANSPORT_SSE", "sse"),
-            ("MCP_RELAY_TRANSPORT_STDIO", "stdio"),
             ("TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT", 300),
             ("MAX_DOWNSTREAM_SERVERS_DEFAULT", 32),
             ("MAX_DOWNSTREAM_TOOLS_DEFAULT", 64),
@@ -180,8 +178,6 @@ class TestConstantImmutability:
             constants.MCP_SERVER_CONFIG_LABEL,
             constants.HIDDEN_MODE_LABEL,
             constants.HIDDEN_MODE_ENABLED,
-            constants.MCP_RELAY_TRANSPORT_SSE,
-            constants.MCP_RELAY_TRANSPORT_STDIO,
             constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO,
             constants.TOOL_NAME_PAN_AISECURITY_INLINE_SCAN,
             constants.SECURITY_SCAN_RESPONSE_ACTION_BLOCK,
@@ -206,8 +202,6 @@ class TestConstantTypes:
             "MCP_SERVER_CONFIG_LABEL",
             "HIDDEN_MODE_LABEL",
             "HIDDEN_MODE_ENABLED",
-            "MCP_RELAY_TRANSPORT_SSE",
-            "MCP_RELAY_TRANSPORT_STDIO",
             "TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO",
             "TOOL_NAME_PAN_AISECURITY_INLINE_SCAN",
             "SECURITY_SCAN_RESPONSE_ACTION_BLOCK",
@@ -234,3 +228,34 @@ class TestConstantTypes:
     def test_datetime_constant_type(self):
         """Test datetime constant is datetime."""
         assert isinstance(constants.UNIX_EPOCH, datetime)
+
+    def test_transport_type_values(self):
+        """Test that TransportType enum has correct values."""
+        assert constants.TransportType.STDIO == "stdio"
+        assert constants.TransportType.SSE == "sse"
+
+    def test_transport_type_string_conversion(self):
+        """Test string conversion of TransportType enum."""
+        assert str(constants.TransportType.STDIO) == "stdio"
+        assert str(constants.TransportType.SSE) == "sse"
+
+    def test_transport_type_inheritance(self):
+        """Test that TransportType inherits from str and Enum."""
+        assert isinstance(constants.TransportType.STDIO, str)
+        assert isinstance(constants.TransportType.SSE, str)
+        
+        # Test enum membership
+        assert constants.TransportType.STDIO in constants.TransportType
+        assert constants.TransportType.SSE in constants.TransportType
+
+    def test_transport_type_values_list(self):
+        """Test getting all transport type values."""
+        values = [t.value for t in constants.TransportType]
+        assert "stdio" in values
+        assert "sse" in values
+        assert len(values) == 2
+
+    def test_transport_type_names(self):
+        """Test enum member names."""
+        assert constants.TransportType.STDIO.name == "STDIO"
+        assert constants.TransportType.SSE.name == "SSE"
