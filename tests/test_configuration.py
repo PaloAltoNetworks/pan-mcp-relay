@@ -1,17 +1,35 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
 """Unit tests for Configuration class."""
 
 import json
-import tempfile
 import os
-import pytest
+import tempfile
 from unittest.mock import patch
-from pan_aisecurity_mcp.mcp_relay.configuration import Configuration
+
+import pytest
+
+from pan_aisecurity_mcp_relay.configuration import Configuration
 
 
 class TestConfiguration:
     """Basic unit tests for Configuration class."""
 
-    @patch("pan_aisecurity_mcp.mcp_relay.configuration.load_dotenv")
+    @patch("pan_aisecurity_mcp_relay.configuration.load_dotenv")
     def test_init_calls_load_env(self, mock_load_dotenv):
         """Test that __init__ calls load_env method."""
         Configuration()
