@@ -1,3 +1,19 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
 """
 Unit tests for the tool module.
 
@@ -6,21 +22,15 @@ ToolState enum, BaseTool, InternalTool, and RelayTool classes using
 simulated tools for testing purposes.
 """
 
-import pytest
-import json
 import hashlib
-from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
-from typing import List
+import json
+from unittest.mock import patch
+
 import mcp.types as types
+import pytest
 from pydantic import ValidationError
 
-from pan_aisecurity_mcp.mcp_relay.tool import (
-    ToolState,
-    BaseTool,
-    InternalTool,
-    RelayTool
-)
+from pan_aisecurity_mcp_relay.tool import BaseTool, InternalTool, RelayTool, ToolState
 
 
 class TestToolState:
@@ -62,21 +72,15 @@ class TestBaseTool:
         return {
             "type": "object",
             "properties": {
-                "text": {
-                    "type": "string",
-                    "description": "Text to echo back to the user"
-                },
+                "text": {"type": "string", "description": "Text to echo back to the user"},
                 "format": {
                     "type": "string",
                     "enum": ["plain", "json", "xml"],
-                    "description": "Output format for the echoed text"
+                    "description": "Output format for the echoed text",
                 },
-                "uppercase": {
-                    "type": "boolean",
-                    "description": "Whether to convert text to uppercase"
-                }
+                "uppercase": {"type": "boolean", "description": "Whether to convert text to uppercase"},
             },
-            "required": ["text"]
+            "required": ["text"],
         }
 
     @pytest.fixture
@@ -87,7 +91,7 @@ class TestBaseTool:
             "description": "Echo back input text with optional formatting",
             "inputSchema": echo_tool_schema,
             "server_name": "echo_server",
-            "state": ToolState.ENABLED
+            "state": ToolState.ENABLED,
         }
 
     def test_base_tool_creation_minimal_echo_tool(self):
@@ -96,7 +100,7 @@ class TestBaseTool:
             name="simple_echo_tool",
             description="Basic text echo functionality",
             inputSchema={},
-            server_name="test_server"
+            server_name="test_server",
         )
 
         assert basic_echo.name == "simple_echo_tool"
@@ -122,7 +126,7 @@ class TestBaseTool:
             ToolState.DISABLED_HIDDEN_MODE,
             ToolState.DISABLED_DUPLICATE,
             ToolState.DISABLED_SECURITY_RISK,
-            ToolState.DISABLED_ERROR
+            ToolState.DISABLED_ERROR,
         ]
 
         for state in tool_states_to_test:
@@ -137,7 +141,7 @@ class TestBaseTool:
             "version": "1.2.0",
             "author": "test_team",
             "performance": "high_speed",
-            "reliability": "stable"
+            "reliability": "stable",
         }
         echo_tool_data["annotations"] = tool_annotations
 
@@ -171,7 +175,7 @@ class TestBaseTool:
             name="passthrough_tool",
             description="Simple passthrough tool",
             inputSchema={"type": "string"},
-            server_name="utility_server"
+            server_name="utility_server",
         )
 
         descriptions = simple_tool.get_argument_descriptions()
@@ -193,10 +197,7 @@ class TestBaseTool:
     def test_get_argument_descriptions_empty_schema(self):
         """Test argument descriptions with empty input schema."""
         empty_tool = BaseTool(
-            name="empty_tool",
-            description="Tool with no parameters",
-            inputSchema={},
-            server_name="test_server"
+            name="empty_tool", description="Tool with no parameters", inputSchema={}, server_name="test_server"
         )
 
         descriptions = empty_tool.get_argument_descriptions()
@@ -225,11 +226,7 @@ class TestBaseTool:
         """Test BaseTool validation with missing required server information."""
         # Missing server_name for distributed system
         with pytest.raises(ValidationError) as exc_info:
-            BaseTool(
-                name="orphaned_tool",
-                description="Tool without server info",
-                inputSchema={}
-            )
+            BaseTool(name="orphaned_tool", description="Tool without server info", inputSchema={})
 
         error_details = str(exc_info.value)
         assert "server_name" in error_details
@@ -256,7 +253,7 @@ class TestBaseTool:
                 description="Tool with invalid state",
                 inputSchema={},
                 server_name="test_server",
-                state="invalid_state"  # Should be ToolState enum
+                state="invalid_state",  # Should be ToolState enum
             )
 
     def test_base_tool_inheritance_from_mcp_tool(self, echo_tool_data):
@@ -284,19 +281,16 @@ class TestInternalTool:
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "input": {
-                        "type": "string",
-                        "description": "Input text that will trigger error response"
-                    },
+                    "input": {"type": "string", "description": "Input text that will trigger error response"},
                     "error_type": {
                         "type": "string",
                         "enum": ["validation", "timeout", "server_error", "network"],
-                        "description": "Type of error to simulate"
-                    }
-                }
+                        "description": "Type of error to simulate",
+                    },
+                },
             },
             "server_name": "test_server",
-            "state": ToolState.ENABLED
+            "state": ToolState.ENABLED,
         }
 
     def test_internal_tool_creation_with_hash_generation(self, error_all_tool_data):
@@ -307,8 +301,8 @@ class TestInternalTool:
         assert error_tool.description == "Tool that always returns isError=True for testing error handling"
         assert error_tool.server_name == "test_server"
         assert error_tool.state == ToolState.ENABLED
-        assert error_tool.md5_hash != ""
-        assert len(error_tool.md5_hash) == 32  # MD5 hash length for registry key
+        assert error_tool.sha256_hash != ""
+        assert len(error_tool.sha256_hash) == 32  # MD5 hash length for registry key
 
     def test_internal_tool_hash_computation_for_deduplication(self, error_all_tool_data):
         """Test MD5 hash computation for tool deduplication across servers."""
@@ -324,14 +318,14 @@ class TestInternalTool:
         json_str = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         expected_hash = hashlib.md5(json_str.encode("utf-8")).hexdigest()
 
-        assert error_tool.md5_hash == expected_hash
+        assert error_tool.sha256_hash == expected_hash
 
     def test_internal_tool_hash_consistency_across_instances(self, error_all_tool_data):
         """Test that identical tools produce identical hashes for caching."""
         error_tool_1 = InternalTool(**error_all_tool_data)
         error_tool_2 = InternalTool(**error_all_tool_data)
 
-        assert error_tool_1.md5_hash == error_tool_2.md5_hash
+        assert error_tool_1.sha256_hash == error_tool_2.sha256_hash
 
     def test_internal_tool_hash_uniqueness_for_different_tools(self, error_all_tool_data):
         """Test that different tools produce different hashes for proper separation."""
@@ -343,14 +337,14 @@ class TestInternalTool:
         slow_tool_data["description"] = "Tool that simulates slow response with intentional delay"
         slow_tool = InternalTool(**slow_tool_data)
 
-        assert error_tool.md5_hash != slow_tool.md5_hash
+        assert error_tool.sha256_hash != slow_tool.sha256_hash
 
     def test_internal_tool_compute_hash_method_for_registry(self, error_all_tool_data):
         """Test compute_hash method directly for tool registry operations."""
         external_tool = InternalTool(**error_all_tool_data)
         computed_registry_hash = external_tool.compute_hash()
 
-        assert computed_registry_hash == external_tool.md5_hash
+        assert computed_registry_hash == external_tool.sha256_hash
         assert len(computed_registry_hash) == 32
 
     def test_internal_tool_hash_with_complex_schema(self):
@@ -366,53 +360,43 @@ class TestInternalTool:
                         "timeout_settings": {
                             "type": "array",
                             "items": {"type": "number"},
-                            "description": "Timeout values in milliseconds"
-                        }
-                    }
+                            "description": "Timeout values in milliseconds",
+                        },
+                    },
                 },
-                "response_format": {
-                    "type": "string",
-                    "enum": ["json", "xml", "plain", "binary"]
-                },
-                "custom_headers": {
-                    "type": "array",
-                    "items": {"type": "string"}
-                }
-            }
+                "response_format": {"type": "string", "enum": ["json", "xml", "plain", "binary"]},
+                "custom_headers": {"type": "array", "items": {"type": "string"}},
+            },
         }
 
         complex_tool = InternalTool(
             name="fixed_response_tool",
             description="Tool that returns predefined fixed responses",
             inputSchema=complex_schema,
-            server_name="mock_server"
+            server_name="mock_server",
         )
 
-        assert complex_tool.md5_hash != ""
-        assert len(complex_tool.md5_hash) == 32
+        assert complex_tool.sha256_hash != ""
+        assert len(complex_tool.sha256_hash) == 32
 
     def test_internal_tool_to_dict_for_storage(self, error_all_tool_data):
         """Test conversion to dictionary for database storage."""
         external_tool = InternalTool(**error_all_tool_data)
         storage_dict = external_tool.to_dict()
 
-        expected_storage_keys = ["name", "description", "input_schema", "server_name", "state", "md5_hash"]
+        expected_storage_keys = ["name", "description", "input_schema", "server_name", "state", "sha256_hash"]
         assert all(key in storage_dict for key in expected_storage_keys)
 
         assert storage_dict["name"] == "error_all_tool"
         assert storage_dict["description"] == "Tool that always returns isError=True for testing error handling"
         assert storage_dict["server_name"] == "test_server"
         assert storage_dict["state"] == ToolState.ENABLED
-        assert storage_dict["md5_hash"] == external_tool.md5_hash
+        assert storage_dict["sha256_hash"] == external_tool.sha256_hash
         assert storage_dict["input_schema"] == error_all_tool_data["inputSchema"]
 
     def test_internal_tool_to_dict_with_different_states(self, error_all_tool_data):
         """Test to_dict with different tool states for compliance tracking."""
-        tool_states_to_test = [
-            ToolState.ENABLED,
-            ToolState.DISABLED_HIDDEN_MODE,
-            ToolState.DISABLED_SECURITY_RISK
-        ]
+        tool_states_to_test = [ToolState.ENABLED, ToolState.DISABLED_HIDDEN_MODE, ToolState.DISABLED_SECURITY_RISK]
 
         for state in tool_states_to_test:
             error_all_tool_data["state"] = state
@@ -423,11 +407,11 @@ class TestInternalTool:
 
     def test_internal_tool_model_post_init_hash_generation(self, error_all_tool_data):
         """Test that model_post_init is called during initialization for hash generation."""
-        with patch.object(InternalTool, 'compute_hash', return_value="external_tool_hash_123") as mock_compute:
+        with patch.object(InternalTool, "compute_hash", return_value="external_tool_hash_123") as mock_compute:
             external_tool = InternalTool(**error_all_tool_data)
 
             mock_compute.assert_called_once()
-            assert external_tool.md5_hash == "external_tool_hash_123"
+            assert external_tool.sha256_hash == "external_tool_hash_123"
 
     def test_internal_tool_inherits_base_tool_functionality(self, error_all_tool_data):
         """Test that InternalTool inherits BaseTool functionality."""
@@ -449,10 +433,10 @@ class TestInternalTool:
             name="passthrough_tool",
             description="Simple passthrough tool with no parameters",
             inputSchema={},
-            server_name="utility_server"
+            server_name="utility_server",
         )
 
-        assert simple_tool.md5_hash != ""
+        assert simple_tool.sha256_hash != ""
         storage_dict = simple_tool.to_dict()
         assert storage_dict["input_schema"] == {}
 
@@ -462,21 +446,21 @@ class TestInternalTool:
             name="echo_tool_Überprüfung",  # ü is Unicode
             description="Internationales Echo-Tool mit Unicode-Unterstützung: 📢 🔊 ä ö ü ß",
             inputSchema={"type": "string"},
-            server_name="globaler_Server_Prüfung"  # ü is Unicode
+            server_name="globaler_Server_Prüfung",  # ü is Unicode
         )
 
-        assert unicode_tool.md5_hash != ""
-        assert len(unicode_tool.md5_hash) == 32
+        assert unicode_tool.sha256_hash != ""
+        assert len(unicode_tool.sha256_hash) == 32
 
         # Hash should be reproducible for unicode content
         unicode_tool_2 = InternalTool(
             name="echo_tool_Überprüfung",
             description="Internationales Echo-Tool mit Unicode-Unterstützung: 📢 🔊 ä ö ü ß",
             inputSchema={"type": "string"},
-            server_name="globaler_Server_Prüfung"
+            server_name="globaler_Server_Prüfung",
         )
 
-        assert unicode_tool.md5_hash == unicode_tool_2.md5_hash
+        assert unicode_tool.sha256_hash == unicode_tool_2.sha256_hash
 
 
 class TestRelayTool:
@@ -495,21 +479,18 @@ class TestRelayTool:
                         "type": "number",
                         "minimum": 0,
                         "maximum": 60,
-                        "description": "Number of seconds to delay before responding"
+                        "description": "Number of seconds to delay before responding",
                     },
-                    "content": {
-                        "type": "string",
-                        "description": "Content to return after the specified delay"
-                    },
+                    "content": {"type": "string", "description": "Content to return after the specified delay"},
                     "simulate_load": {
                         "type": "boolean",
-                        "description": "Whether to simulate high CPU load during delay"
-                    }
+                        "description": "Whether to simulate high CPU load during delay",
+                    },
                 },
-                "required": ["delay_seconds"]
+                "required": ["delay_seconds"],
             },
             "server_name": "performance_server",
-            "state": ToolState.ENABLED
+            "state": ToolState.ENABLED,
         }
 
     def test_relay_tool_creation_for_llm_presentation(self, slow_response_tool_data):
@@ -541,7 +522,7 @@ class TestRelayTool:
         llm_formatted_output = external_tool.format_for_llm()
 
         # delay_seconds should be marked as required
-        lines = llm_formatted_output.split('\n')
+        lines = llm_formatted_output.split("\n")
         delay_line = next((line for line in lines if "delay_seconds:" in line), "")
         assert "(required)" in delay_line
 
@@ -555,7 +536,7 @@ class TestRelayTool:
             name="passthrough_tool",
             description="Simple passthrough tool that returns input unchanged",
             inputSchema={},
-            server_name="utility_server"
+            server_name="utility_server",
         )
 
         llm_formatted_output = simple_tool.format_for_llm()
@@ -571,7 +552,7 @@ class TestRelayTool:
             name="echo_tool",
             description="Simple echo tool that accepts string input",
             inputSchema={"type": "string"},
-            server_name="echo_server"
+            server_name="echo_server",
         )
 
         llm_formatted_output = string_tool.format_for_llm()
@@ -585,7 +566,7 @@ class TestRelayTool:
         external_tool = RelayTool(**slow_response_tool_data)
         llm_formatted_output = external_tool.format_for_llm()
 
-        lines = [line.strip() for line in llm_formatted_output.split('\n') if line.strip()]
+        lines = [line.strip() for line in llm_formatted_output.split("\n") if line.strip()]
 
         # Should have multiple non-empty lines for LLM parsing
         assert len(lines) >= 4
@@ -621,25 +602,25 @@ class TestRelayTool:
             "properties": {
                 "configuration": {
                     "type": "string",
-                    "description": "Complex configuration string with multiple parameters including performance tuning, error handling, and output formatting options for comprehensive tool behavior control"
+                    "description": "Complex configuration string with multiple parameters including performance tuning, error handling, and output formatting options for comprehensive tool behavior control",
                 },
                 "metadata": {
                     "type": "string",
-                    "description": "Tool metadata with special characters: JSON{} XML<> CSV, TSV\t and international characters: 配置 🛠️ настройки"
+                    "description": "Tool metadata with special characters: JSON{} XML<> CSV, TSV\t and international characters: 配置 🛠️ настройки",
                 },
                 "advanced_options": {
                     "type": "string",
-                    "description": "Advanced configuration options for power users including debugging flags and performance optimizations"
-                }
+                    "description": "Advanced configuration options for power users including debugging flags and performance optimizations",
+                },
             },
-            "required": ["configuration"]
+            "required": ["configuration"],
         }
 
         complex_tool = RelayTool(
             name="fixed_response_tool",
             description="Advanced fixed response tool with comprehensive configuration options",
             inputSchema=complex_schema,
-            server_name="advanced_server"
+            server_name="advanced_server",
         )
 
         llm_formatted_output = complex_tool.format_for_llm()
@@ -653,11 +634,7 @@ class TestRelayTool:
 
     def test_relay_tool_with_different_states(self, slow_response_tool_data):
         """Test RelayTool with different states for compliance management."""
-        tool_states_to_test = [
-            ToolState.ENABLED,
-            ToolState.DISABLED_HIDDEN_MODE,
-            ToolState.DISABLED_SECURITY_RISK
-        ]
+        tool_states_to_test = [ToolState.ENABLED, ToolState.DISABLED_HIDDEN_MODE, ToolState.DISABLED_SECURITY_RISK]
 
         for state in tool_states_to_test:
             slow_response_tool_data["state"] = state
@@ -684,12 +661,12 @@ class TestExternalToolIntegration:
                     "failure_mode": {
                         "type": "string",
                         "enum": ["exception", "error_response", "timeout"],
-                        "description": "Type of failure to simulate"
+                        "description": "Type of failure to simulate",
                     }
-                }
+                },
             },
             "server_name": "test_server",
-            "state": ToolState.ENABLED
+            "state": ToolState.ENABLED,
         }
 
         # Create all tool types
@@ -710,9 +687,9 @@ class TestExternalToolIntegration:
         # Create an InternalTool for registry
         internal_tool = InternalTool(
             name="echo_tool",
-            description = "Echo tool for conversion testing",
+            description="Echo tool for conversion testing",
             inputSchema={"type": "string"},
-            server_name="echo_server"
+            server_name="echo_server",
         )
 
         # Convert to MCP tool
@@ -724,7 +701,7 @@ class TestExternalToolIntegration:
             description=internal_tool.description,
             inputSchema=internal_tool.inputSchema,
             server_name=internal_tool.server_name,
-            state=internal_tool.state
+            state=internal_tool.state,
         )
 
         # Both should produce same MCP tool
@@ -741,12 +718,10 @@ class TestExternalToolIntegration:
             description="Tool for serialization testing",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "response_type": {"type": "string", "description": "Type of response"}
-                }
+                "properties": {"response_type": {"type": "string", "description": "Type of response"}},
             },
             server_name="mock_server",
-            state=ToolState.DISABLED_DUPLICATE
+            state=ToolState.DISABLED_DUPLICATE,
         )
 
         # Serialize to dict for database storage
@@ -758,11 +733,11 @@ class TestExternalToolIntegration:
             description=tool_dict["description"],
             inputSchema=tool_dict["input_schema"],
             server_name=tool_dict["server_name"],
-            state=tool_dict["state"]
+            state=tool_dict["state"],
         )
 
         # Should have same hash (same content)
-        assert original_tool.md5_hash == recreated_tool.md5_hash
+        assert original_tool.sha256_hash == recreated_tool.sha256_hash
         assert original_tool.name == recreated_tool.name
         assert original_tool.state == recreated_tool.state
 
@@ -772,7 +747,7 @@ class TestExternalToolIntegration:
             name="passthrough_tool",
             description="Distributed passthrough tool",
             inputSchema={},
-            server_name="distributed_cluster"
+            server_name="distributed_cluster",
         )
 
         # Should be instance of all parent classes for proper integration
@@ -786,7 +761,7 @@ class TestExternalToolIntegration:
         assert hasattr(distributed_tool, "to_mcp_tool")  # BaseTool for relay
 
         # Should have all required attributes for distributed operations
-        assert hasattr(distributed_tool, "md5_hash")  # InternalTool for deduplication
+        assert hasattr(distributed_tool, "sha256_hash")  # InternalTool for deduplication
         assert hasattr(distributed_tool, "server_name")  # BaseTool for server tracking
         assert hasattr(distributed_tool, "state")  # BaseTool for state management
         assert hasattr(distributed_tool, "name")  # types.Tool for identification
@@ -800,25 +775,25 @@ class TestExternalToolIntegration:
             name="echo_tool",
             description="Echo user input",
             inputSchema={"type": "object", "properties": {"text": {"type": "string"}}},
-            server_name="echo_server"
+            server_name="echo_server",
         )
 
         slow_tool = InternalTool(
             name="slow_response_tool",
             description="Add processing delay",
             inputSchema={"type": "object", "properties": {"delay": {"type": "number"}}},
-            server_name="performance_server"
+            server_name="performance_server",
         )
 
         fixed_tool = InternalTool(
             name="fixed_response_tool",
             description="Return predefined response",
             inputSchema={"type": "object", "properties": {"type": {"type": "string"}}},
-            server_name="mock_server"
+            server_name="mock_server",
         )
 
         # All tools should have unique hashes
-        tool_hashes = {echo_tool.md5_hash, slow_tool.md5_hash, fixed_tool.md5_hash}
+        tool_hashes = {echo_tool.sha256_hash, slow_tool.sha256_hash, fixed_tool.sha256_hash}
         assert len(tool_hashes) == 3  # All hashes are unique
 
         # All tools should convert to valid MCP tools
@@ -827,7 +802,7 @@ class TestExternalToolIntegration:
 
         # All tools should be serializable
         tool_dicts = [tool.to_dict() for tool in [echo_tool, slow_tool, fixed_tool]]
-        assert all("md5_hash" in tool_dict for tool_dict in tool_dicts)
+        assert all("sha256_hash" in tool_dict for tool_dict in tool_dicts)
 
     def test_mixed_external_tool_states_handling(self):
         """Test handling of external tools with mixed states."""
@@ -837,7 +812,7 @@ class TestExternalToolIntegration:
             description="Enabled echo tool",
             inputSchema={"type": "object"},
             server_name="test_server",
-            state=ToolState.ENABLED
+            state=ToolState.ENABLED,
         )
 
         disabled_tool = InternalTool(
@@ -845,7 +820,7 @@ class TestExternalToolIntegration:
             description="Disabled failing tool",
             inputSchema={"type": "object"},
             server_name="test_server",
-            state=ToolState.DISABLED_ERROR
+            state=ToolState.DISABLED_ERROR,
         )
 
         hidden_tool = InternalTool(
@@ -853,14 +828,14 @@ class TestExternalToolIntegration:
             description="Hidden passthrough tool",
             inputSchema={"type": "object"},
             server_name="test_server",
-            state=ToolState.DISABLED_HIDDEN_MODE
+            state=ToolState.DISABLED_HIDDEN_MODE,
         )
 
         tools = [enabled_tool, disabled_tool, hidden_tool]
 
         # All should have valid hashes regardless of state
-        assert all(tool.md5_hash for tool in tools)
-        assert all(len(tool.md5_hash) == 32 for tool in tools)
+        assert all(tool.sha256_hash for tool in tools)
+        assert all(len(tool.sha256_hash) == 32 for tool in tools)
 
         # All should convert to MCP tools regardless of state
         mcp_tools = [tool.to_mcp_tool() for tool in tools]
@@ -873,33 +848,29 @@ class TestExternalToolIntegration:
         assert ToolState.DISABLED_ERROR in states
         assert ToolState.DISABLED_HIDDEN_MODE in states
 
-
     def test_external_tool_performance_with_large_schemas(self):
         """Test external tool performance with large input schemas."""
         # Create tool with large, complex schema
-        large_schema = {
-            "type": "object",
-            "properties": {}
-        }
+        large_schema = {"type": "object", "properties": {}}
 
         # Add many properties to simulate large schema
         for i in range(50):
             large_schema["properties"][f"param_{i}"] = {
                 "type": "string",
                 "description": f"Parameter {i} for testing large schema performance",
-                "enum": [f"value_{j}" for j in range(10)]  # Add enum values
+                "enum": [f"value_{j}" for j in range(10)],  # Add enum values
             }
 
         large_schema_tool = InternalTool(
             name="slow_response_tool",
             description="Tool with large schema for performance testing",
             inputSchema=large_schema,
-            server_name="performance_server"
+            server_name="performance_server",
         )
 
         # Should handle large schema efficiently
-        assert large_schema_tool.md5_hash != ""
-        assert len(large_schema_tool.md5_hash) == 32
+        assert large_schema_tool.sha256_hash != ""
+        assert len(large_schema_tool.sha256_hash) == 32
 
         # Serialization should work with large schema
         tool_dict = large_schema_tool.to_dict()
@@ -910,10 +881,9 @@ class TestExternalToolIntegration:
             name="slow_response_tool",
             description="Tool with large schema for performance testing",
             inputSchema=large_schema,
-            server_name="performance_server"
+            server_name="performance_server",
         )
-        assert large_schema_tool.md5_hash == large_schema_tool_2.md5_hash
-
+        assert large_schema_tool.sha256_hash == large_schema_tool_2.sha256_hash
 
     def test_external_tool_edge_cases_handling(self):
         """Test external tool handling of edge cases."""
@@ -922,10 +892,10 @@ class TestExternalToolIntegration:
             name="a",  # Single character name
             description="",  # Empty description
             inputSchema={},  # Empty schema
-            server_name="x"  # Single character server
+            server_name="x",  # Single character server
         )
 
-        assert minimal_tool.md5_hash != ""
+        assert minimal_tool.sha256_hash != ""
         tool_dict = minimal_tool.to_dict()
         assert tool_dict["name"] == "a"
         assert tool_dict["description"] == ""
@@ -936,12 +906,11 @@ class TestExternalToolIntegration:
             name=max_length_name,
             description="Tool with very long name for edge case testing",
             inputSchema={"type": "object"},
-            server_name="test_server"
+            server_name="test_server",
         )
 
-        assert max_tool.md5_hash != ""
+        assert max_tool.sha256_hash != ""
         assert max_tool.name == max_length_name
-
 
     def test_external_tool_special_characters_handling(self):
         """Test external tool handling of special characters in various fields."""
@@ -951,30 +920,26 @@ class TestExternalToolIntegration:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "special_input": {
-                        "type": "string",
-                        "description": "Input with special chars: ∑∏∆√∫≈≠≤≥±×÷"
-                    }
-                }
+                    "special_input": {"type": "string", "description": "Input with special chars: ∑∏∆√∫≈≠≤≥±×÷"}  # noqa: RUF001
+                },
             },
-            server_name="special_server"
+            server_name="special_server",
         )
 
         # Should handle special characters without issues
-        assert special_chars_tool.md5_hash != ""
+        assert special_chars_tool.sha256_hash != ""
 
         # LLM formatting should preserve special characters
         relay_special_tool = RelayTool(
             name=special_chars_tool.name,
             description=special_chars_tool.description,
             inputSchema=special_chars_tool.inputSchema,
-            server_name=special_chars_tool.server_name
+            server_name=special_chars_tool.server_name,
         )
 
         llm_output = relay_special_tool.format_for_llm()
         assert "!@#$%^&*()" in llm_output
-        assert "∑∏∆√∫≈≠≤≥±×÷" in llm_output
-
+        assert "∑∏∆√∫≈≠≤≥±×÷" in llm_output  # noqa: RUF001
 
     def test_external_tool_state_transitions(self):
         """Test external tool state transitions and validation."""
@@ -984,17 +949,17 @@ class TestExternalToolIntegration:
             description="Tool for state transition testing",
             inputSchema={"type": "object"},
             server_name="test_server",
-            state=ToolState.ENABLED
+            state=ToolState.ENABLED,
         )
 
-        original_hash = transition_tool.md5_hash
+        original_hash = transition_tool.sha256_hash
 
         # Create tools with different states (simulating state changes)
         states_to_test = [
             ToolState.DISABLED_DUPLICATE,
             ToolState.DISABLED_ERROR,
             ToolState.DISABLED_HIDDEN_MODE,
-            ToolState.DISABLED_SECURITY_RISK
+            ToolState.DISABLED_SECURITY_RISK,
         ]
 
         for new_state in states_to_test:
@@ -1004,14 +969,13 @@ class TestExternalToolIntegration:
                 description="Tool for state transition testing",
                 inputSchema={"type": "object"},
                 server_name="test_server",
-                state=new_state
+                state=new_state,
             )
 
             # Core properties should remain the same, hash should be identical
             # (since hash is based on functional properties, not state)
-            assert changed_tool.md5_hash == original_hash
+            assert changed_tool.sha256_hash == original_hash
             assert changed_tool.state == new_state
-
 
     def test_external_tool_cross_server_compatibility(self):
         """Test external tool compatibility across different servers."""
@@ -1023,18 +987,13 @@ class TestExternalToolIntegration:
             tool = InternalTool(
                 name="echo_tool",
                 description="Cross-server echo tool",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "text": {"type": "string"}
-                    }
-                },
-                server_name=server
+                inputSchema={"type": "object", "properties": {"text": {"type": "string"}}},
+                server_name=server,
             )
             tools.append(tool)
 
         # All tools should have different hashes due to different server names
-        tool_hashes = [tool.md5_hash for tool in tools]
+        tool_hashes = [tool.sha256_hash for tool in tools]
         assert len(set(tool_hashes)) == 3  # All hashes are unique
 
         # But all should have same functional MCP representation
@@ -1043,7 +1002,6 @@ class TestExternalToolIntegration:
             assert mcp_tools[0].name == mcp_tools[i].name
             assert mcp_tools[0].description == mcp_tools[i].description
             assert mcp_tools[0].inputSchema == mcp_tools[i].inputSchema
-
 
     def test_external_tool_complex_workflow_simulation(self):
         """Test complex workflow with multiple external tools."""
@@ -1056,12 +1014,10 @@ class TestExternalToolIntegration:
             description="Capture and echo user input",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "user_input": {"type": "string", "description": "User input to process"}
-                },
-                "required": ["user_input"]
+                "properties": {"user_input": {"type": "string", "description": "User input to process"}},
+                "required": ["user_input"],
             },
-            server_name="input_server"
+            server_name="input_server",
         )
         workflow_tools.append(echo_tool)
 
@@ -1071,13 +1027,10 @@ class TestExternalToolIntegration:
             description="Process input with simulated delay",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "input_data": {"type": "string"},
-                    "processing_time": {"type": "number", "minimum": 0}
-                },
-                "required": ["input_data"]
+                "properties": {"input_data": {"type": "string"}, "processing_time": {"type": "number", "minimum": 0}},
+                "required": ["input_data"],
             },
-            server_name="processing_server"
+            server_name="processing_server",
         )
         workflow_tools.append(processing_tool)
 
@@ -1089,11 +1042,11 @@ class TestExternalToolIntegration:
                 "type": "object",
                 "properties": {
                     "processed_data": {"type": "string"},
-                    "response_format": {"type": "string", "enum": ["json", "text"]}
+                    "response_format": {"type": "string", "enum": ["json", "text"]},
                 },
-                "required": ["processed_data"]
+                "required": ["processed_data"],
             },
-            server_name="output_server"
+            server_name="output_server",
         )
         workflow_tools.append(result_tool)
 
@@ -1103,13 +1056,10 @@ class TestExternalToolIntegration:
             description="Handle errors in workflow",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "error_input": {"type": "string"},
-                    "error_type": {"type": "string"}
-                }
+                "properties": {"error_input": {"type": "string"}, "error_type": {"type": "string"}},
             },
             server_name="error_server",
-            state=ToolState.DISABLED_ERROR  # Disabled unless needed
+            state=ToolState.DISABLED_ERROR,  # Disabled unless needed
         )
         workflow_tools.append(error_tool)
 
@@ -1117,7 +1067,7 @@ class TestExternalToolIntegration:
         assert len(workflow_tools) == 4
 
         # All tools should have unique hashes
-        hashes = [tool.md5_hash for tool in workflow_tools]
+        hashes = [tool.sha256_hash for tool in workflow_tools]
         assert len(set(hashes)) == 4
 
         # All enabled tools should be convertible to MCP tools
@@ -1129,16 +1079,19 @@ class TestExternalToolIntegration:
 
         # Workflow should be serializable for storage
         workflow_dicts = [tool.to_dict() for tool in workflow_tools]
-        assert all("md5_hash" in tool_dict for tool_dict in workflow_dicts)
+        assert all("sha256_hash" in tool_dict for tool_dict in workflow_dicts)
 
         # LLM presentation should work for all enabled tools
-        relay_tools = [RelayTool(**{
-            "name": tool.name,
-            "description": tool.description,
-            "inputSchema": tool.inputSchema,
-            "server_name": tool.server_name,
-            "state": tool.state
-        }) for tool in enabled_tools]
+        relay_tools = [
+            RelayTool(**{
+                "name": tool.name,
+                "description": tool.description,
+                "inputSchema": tool.inputSchema,
+                "server_name": tool.server_name,
+                "state": tool.state,
+            })
+            for tool in enabled_tools
+        ]
 
         llm_outputs = [tool.format_for_llm() for tool in relay_tools]
         assert all("Tool:" in output for output in llm_outputs)
@@ -1155,7 +1108,7 @@ class TestExternalToolValidationAndErrorHandling:
             BaseTool(
                 name="test_tool",
                 description="Tool missing server name",
-                inputSchema={}
+                inputSchema={},
                 # Missing server_name - this should definitely fail
             )
 
@@ -1166,7 +1119,7 @@ class TestExternalToolValidationAndErrorHandling:
                 description="Tool with invalid state",
                 inputSchema={},
                 server_name="test_server",
-                state="not_a_valid_state"  # Should be ToolState enum
+                state="not_a_valid_state",  # Should be ToolState enum
             )
 
         # Test None values for required fields
@@ -1175,7 +1128,7 @@ class TestExternalToolValidationAndErrorHandling:
                 name=None,  # None name should fail
                 description="Tool with None name",
                 inputSchema={},
-                server_name="test_server"
+                server_name="test_server",
             )
 
         # Test None server_name
@@ -1184,7 +1137,7 @@ class TestExternalToolValidationAndErrorHandling:
                 name="test_tool",
                 description="Tool with None server",
                 inputSchema={},
-                server_name=None  # None server_name should fail
+                server_name=None,  # None server_name should fail
             )
 
     def test_external_tool_schema_validation(self):
@@ -1196,11 +1149,8 @@ class TestExternalToolValidationAndErrorHandling:
             {"type": "object", "properties": {}},  # Empty object schema
             {
                 "type": "object",
-                "properties": {
-                    "param1": {"type": "string"},
-                    "param2": {"type": "number"}
-                }
-            }  # Complex schema
+                "properties": {"param1": {"type": "string"}, "param2": {"type": "number"}},
+            },  # Complex schema
         ]
 
         for schema in valid_schemas:
@@ -1208,7 +1158,7 @@ class TestExternalToolValidationAndErrorHandling:
                 name="validation_tool",
                 description="Tool for schema validation testing",
                 inputSchema=schema,
-                server_name="validation_server"
+                server_name="validation_server",
             )
             assert tool.inputSchema == schema
 
@@ -1220,7 +1170,7 @@ class TestExternalToolValidationAndErrorHandling:
                 "name": "echo_tool",
                 "description": None,  # None description
                 "inputSchema": {},
-                "server_name": "test_server"
+                "server_name": "test_server",
             }
         ]
 
@@ -1244,18 +1194,13 @@ class TestExternalToolValidationAndErrorHandling:
             tool = InternalTool(
                 name=f"echo_tool_{i}",
                 description="Very similar echo tool for collision testing",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "text": {"type": "string"}
-                    }
-                },
-                server_name="echo_server"
+                inputSchema={"type": "object", "properties": {"text": {"type": "string"}}},
+                server_name="echo_server",
             )
             similar_tools.append(tool)
 
         # All hashes should be unique despite similarities
-        hashes = [tool.md5_hash for tool in similar_tools]
+        hashes = [tool.sha256_hash for tool in similar_tools]
         assert len(set(hashes)) == 10  # All hashes are unique
 
     def test_external_tool_memory_efficiency(self):
@@ -1268,7 +1213,7 @@ class TestExternalToolValidationAndErrorHandling:
                 name=f"tool_{i}",
                 description=f"Tool number {i}",
                 inputSchema={"type": "object"},
-                server_name=f"server_{i % 5}"  # 5 different servers
+                server_name=f"server_{i % 5}",  # 5 different servers
             )
             tools.append(tool)
 
@@ -1276,14 +1221,14 @@ class TestExternalToolValidationAndErrorHandling:
         assert len(tools) == 100
 
         # Verify all have unique hashes
-        hashes = [tool.md5_hash for tool in tools]
+        hashes = [tool.sha256_hash for tool in tools]
         assert len(set(hashes)) == 100
 
         # Memory usage should be reasonable (tools should not hold excessive references)
         for tool in tools:
-            assert hasattr(tool, 'md5_hash')
-            assert hasattr(tool, 'name')
-            assert hasattr(tool, 'server_name')
+            assert hasattr(tool, "sha256_hash")
+            assert hasattr(tool, "name")
+            assert hasattr(tool, "server_name")
 
     def test_external_tool_concurrent_access_simulation(self):
         """Test external tool behavior under simulated concurrent access."""
@@ -1291,13 +1236,8 @@ class TestExternalToolValidationAndErrorHandling:
         shared_config = {
             "name": "passthrough_tool",
             "description": "Tool for concurrent access testing",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "data": {"type": "string"}
-                }
-            },
-            "server_name": "concurrent_server"
+            "inputSchema": {"type": "object", "properties": {"data": {"type": "string"}}},
+            "server_name": "concurrent_server",
         }
 
         # Simulate multiple threads creating the same tool
@@ -1307,7 +1247,7 @@ class TestExternalToolValidationAndErrorHandling:
             concurrent_tools.append(tool)
 
         # All tools should have identical hashes (same configuration)
-        hashes = [tool.md5_hash for tool in concurrent_tools]
+        hashes = [tool.sha256_hash for tool in concurrent_tools]
         assert all(h == hashes[0] for h in hashes)
 
         # All tools should be functionally equivalent
@@ -1331,18 +1271,13 @@ class TestExternalToolValidationAndErrorHandling:
                         "properties": {
                             "nested": {
                                 "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "deep_param": {"type": "string"}
-                                    }
-                                }
+                                "items": {"type": "object", "properties": {"deep_param": {"type": "string"}}},
                             }
-                        }
+                        },
                     }
-                }
+                },
             },
-            server_name="complex_server"
+            server_name="complex_server",
         )
 
         # Serialization should handle complex structure
@@ -1351,8 +1286,8 @@ class TestExternalToolValidationAndErrorHandling:
         assert "config" in tool_dict["input_schema"]["properties"]
 
         # Hash should be computed successfully
-        assert complex_tool.md5_hash != ""
-        assert len(complex_tool.md5_hash) == 32
+        assert complex_tool.sha256_hash != ""
+        assert len(complex_tool.sha256_hash) == 32
 
     def test_external_tool_internationalization_support(self):
         """Test external tool support for international characters and formats."""
@@ -1361,23 +1296,23 @@ class TestExternalToolValidationAndErrorHandling:
             {
                 "name": "echo_tool_Überprüfung",
                 "description": "Deutsches Echo-Werkzeug für Internationalisierungs-Unterstützung mit ä ö ü ß",
-                "server_name": "Deutscher_Prüfungs_Server"
+                "server_name": "Deutscher_Prüfungs_Server",
             },
             {
                 "name": "echo_tool_العربية",
                 "description": "أداة الصدى العربية لاختبار الدعم الدولي",
-                "server_name": "الخادم_العربي"
+                "server_name": "الخادم_العربي",
             },
             {
                 "name": "echo_tool_русский",
                 "description": "Русский инструмент эхо для тестирования интернационализации",
-                "server_name": "русский_сервер"
+                "server_name": "русский_сервер",
             },
             {
                 "name": "echo_tool_emoji",
                 "description": "Echo tool with emoji support 🔧🛠️⚙️🔨",
-                "server_name": "emoji_server_🚀"
-            }
+                "server_name": "emoji_server_🚀",
+            },
         ]
 
         for tool_config in international_tools:
@@ -1385,12 +1320,12 @@ class TestExternalToolValidationAndErrorHandling:
                 name=tool_config["name"],
                 description=tool_config["description"],
                 inputSchema={"type": "object"},
-                server_name=tool_config["server_name"]
+                server_name=tool_config["server_name"],
             )
 
             # Should handle international characters
-            assert tool.md5_hash != ""
-            assert len(tool.md5_hash) == 32
+            assert tool.sha256_hash != ""
+            assert len(tool.sha256_hash) == 32
 
             # Serialization should preserve international characters
             tool_dict = tool.to_dict()
@@ -1399,10 +1334,7 @@ class TestExternalToolValidationAndErrorHandling:
 
             # LLM formatting should preserve international characters
             relay_tool = RelayTool(
-                name=tool.name,
-                description=tool.description,
-                inputSchema=tool.inputSchema,
-                server_name=tool.server_name
+                name=tool.name, description=tool.description, inputSchema=tool.inputSchema, server_name=tool.server_name
             )
 
             llm_output = relay_tool.format_for_llm()
