@@ -1,3 +1,19 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
 """
 Unit tests for the downstream_mcp_client module.
 
@@ -5,19 +21,17 @@ This module contains comprehensive tests for the DownstreamMcpClient class using
 simulated tools for testing purposes.
 """
 
-import pytest
 import asyncio
 import json
-import os
-from unittest.mock import AsyncMock, MagicMock, patch, call
 from contextlib import AsyncExitStack
-from typing import Dict, Any
+from unittest.mock import AsyncMock, call, patch
 
 import mcp.types as types
-from mcp import ClientSession, StdioServerParameters
+import pytest
+from mcp import ClientSession
 from tenacity import RetryError
 
-from pan_aisecurity_mcp.mcp_relay.downstream_mcp_client import DownstreamMcpClient
+from pan_aisecurity_mcp_relay.downstream_mcp_client import DownstreamMcpClient
 
 
 @pytest.fixture
@@ -26,24 +40,14 @@ def echo_server_config():
     return {
         "command": "python",
         "args": ["-m", "echo_server"],
-        "env": {
-            "ECHO_MODE": "simple",
-            "RESPONSE_FORMAT": "json"
-        }
+        "env": {"ECHO_MODE": "simple", "RESPONSE_FORMAT": "json"},
     }
 
 
 @pytest.fixture
 def test_server_config():
     """Create generic test server configuration."""
-    return {
-        "command": "uv",
-        "args": ["run", "test-server"],
-        "env": {
-            "TEST_MODE": "enabled",
-            "LOG_LEVEL": "debug"
-        }
-    }
+    return {"command": "uv", "args": ["run", "test-server"], "env": {"TEST_MODE": "enabled", "LOG_LEVEL": "debug"}}
 
 
 @pytest.fixture
@@ -52,10 +56,7 @@ def performance_server_config():
     return {
         "command": "python",
         "args": ["-m", "performance_tools"],
-        "env": {
-            "LATENCY_MODE": "variable",
-            "MAX_DELAY": "5000"
-        }
+        "env": {"LATENCY_MODE": "variable", "MAX_DELAY": "5000"},
     }
 
 
@@ -67,14 +68,9 @@ def mock_echo_tool():
         description="Echo back the input text",
         inputSchema={
             "type": "object",
-            "properties": {
-                "text": {
-                    "type": "string",
-                    "description": "Text to echo back"
-                }
-            },
-            "required": ["text"]
-        }
+            "properties": {"text": {"type": "string", "description": "Text to echo back"}},
+            "required": ["text"],
+        },
     )
 
 
@@ -86,13 +82,8 @@ def mock_error_all_tool():
         description="Always returns error response with isError=True",
         inputSchema={
             "type": "object",
-            "properties": {
-                "input": {
-                    "type": "string",
-                    "description": "Input that will trigger error response"
-                }
-            }
-        }
+            "properties": {"input": {"type": "string", "description": "Input that will trigger error response"}},
+        },
     )
 
 
@@ -109,15 +100,12 @@ def mock_slow_response_tool():
                     "type": "number",
                     "minimum": 0,
                     "maximum": 10,
-                    "description": "Delay in seconds before responding"
+                    "description": "Delay in seconds before responding",
                 },
-                "content": {
-                    "type": "string",
-                    "description": "Content to return after delay"
-                }
+                "content": {"type": "string", "description": "Content to return after delay"},
             },
-            "required": ["delay_seconds"]
-        }
+            "required": ["delay_seconds"],
+        },
     )
 
 
@@ -133,16 +121,16 @@ def mock_fixed_response_tool():
                 "response_type": {
                     "type": "string",
                     "enum": ["success", "warning", "info", "error"],
-                    "description": "Type of fixed response to return"
+                    "description": "Type of fixed response to return",
                 },
                 "include_metadata": {
                     "type": "boolean",
                     "default": False,
-                    "description": "Whether to include metadata in response"
-                }
+                    "description": "Whether to include metadata in response",
+                },
             },
-            "required": ["response_type"]
-        }
+            "required": ["response_type"],
+        },
     )
 
 
@@ -154,13 +142,8 @@ def mock_passthrough_tool():
         description="Passthrough tool that returns input unchanged",
         inputSchema={
             "type": "object",
-            "properties": {
-                "data": {
-                    "type": "object",
-                    "description": "Data to pass through unchanged"
-                }
-            }
-        }
+            "properties": {"data": {"type": "object", "description": "Data to pass through unchanged"}},
+        },
     )
 
 
@@ -176,22 +159,28 @@ def mock_failing_tool():
                 "failure_mode": {
                     "type": "string",
                     "enum": ["exception", "error_response", "timeout", "network_error"],
-                    "description": "Type of failure to simulate"
+                    "description": "Type of failure to simulate",
                 },
                 "error_message": {
                     "type": "string",
                     "default": "Simulated failure",
-                    "description": "Custom error message"
-                }
+                    "description": "Custom error message",
+                },
             },
-            "required": ["failure_mode"]
-        }
+            "required": ["failure_mode"],
+        },
     )
 
 
 @pytest.fixture
-def mock_external_tools_list(mock_echo_tool, mock_error_all_tool, mock_slow_response_tool,
-                            mock_fixed_response_tool, mock_passthrough_tool, mock_failing_tool):
+def mock_external_tools_list(
+    mock_echo_tool,
+    mock_error_all_tool,
+    mock_slow_response_tool,
+    mock_fixed_response_tool,
+    mock_passthrough_tool,
+    mock_failing_tool,
+):
     """Create list of all external simulated tools for testing."""
     return [
         mock_echo_tool,
@@ -199,7 +188,7 @@ def mock_external_tools_list(mock_echo_tool, mock_error_all_tool, mock_slow_resp
         mock_slow_response_tool,
         mock_fixed_response_tool,
         mock_passthrough_tool,
-        mock_failing_tool
+        mock_failing_tool,
     ]
 
 
@@ -216,7 +205,7 @@ class TestDownstreamMcpClient:
         assert isinstance(client._cleanup_lock, asyncio.Lock)
         assert isinstance(client.exit_stack, AsyncExitStack)
 
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.logging')
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.logging")
     def test_downstream_mcp_client_initialization_logging(self, mock_logging, test_server_config):
         """Test that client initialization logs configuration information."""
         DownstreamMcpClient("test-server", test_server_config)
@@ -225,7 +214,7 @@ class TestDownstreamMcpClient:
         mock_logging.info.assert_called_with(expected_message)
 
     @pytest.mark.asyncio
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.stdio_client')
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.stdio_client")
     async def test_initialize_echo_server_success(self, mock_stdio_client, echo_server_config):
         """Test successful initialization of echo server connection."""
         # Setup mocks for echo server connection
@@ -240,7 +229,7 @@ class TestDownstreamMcpClient:
 
         client = DownstreamMcpClient("echo-server", echo_server_config)
 
-        with patch.object(client.exit_stack, 'enter_async_context') as mock_enter_context:
+        with patch.object(client.exit_stack, "enter_async_context") as mock_enter_context:
             mock_enter_context.side_effect = [mock_stdio_transport, mock_session]
 
             await client.initialize()
@@ -249,10 +238,11 @@ class TestDownstreamMcpClient:
         mock_session.initialize.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.stdio_client')
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.logging')
-    async def test_initialize_server_environment_variables(self, mock_logging, mock_stdio_client,
-                                                          performance_server_config):
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.stdio_client")
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.logging")
+    async def test_initialize_server_environment_variables(
+        self, mock_logging, mock_stdio_client, performance_server_config
+    ):
         """Test server initialization with environment variable handling."""
         mock_stdio_client.return_value = AsyncMock()
         mock_stdio_client.return_value.__aenter__.return_value = (AsyncMock(), AsyncMock())
@@ -260,24 +250,19 @@ class TestDownstreamMcpClient:
         mock_session = AsyncMock(spec=ClientSession)
         client = DownstreamMcpClient("performance-server", performance_server_config)
 
-        with patch.object(client.exit_stack, 'enter_async_context') as mock_enter_context:
-            with patch('os.environ', {"EXISTING_VAR": "existing_value"}) as mock_env:
+        with patch.object(client.exit_stack, "enter_async_context") as mock_enter_context:
+            with patch("os.environ", {"EXISTING_VAR": "existing_value"}):
                 mock_enter_context.side_effect = [(AsyncMock(), AsyncMock()), mock_session]
 
                 await client.initialize()
 
                 # Verify environment variables are properly set
-                expected_env = {
-                    "EXISTING_VAR": "existing_value",
-                    "LATENCY_MODE": "variable",
-                    "MAX_DELAY": "5000"
-                }
 
         mock_logging.debug.assert_any_call("Initializing downstream mcp server: performance-server...")
 
     @pytest.mark.asyncio
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.stdio_client')
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.logging')
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.stdio_client")
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.logging")
     async def test_initialize_server_failure(self, mock_logging, mock_stdio_client, test_server_config):
         """Test server initialization failure handling."""
         # Simulate connection failure
@@ -285,15 +270,14 @@ class TestDownstreamMcpClient:
 
         client = DownstreamMcpClient("test-server", test_server_config)
 
-        with patch.object(client, 'cleanup') as mock_cleanup:
+        with patch.object(client, "cleanup") as mock_cleanup:
             with pytest.raises(Exception, match="Test server connection failed"):
                 await client.initialize()
 
             mock_cleanup.assert_called_once()
 
         mock_logging.error.assert_called_with(
-            "Error initializing server test-server: Test server connection failed",
-            exc_info=True
+            "Error initializing server test-server: Test server connection failed", exc_info=True
         )
 
     @pytest.mark.asyncio
@@ -344,7 +328,7 @@ class TestDownstreamMcpClient:
         assert tools == []
 
     @pytest.mark.asyncio
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.logging')
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.logging")
     async def test_execute_tool_echo_success(self, mock_logging):
         """Test successful execution of echo tool."""
         client = DownstreamMcpClient("echo-server", {})
@@ -358,17 +342,15 @@ class TestDownstreamMcpClient:
                     text=json.dumps({
                         "echoed_text": "Hello, World!",
                         "timestamp": "2024-01-15T12:00:00Z",
-                        "tool": "echo_tool"
-                    })
+                        "tool": "echo_tool",
+                    }),
                 )
             ]
         )
         client.session.call_tool.return_value = mock_echo_response
 
         # Execute echo tool
-        echo_args = {
-            "text": "Hello, World!"
-        }
+        echo_args = {"text": "Hello, World!"}
 
         result = await client.execute_tool("echo_tool", echo_args)
 
@@ -379,7 +361,7 @@ class TestDownstreamMcpClient:
         mock_logging.info.assert_any_call(f"arguments: {echo_args}")
 
     @pytest.mark.asyncio
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.logging')
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.logging")
     async def test_execute_tool_fixed_response_success(self, mock_logging):
         """Test successful execution of fixed response tool."""
         client = DownstreamMcpClient("test-server", {})
@@ -394,21 +376,15 @@ class TestDownstreamMcpClient:
                         "response_type": "success",
                         "message": "Operation completed successfully",
                         "status_code": 200,
-                        "metadata": {
-                            "tool": "fixed_response_tool",
-                            "execution_time": "50ms"
-                        }
-                    })
+                        "metadata": {"tool": "fixed_response_tool", "execution_time": "50ms"},
+                    }),
                 )
             ]
         )
         client.session.call_tool.return_value = mock_fixed_response
 
         # Execute fixed response tool
-        fixed_args = {
-            "response_type": "success",
-            "include_metadata": True
-        }
+        fixed_args = {"response_type": "success", "include_metadata": True}
 
         result = await client.execute_tool("fixed_response_tool", fixed_args)
 
@@ -416,7 +392,7 @@ class TestDownstreamMcpClient:
         client.session.call_tool.assert_called_once_with("fixed_response_tool", fixed_args)
 
     @pytest.mark.asyncio
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.logging')
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.logging")
     async def test_execute_tool_slow_response_success(self, mock_logging):
         """Test successful execution of slow response tool."""
         client = DownstreamMcpClient("performance-server", {})
@@ -430,18 +406,15 @@ class TestDownstreamMcpClient:
                     text=json.dumps({
                         "content": "Delayed response content",
                         "delay_applied": 2.5,
-                        "completion_time": "2024-01-15T12:00:02.5Z"
-                    })
+                        "completion_time": "2024-01-15T12:00:02.5Z",
+                    }),
                 )
             ]
         )
         client.session.call_tool.return_value = mock_slow_response
 
         # Execute slow response tool
-        slow_args = {
-            "delay_seconds": 2.5,
-            "content": "Delayed response content"
-        }
+        slow_args = {"delay_seconds": 2.5, "content": "Delayed response content"}
 
         result = await client.execute_tool("slow_response_tool", slow_args)
 
@@ -462,7 +435,7 @@ class TestDownstreamMcpClient:
         assert "Server test-server not initialized" in str(original_exception)
 
     @pytest.mark.asyncio
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.logging')
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.logging")
     async def test_execute_tool_server_error_with_retry(self, mock_logging):
         """Test tool execution error handling with retry mechanism."""
         client = DownstreamMcpClient("test-server", {})
@@ -497,11 +470,7 @@ class TestDownstreamMcpClient:
 
         # Test with echo tool response TextContent
         echo_text_content = types.TextContent(
-            type="text",
-            text=json.dumps({
-                "echoed_text": "test response",
-                "tool": "echo_tool"
-            })
+            type="text", text=json.dumps({"echoed_text": "test response", "tool": "echo_tool"})
         )
 
         extracted = client.extract_text_content(echo_text_content)
@@ -518,10 +487,7 @@ class TestDownstreamMcpClient:
         # Test with embedded resource
         embedded_resource = types.EmbeddedResource(
             type="resource",
-            resource=types.TextResourceContents(
-                uri="test://resource/12345",
-                text="Test resource content"
-            )
+            resource=types.TextResourceContents(uri="test://resource/12345", text="Test resource content"),
         )
 
         extracted = client.extract_text_content(embedded_resource)
@@ -537,7 +503,7 @@ class TestDownstreamMcpClient:
         # Test with list of responses
         content_list = [
             types.TextContent(type="text", text="Response 1"),
-            types.TextContent(type="text", text="Response 2")
+            types.TextContent(type="text", text="Response 2"),
         ]
 
         extracted = client.extract_text_content(content_list)
@@ -623,7 +589,7 @@ class TestDownstreamMcpClient:
         assert client.session is None
 
     @pytest.mark.asyncio
-    @patch('pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.logging')
+    @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.logging")
     async def test_cleanup_server_with_exception(self, mock_logging):
         """Test cleanup handling exceptions during server cleanup."""
         client = DownstreamMcpClient("test-server", {})
@@ -635,9 +601,7 @@ class TestDownstreamMcpClient:
         # Should not raise exception, but log error
         await client.cleanup()
 
-        mock_logging.error.assert_called_with(
-            "Error during cleanup of server test-server: Cleanup error"
-        )
+        mock_logging.error.assert_called_with("Error during cleanup of server test-server: Cleanup error")
 
     @pytest.mark.asyncio
     async def test_concurrent_cleanup_calls(self):
@@ -664,7 +628,7 @@ class TestDownstreamMcpClientIntegration:
         client = DownstreamMcpClient("test-server", test_server_config)
 
         # Mock successful initialization
-        with patch.object(client, 'initialize') as mock_init:
+        with patch.object(client, "initialize") as mock_init:
             mock_init.return_value = None
             client.session = AsyncMock(spec=ClientSession)
 
@@ -685,9 +649,7 @@ class TestDownstreamMcpClientIntegration:
             client.session.call_tool.return_value = mock_echo_result
 
             # Execute echo tool
-            result = await client.execute_tool("echo_tool", {
-                "text": "test content"
-            })
+            result = await client.execute_tool("echo_tool", {"text": "test content"})
 
             assert result == mock_echo_result
 
@@ -708,9 +670,7 @@ class TestDownstreamMcpClientIntegration:
             call_count += 1
             if call_count < 3:  # Fail first 2 attempts
                 raise Exception("Temporary server error")
-            return types.CallToolResult(
-                content=[types.TextContent(type="text", text='{"status": "success"}')]
-            )
+            return types.CallToolResult(content=[types.TextContent(type="text", text='{"status": "success"}')])
 
         client.session.call_tool.side_effect = side_effect
 
@@ -731,12 +691,22 @@ class TestDownstreamMcpClientIntegration:
         perf_client.session = AsyncMock(spec=ClientSession)
 
         # Both servers should be able to list tools
-        mock_echo_tools = [("tools", [
-            types.Tool(name="echo_tool", description="Echo tool", inputSchema={}),
-        ])]
-        mock_perf_tools = [("tools", [
-            types.Tool(name="slow_response_tool", description="Latency simulator", inputSchema={}),
-        ])]
+        mock_echo_tools = [
+            (
+                "tools",
+                [
+                    types.Tool(name="echo_tool", description="Echo tool", inputSchema={}),
+                ],
+            )
+        ]
+        mock_perf_tools = [
+            (
+                "tools",
+                [
+                    types.Tool(name="slow_response_tool", description="Latency simulator", inputSchema={}),
+                ],
+            )
+        ]
 
         echo_client.session.list_tools.return_value = mock_echo_tools
         perf_client.session.list_tools.return_value = mock_perf_tools
@@ -764,8 +734,8 @@ class TestDownstreamMcpClientIntegration:
                         "isError": True,
                         "error_type": "simulated_error",
                         "message": "This tool always returns errors",
-                        "timestamp": "2024-01-15T12:00:00Z"
-                    })
+                        "timestamp": "2024-01-15T12:00:00Z",
+                    }),
                 )
             ]
         )
@@ -781,7 +751,7 @@ class TestDownstreamMcpClientIntegration:
         error_data_text = error_data["text"]
         error_data_text_parsed = json.loads(error_data_text)
         print(error_data_text_parsed)
-        assert error_data_text_parsed["isError"] == True
+        assert error_data_text_parsed["isError"]
         assert error_data_text_parsed["error_type"] == "simulated_error"
 
     @pytest.mark.asyncio
@@ -796,11 +766,7 @@ class TestDownstreamMcpClientIntegration:
             content=[
                 types.TextContent(
                     type="text",
-                    text=json.dumps({
-                        "passthrough": True,
-                        "original_data": test_data,
-                        "processing_time": "0ms"
-                    })
+                    text=json.dumps({"passthrough": True, "original_data": test_data, "processing_time": "0ms"}),
                 )
             ]
         )
@@ -816,7 +782,7 @@ class TestDownstreamMcpClientIntegration:
         response_data = json.loads(extracted_content)
         response_data_text = response_data["text"]
         response_data_text_parsed = json.loads(response_data_text)
-        assert response_data_text_parsed["passthrough"] == True
+        assert response_data_text_parsed["passthrough"]
         assert response_data_text_parsed["original_data"] == test_data
 
     @pytest.mark.asyncio
@@ -830,11 +796,10 @@ class TestDownstreamMcpClientIntegration:
         client.session.call_tool.side_effect = tool_exception
 
         # Should fail after retries
-        with pytest.raises(RetryError) as exc_info:
-            await client.execute_tool("failing_tool", {
-                "failure_mode": "exception",
-                "error_message": "Intentional tool failure"
-            })
+        with pytest.raises(RetryError):
+            await client.execute_tool(
+                "failing_tool", {"failure_mode": "exception", "error_message": "Intentional tool failure"}
+            )
 
         # Verify exception was retried
         assert client.session.call_tool.call_count == 3
@@ -857,20 +822,16 @@ class TestDownstreamMcpClientIntegration:
                             "requested_delay": delay,
                             "actual_delay": delay,
                             "content": f"Response after {delay}s delay",
-                            "performance_metrics": {
-                                "cpu_usage": "5%",
-                                "memory_usage": "12MB"
-                            }
-                        })
+                            "performance_metrics": {"cpu_usage": "5%", "memory_usage": "12MB"},
+                        }),
                     )
                 ]
             )
             client.session.call_tool.return_value = mock_response
 
-            result = await client.execute_tool("slow_response_tool", {
-                "delay_seconds": delay,
-                "content": f"Test content {delay}"
-            })
+            result = await client.execute_tool(
+                "slow_response_tool", {"delay_seconds": delay, "content": f"Test content {delay}"}
+            )
 
             assert result == mock_response
 
@@ -891,20 +852,16 @@ class TestDownstreamMcpClientIntegration:
                             "response_type": response_type,
                             "message": f"Fixed {response_type} response",
                             "status_code": 200 if response_type == "success" else 400,
-                            "metadata": {
-                                "tool": "fixed_response_tool",
-                                "version": "1.0.0"
-                            }
-                        })
+                            "metadata": {"tool": "fixed_response_tool", "version": "1.0.0"},
+                        }),
                     )
                 ]
             )
             client.session.call_tool.return_value = mock_response
 
-            result = await client.execute_tool("fixed_response_tool", {
-                "response_type": response_type,
-                "include_metadata": True
-            })
+            result = await client.execute_tool(
+                "fixed_response_tool", {"response_type": response_type, "include_metadata": True}
+            )
 
             # Verify response structure
             extracted_content = client.extract_text_content(result.content[0])
@@ -924,7 +881,7 @@ class TestDownstreamMcpClientIntegration:
         workflow_responses = [
             types.CallToolResult(content=[types.TextContent(type="text", text='{"echoed": "step1"}')]),
             types.CallToolResult(content=[types.TextContent(type="text", text='{"response_type": "success"}')]),
-            types.CallToolResult(content=[types.TextContent(type="text", text='{"passthrough": true}')])
+            types.CallToolResult(content=[types.TextContent(type="text", text='{"passthrough": true}')]),
         ]
 
         client.session.call_tool.side_effect = workflow_responses
