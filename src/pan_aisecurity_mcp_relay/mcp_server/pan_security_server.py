@@ -4,7 +4,7 @@ Palo Alto Networks AI Runtime Security (AIRS) API - Model Context Protocol (MCP)
 
 This is an example MCP Server demonstrating the use of the AI Runtime Security API Intercept as MCP Tools.
 
-The server exposes the AIRS API functionality of as various MCP tools:
+The server exposes the AIRS API functionality as several MCP tools:
 - Inline Prompt/Response Scanning
 - Batch (Asynchronous) Scanning for collections of Prompts/Responses
 - Retrieval of Scan Results and Scan Threat Reports
@@ -14,7 +14,7 @@ The server exposes the AIRS API functionality of as various MCP tools:
 # requires-python = ">=3.10"
 # dependencies = [
 #     "pan-aisecurity",
-#     "fastmcp",
+#     "mcp",
 #     "python-dotenv",
 # ]#
 # ///
