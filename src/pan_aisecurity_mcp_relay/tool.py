@@ -1,3 +1,19 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
 """
 Tool module for MCP Relay application.
 
@@ -7,7 +23,7 @@ Defines tool classes and states for managing tools across different servers.
 import hashlib
 import json
 from enum import Enum
-from typing import Any, List
+from typing import Any
 
 import mcp.types as types
 from pydantic import ConfigDict, Field
@@ -35,7 +51,7 @@ class BaseTool(types.Tool):
 
     model_config = ConfigDict(extra="allow")
 
-    def get_argument_descriptions(self) -> List[str]:
+    def get_argument_descriptions(self) -> list[str]:
         """
         Get formatted argument descriptions from input schema.
 
@@ -75,11 +91,11 @@ class InternalTool(BaseTool):
     Extends BaseTool with MD5 hash for tool identification and caching.
     """
 
-    md5_hash: str = Field(default="", description="Hash of tool identity fields")
+    sha256_hash: str = Field(default="", description="Hash of tool identity fields")
 
     def model_post_init(self, __context: Any) -> None:
         """Compute hash after initialization."""
-        self.md5_hash = self.compute_hash()
+        self.sha256_hash = self.compute_hash()
 
     def compute_hash(self) -> str:
         """
@@ -95,7 +111,7 @@ class InternalTool(BaseTool):
             "input_schema": self.inputSchema,
         }
         json_str = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-        return hashlib.md5(json_str.encode("utf-8")).hexdigest()
+        return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
     def to_dict(self) -> dict[str, str]:
         """
@@ -110,7 +126,7 @@ class InternalTool(BaseTool):
             "input_schema": self.inputSchema,
             "server_name": self.server_name,
             "state": self.state,
-            "md5_hash": self.md5_hash,
+            "sha256_hash": self.sha256_hash,
         }
 
 
