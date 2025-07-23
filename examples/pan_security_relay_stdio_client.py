@@ -3,12 +3,12 @@ import asyncio
 import json
 import logging
 import sys
-from enum import Enum
-from typing import Any, Dict, List, Optional
-
 from contextlib import AsyncExitStack
+from enum import Enum
+from typing import Any
+
 import mcp.types as types
-from mcp import stdio_client, StdioServerParameters
+from mcp import StdioServerParameters, stdio_client
 from mcp.client.session import ClientSession
 
 logging.basicConfig(
@@ -74,10 +74,10 @@ class PanSecurityRelayStdioClient:
         """Initialize the client with relay module path and config file."""
         self.relay_module = relay_module
         self.config_file_path = config_file_path
-        self.session: Optional[ClientSession] = None
+        self.session: ClientSession | None = None
         self._cleanup_lock = asyncio.Lock()
         self.exit_stack = AsyncExitStack()
-        self.available_tools: List[types.Tool] = []
+        self.available_tools: list[types.Tool] = []
 
     async def connect(self):
         """Establish connection to the relay subprocess via stdio transport."""
@@ -94,9 +94,7 @@ class PanSecurityRelayStdioClient:
                     )
                 )
             )
-            self.session = await self.exit_stack.enter_async_context(
-                ClientSession(read, write)
-            )
+            self.session = await self.exit_stack.enter_async_context(ClientSession(read, write))
             await self.session.initialize()
             logging.info("MCP session initialized successfully")
         except Exception as e:
@@ -110,7 +108,7 @@ class PanSecurityRelayStdioClient:
             await self.exit_stack.aclose()
             self.session = None
 
-    async def list_tools(self, refresh=False) -> List[types.Tool]:
+    async def list_tools(self, refresh=False) -> list[types.Tool]:
         """List available tools, with optional refresh from the server."""
         if self.session is None:
             raise RuntimeError("Not connected")
@@ -119,9 +117,7 @@ class PanSecurityRelayStdioClient:
             self.available_tools = resp.tools
         return self.available_tools
 
-    async def call_tool(
-        self, name: str, args: Optional[Dict[str, Any]] = None
-    ) -> types.CallToolResult:
+    async def call_tool(self, name: str, args: dict[str, Any] | None = None) -> types.CallToolResult:
         """Invoke a tool by name with optional arguments."""
         if self.session is None:
             raise RuntimeError("Not connected")
@@ -135,7 +131,7 @@ class PanSecurityRelayStdioClient:
             raise RuntimeError(f"Execution failed: {result.content}")
         return result
 
-    async def get_server_info(self) -> Dict[str, Any]:
+    async def get_server_info(self) -> dict[str, Any]:
         """Fetch downstream server information via the special tool."""
         result = await self.call_tool("list_downstream_servers_info")
         return json.loads(result.content[0].text) if result.content else {}
@@ -159,9 +155,7 @@ async def interactive_mode(client: PanSecurityRelayStdioClient):
             elif command == InteractiveCommand.LIST:
                 tools = await client.list_tools(refresh=True)
                 print(f"Found {len(tools)} tools")
-                print(
-                    json.dumps([tool.__dict__ for tool in tools], indent=2, default=str)
-                )
+                print(json.dumps([tool.__dict__ for tool in tools], indent=2, default=str))
                 continue
             elif command[: len(InteractiveCommand.CALL)] == InteractiveCommand.CALL:
                 parts = command.split(" ", 2)
