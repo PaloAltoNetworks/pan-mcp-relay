@@ -1,6 +1,8 @@
 # Palo Alto Networks MCP Security Relay
 
-A implementation of a security-enhanced Model Context Protocol (MCP) relay server that acts as an intermediary between clients and downstream MCP servers, providing security scanning and centralized orchestration capabilities.
+A security-enhanced [Model Context Protocol](https://modelcontextprotocol.io) (MCP) relay server that acts as an
+intermediary between clients and downstream MCP servers, providing security scanning and centralized orchestration
+capabilities.
 
 <!--TOC-->
 - [Palo Alto Networks MCP Security Relay](#palo-alto-networks-mcp-security-relay)
@@ -29,28 +31,37 @@ A implementation of a security-enhanced Model Context Protocol (MCP) relay serve
 
 </a>
 
-The MCP Security Relay provides a security-enhanced intermediary layer for Model Context Protocol communications. It enables:
+The MCP Security Relay provides a security-enhanced intermediary layer for Model Context Protocol communications
 
 - **Security scanning** of tool requests and responses using integrated AI security services
 - **Tool registry management** with deduplication, caching, and state management
-- **Multi-server orchestration** supporting multiple downstream MCP servers
+- **Multiserver orchestration** supporting multiple downstream MCP servers
 - **Hidden mode support** for bypassing security scans on trusted servers
 - **Automatic tool discovery** and registration from configured downstream servers
 
 <a id="installation" href="#installation">
 
-# Installation
+# Installation and Setup
 
 </a>
 
+We recommend using [uv](https://docs.astral.sh/uv/) to manage your Python projects.
+
+1. Clone this repository.
+2. Install the project dependencies using `uv`
+3. Configure the MCP Relay
+4. Run the MCP Relay Server
+
 ```sh
+git clone https://github.com/paloaltonetworks/aisecurity-mcp-relay.git
 
-# Create and activate a virtual environment
-python3 -m venv --prompt ${PWD##*/} .venv && source .venv/bin/activate
+cd aisecurity-mcp-relay
 
-# Install required dependencies
-python3 -m pip install -r requirements.txt
+uv sync
+
+# edit config/servers_config.json
 ```
+
 
 <a id="configuration" href="#configuration">
 
@@ -82,7 +93,7 @@ PANW_AI_PROFILE_ID=YOUR_PROFILE_ID
 
 Configure downstream MCP servers in `config/servers_config.json`:
 
-**Note**: The `pan-aisecurity` server configuration is required and must be included in the servers configuration.
+**Note**: The `pan-aisecurity` server configuration is required and must be included in the server configuration.
 
 ```json
 {
@@ -131,12 +142,12 @@ The relay supports two transport mechanisms:
 
 ```sh
 # Run with STDIO transport (default)
-python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
+python -m pan_aisecurity_mcp_relay.pan_security_relay \
   --config-file=config/servers_config.json \
   --transport=stdio
 
 # Run with SSE transport
-python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
+python -m pan_aisecurity_mcp_relay.pan_security_relay \
   --config-file=config/servers_config.json \
   --transport=sse \
   --host=127.0.0.1 \
@@ -146,7 +157,7 @@ python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
 Additional configuration options:
 
 ```sh
-python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
+python -m pan_aisecurity_mcp_relay.pan_security_relay \
   --config-file=config/servers_config.json \
   --transport=stdio \
   --host=127.0.0.1 \
@@ -257,7 +268,26 @@ The relay defines custom exceptions in `pan_aisecurity_mcp/mcp_relay/exceptions.
 
 <a id="security-considerations" href="#security-considerations">
 
+
 # Legal
 
+</a>
+
 Copyright (c) 2025, Palo Alto Networks
+
+Licensed under the [Polyform Internal Use License 1.0.0](https://polyformproject.org/licenses/internal-use/1.0.0)
+(the "License"); you may not use this file except in compliance with the License.
+
+You may obtain a copy of the License at:
+
+https://polyformproject.org/licenses/internal-use/1.0.0
+
+(or)
+
+https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+
+As far as the law allows, the software comes as is, without any warranty
+or condition, and the licensor will not be liable to you for any damages
+arising out of these terms or the use or nature of the software, under
+any kind of legal claim.
 <!---Protected_by_PANW_Code_Armor_2024 - Y3ByfC9haWZ3L29wZW5zb3VyY2UvYWlzZWN1cml0eS1tY3AtcmVsYXl8MjE5NDV8bWFpbg== --->
