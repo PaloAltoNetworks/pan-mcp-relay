@@ -1,3 +1,19 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
 """
 Tool Registry Module
 
@@ -8,14 +24,14 @@ with expiration-based refresh logic and efficient lookup capabilities.
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Optional
 
-from pan_aisecurity_mcp.mcp_relay.constants import (
+from pan_aisecurity_mcp_relay.constants import (
     TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
     UNIX_EPOCH,
 )
-from pan_aisecurity_mcp.mcp_relay.exceptions import AISecMcpRelayException, ErrorType
-from pan_aisecurity_mcp.mcp_relay.tool import InternalTool, ToolState
+from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayException, ErrorType
+from pan_aisecurity_mcp_relay.tool import InternalTool, ToolState
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +67,9 @@ class ToolRegistry:
                 ErrorType.VALIDATION_ERROR,
             )
 
-        self._internal_tool_list: List[InternalTool] = []
-        self._available_tool_list: List[InternalTool] = []
-        self._hash_to_tool_map: Dict[str, InternalTool] = {}
+        self._internal_tool_list: list[InternalTool] = []
+        self._available_tool_list: list[InternalTool] = []
+        self._hash_to_tool_map: dict[str, InternalTool] = {}
         self._last_updated_at: datetime = UNIX_EPOCH
         self._expiry_in_seconds: int = tool_registry_cache_expiry
 
@@ -62,7 +78,7 @@ class ToolRegistry:
             self._expiry_in_seconds,
         )
 
-    def update_registry(self, internal_tool_list: List[InternalTool]) -> None:
+    def update_registry(self, internal_tool_list: list[InternalTool]) -> None:
         """
         Update the registry with a new list of tools and refresh all internal collections.
 
@@ -105,8 +121,8 @@ class ToolRegistry:
         """Update the hash-to-tool mapping for quick lookups."""
         self._hash_to_tool_map.clear()
         for tool in self._internal_tool_list:
-            if tool.md5_hash:  # Ensure hash exists
-                self._hash_to_tool_map[tool.md5_hash] = tool
+            if tool.sha256_hash:  # Ensure hash exists
+                self._hash_to_tool_map[tool.sha256_hash] = tool
 
     def is_registry_outdated(self) -> bool:
         """
@@ -118,25 +134,25 @@ class ToolRegistry:
         time_elapsed = datetime.now() - self._last_updated_at
         return time_elapsed > timedelta(seconds=self._expiry_in_seconds)
 
-    def get_available_tools(self) -> List[InternalTool]:
+    def get_available_tools(self) -> list[InternalTool]:
         """
         Retrieve all tools that are currently in the ENABLED state.
 
         Returns:
-            List[InternalTool]: List of enabled tools available for use
+            list[InternalTool]: List of enabled tools available for use
         """
         return self._available_tool_list
 
-    def get_all_tools(self) -> List[InternalTool]:
+    def get_all_tools(self) -> list[InternalTool]:
         """
         Retrieve the complete list of all registered tools regardless of state.
 
         Returns:
-            List[InternalTool]: Complete list of all tools in the registry
+            list[InternalTool]: Complete list of all tools in the registry
         """
         return self._internal_tool_list
 
-    def get_tool_by_hash(self, md5_hash: str) -> Optional[InternalTool]:
+    def get_tool_by_hash(self, sha256_hash: str) -> Optional[InternalTool]:
         """
         Look up a specific tool using its MD5 hash identifier.
 
@@ -144,23 +160,23 @@ class ToolRegistry:
         useful for tool identification and retrieval operations.
 
         Args:
-            md5_hash: The MD5 hash string identifying the desired tool
+            sha256_hash: The MD5 hash string identifying the desired tool
 
         Returns:
             Optional[InternalTool]: The tool object if found, None if hash doesn't exist
 
         Raises:
-            ValidationError: If md5_hash is invalid
+            ValidationError: If sha256_hash is invalid
         """
-        if not isinstance(md5_hash, str):
+        if not isinstance(sha256_hash, str):
             raise AISecMcpRelayException("MD5 hash must be a string", ErrorType.VALIDATION_ERROR)
 
-        if not md5_hash:
+        if not sha256_hash:
             return None
 
-        return self._hash_to_tool_map.get(md5_hash)
+        return self._hash_to_tool_map.get(sha256_hash)
 
-    def get_server_tool_map(self) -> Dict[str, List[InternalTool]]:
+    def get_server_tool_map(self) -> dict[str, list[InternalTool]]:
         """
         Group all tools by their server name for organized access.
 
@@ -168,9 +184,9 @@ class ToolRegistry:
         that belong to that server, including both enabled and disabled tools.
 
         Returns:
-            Dict[str, List[InternalTool]]: Dictionary mapping server names to their tool lists
+            dict[str, list[InternalTool]]: Dictionary mapping server names to their tool lists
         """
-        server_tool_map: Dict[str, List[InternalTool]] = {}
+        server_tool_map: dict[str, list[InternalTool]] = {}
 
         for tool in self._internal_tool_list:
             server_name = tool.server_name
@@ -205,12 +221,12 @@ class ToolRegistry:
             logger.error("Failed to serialize tools to JSON: %s", e)
             raise AISecMcpRelayException(f"Tool serialization failed {e}", ErrorType.TOOL_REGISTRY_ERROR)
 
-    def get_registry_stats(self) -> Dict[str, any]:
+    def get_registry_stats(self) -> dict[str, any]:
         """
         Get statistics about the current registry state.
 
         Returns:
-            Dict[str, any]: Dictionary containing registry statistics
+            dict[str, any]: Dictionary containing registry statistics
         """
         server_count = len(set(tool.server_name for tool in self._internal_tool_list))
 
@@ -238,9 +254,9 @@ class ToolRegistry:
         """Return the total number of tools in the registry."""
         return len(self._internal_tool_list)
 
-    def __contains__(self, md5_hash: str) -> bool:
+    def __contains__(self, sha256_hash: str) -> bool:
         """Check if a tool with the given hash exists in the registry."""
-        return md5_hash in self._hash_to_tool_map
+        return sha256_hash in self._hash_to_tool_map
 
     def __repr__(self) -> str:
         """Return string representation of the registry."""
