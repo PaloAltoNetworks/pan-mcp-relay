@@ -1,3 +1,19 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
 """
 MCP Relay Security Server
 
@@ -27,15 +43,18 @@ import argparse
 import asyncio
 import logging
 from copy import deepcopy
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import mcp.types as types
 import uvicorn
 from mcp.server.lowlevel import Server
 from mcp.server.sse import SseServerTransport
 from mcp.server.stdio import stdio_server
-from pan_aisecurity_mcp.mcp_relay.configuration import Configuration
-from pan_aisecurity_mcp.mcp_relay.constants import (
+from starlette.applications import Starlette
+from starlette.routing import Route
+
+from .configuration import Configuration
+from .constants import (
     ENVIRONMENT_CONFIG_LABEL,
     HIDDEN_MODE_ENABLED,
     HIDDEN_MODE_LABEL,
@@ -48,13 +67,11 @@ from pan_aisecurity_mcp.mcp_relay.constants import (
     TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
     TransportType,
 )
-from pan_aisecurity_mcp.mcp_relay.downstream_mcp_client import DownstreamMcpClient
-from pan_aisecurity_mcp.mcp_relay.exceptions import AISecMcpRelayException, ErrorType
-from pan_aisecurity_mcp.mcp_relay.security_scanner import SecurityScanner
-from pan_aisecurity_mcp.mcp_relay.tool import InternalTool, ToolState
-from pan_aisecurity_mcp.mcp_relay.tool_registry import ToolRegistry
-from starlette.applications import Starlette
-from starlette.routing import Route
+from .downstream_mcp_client import DownstreamMcpClient
+from .exceptions import AISecMcpRelayException, ErrorType
+from .security_scanner import SecurityScanner
+from .tool import InternalTool, ToolState
+from .tool_registry import ToolRegistry
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,7 +99,7 @@ class PanSecurityRelay:
             max_downstream_servers: Maximum number of downstream servers
             max_downstream_tools: Maximum number of tools
         """
-        self.servers: Dict[str, DownstreamMcpClient] = {}  # Maps server_name to server
+        self.servers: dict[str, DownstreamMcpClient] = {}  # Maps server_name to server
         self.tool_registry = ToolRegistry(tool_registry_cache_expiry)
         self.config_path = config_path
         self.max_downstream_servers = max_downstream_servers
@@ -143,7 +160,7 @@ class PanSecurityRelay:
             logging.error(f"Configuration loading error: {e}")
             raise AISecMcpRelayException(f"Could not load configuration: {e}", ErrorType.INVALID_CONFIGURATION)
 
-    async def _update_security_scanner(self, servers_config: Dict[str, Any]) -> None:
+    async def _update_security_scanner(self, servers_config: dict[str, Any]) -> None:
         """Initialize and configure the security scanner for downstream servers."""
         logging.info("MCP pan-aisecurity server init - Setting up security scanning configuration...")
         for server_name, server_config in servers_config.items():
@@ -177,9 +194,9 @@ class PanSecurityRelay:
         # Update tool registry
         self.tool_registry.update_registry(full_tool_list)
 
-    async def _collect_tools_from_servers(self, servers_config) -> List[InternalTool]:
+    async def _collect_tools_from_servers(self, servers_config) -> list[InternalTool]:
         """Collect tools from all configured downstream servers."""
-        full_tool_list: List[InternalTool] = []
+        full_tool_list: list[InternalTool] = []
         for server_name, server_config in servers_config.items():
             server = DownstreamMcpClient(server_name, server_config)
             await server.initialize()
@@ -195,7 +212,7 @@ class PanSecurityRelay:
             await server.cleanup()
         return full_tool_list
 
-    def _validate_tool_limits(self, tools: List[InternalTool]) -> None:
+    def _validate_tool_limits(self, tools: list[InternalTool]) -> None:
         """Additional validation of tool limits and constraints."""
         if len(tools) > self.max_downstream_tools:
             raise AISecMcpRelayException(
@@ -208,7 +225,7 @@ class PanSecurityRelay:
         server_name: str,
         server_tools: list[types.Tool],
         hidden_mode_enabled: bool,
-        full_tool_list: List[InternalTool],
+        full_tool_list: list[InternalTool],
     ):
         """Process and prepare tools from a specific server."""
         for server_tool in server_tools:
@@ -225,7 +242,7 @@ class PanSecurityRelay:
             if hidden_mode_enabled:
                 internal_tool.state = ToolState.DISABLED_HIDDEN_MODE
             else:
-                exist_tool = self.tool_registry.get_tool_by_hash(internal_tool.md5_hash)
+                exist_tool = self.tool_registry.get_tool_by_hash(internal_tool.sha256_hash)
                 if exist_tool is None:
                     # Security scan
                     logging.info(f"Scan tool info: {server_tool.model_dump()!s}")
@@ -372,7 +389,7 @@ class PanSecurityRelay:
             isError=False,
         )
 
-    async def _execute_on_server(self, server_name: str, tool_name: str, arguments: Dict) -> types.CallToolResult:
+    async def _execute_on_server(self, server_name: str, tool_name: str, arguments: dict) -> types.CallToolResult:
         """Execute a tool on a specific downstream server."""
         if server_name not in self.servers:
             raise AISecMcpRelayException(f"Server not found: {server_name}", ErrorType.SERVER_NOT_FOUND)
