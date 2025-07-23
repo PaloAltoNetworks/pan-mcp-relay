@@ -1,3 +1,19 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
 """
 Downstream MCP Client module.
 
@@ -8,7 +24,7 @@ import asyncio
 import logging
 import os
 from contextlib import AsyncExitStack
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import mcp.types as types
 from mcp import ClientSession, StdioServerParameters, stdio_client
@@ -23,7 +39,7 @@ class DownstreamMcpClient:
     downstream MCP server.
     """
 
-    def __init__(self, name: str, config: Dict[str, Any]) -> None:
+    def __init__(self, name: str, config: dict[str, Any]) -> None:
         """
         Initialize the MCP client.
 
@@ -32,7 +48,7 @@ class DownstreamMcpClient:
             config: Server configuration dictionary
         """
         self.name: str = name
-        self.config: Dict[str, Any] = config
+        self.config: dict[str, Any] = config
         self.session: Optional[ClientSession] = None
         self._cleanup_lock: asyncio.Lock = asyncio.Lock()
         self.exit_stack: AsyncExitStack = AsyncExitStack()
@@ -105,7 +121,7 @@ class DownstreamMcpClient:
     async def execute_tool(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> types.CallToolResult:
         """
         Execute a tool with retry mechanism.
