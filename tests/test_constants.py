@@ -1,9 +1,27 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
 """Unit tests for MCP Relay application constants."""
 
 import unittest
-import pytest
 from datetime import datetime
-from pan_aisecurity_mcp.mcp_relay import constants
+
+import pytest
+
+from pan_aisecurity_mcp_relay import constants
 
 
 class TestServerNames(unittest.TestCase):
@@ -69,10 +87,7 @@ class TestToolNames:
     """Test tool name constants."""
 
     def test_tool_name_list_downstream_servers_info(self):
-        assert (
-            constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO
-            == "list_downstream_servers_info"
-        )
+        assert constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO == "list_downstream_servers_info"
         assert isinstance(constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO, str)
         assert len(constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO) > 0
 
@@ -110,10 +125,7 @@ class TestConstantIntegrity:
 
     def test_scan_response_actions_are_different(self):
         """Ensure scan response actions are distinct."""
-        assert (
-            constants.SECURITY_SCAN_RESPONSE_ACTION_BLOCK
-            != constants.SECURITY_SCAN_RESPONSE_ACTION_ALLOW
-        )
+        assert constants.SECURITY_SCAN_RESPONSE_ACTION_BLOCK != constants.SECURITY_SCAN_RESPONSE_ACTION_ALLOW
 
     def test_server_names_are_different(self):
         """Ensure server names are distinct."""
@@ -121,25 +133,17 @@ class TestConstantIntegrity:
 
     def test_tool_names_are_different(self):
         """Ensure tool names are distinct."""
-        assert (
-            constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO
-            != constants.TOOL_NAME_PAN_AISECURITY_INLINE_SCAN
-        )
+        assert constants.TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO != constants.TOOL_NAME_PAN_AISECURITY_INLINE_SCAN
 
     def test_default_values_are_reasonable(self):
         """Test that default values are within reasonable ranges."""
-        assert (
-            0 < constants.TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT <= 3600
-        )  # Between 0 and 1 hour
+        assert 0 < constants.TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT <= 3600  # Between 0 and 1 hour
         assert 0 < constants.MAX_DOWNSTREAM_SERVERS_DEFAULT <= 1000
         assert 0 < constants.MAX_DOWNSTREAM_TOOLS_DEFAULT <= 1000
 
     def test_max_tools_greater_than_max_servers(self):
         """Test logical relationship between max tools and servers."""
-        assert (
-            constants.MAX_DOWNSTREAM_TOOLS_DEFAULT
-            >= constants.MAX_DOWNSTREAM_SERVERS_DEFAULT
-        )
+        assert constants.MAX_DOWNSTREAM_TOOLS_DEFAULT >= constants.MAX_DOWNSTREAM_SERVERS_DEFAULT
 
 
 class TestConstantImmutability:
@@ -243,7 +247,7 @@ class TestConstantTypes:
         """Test that TransportType inherits from str and Enum."""
         assert isinstance(constants.TransportType.STDIO, str)
         assert isinstance(constants.TransportType.SSE, str)
-        
+
         # Test enum membership
         assert constants.TransportType.STDIO in constants.TransportType
         assert constants.TransportType.SSE in constants.TransportType
