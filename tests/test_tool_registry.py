@@ -1,3 +1,19 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
 """
 Unit tests for the tool_registry module.
 
@@ -5,16 +21,16 @@ This module contains comprehensive tests for the ToolRegistry class using
 simulated tools for testing purposes.
 """
 
-import pytest
 import json
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
-from typing import List
+from unittest.mock import patch
 
-from pan_aisecurity_mcp.mcp_relay.tool_registry import ToolRegistry
-from pan_aisecurity_mcp.mcp_relay.tool import InternalTool, ToolState
-from pan_aisecurity_mcp.mcp_relay.exceptions import AISecMcpRelayException, ErrorType
-from pan_aisecurity_mcp.mcp_relay.constants import TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT, UNIX_EPOCH
+import pytest
+
+from pan_aisecurity_mcp_relay.constants import TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT, UNIX_EPOCH
+from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayException, ErrorType
+from pan_aisecurity_mcp_relay.tool import InternalTool, ToolState
+from pan_aisecurity_mcp_relay.tool_registry import ToolRegistry
 
 
 class TestToolRegistry:
@@ -26,15 +42,9 @@ class TestToolRegistry:
         return InternalTool(
             name="echo_tool",
             description="Echo back the input text",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "text": {"type": "string"}
-                },
-                "required": ["text"]
-            },
+            inputSchema={"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
             server_name="test-server",
-            state=ToolState.ENABLED
+            state=ToolState.ENABLED,
         )
 
     @pytest.fixture
@@ -43,14 +53,9 @@ class TestToolRegistry:
         return InternalTool(
             name="error_all_tool",
             description="Always returns error response",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "input": {"type": "string"}
-                }
-            },
+            inputSchema={"type": "object", "properties": {"input": {"type": "string"}}},
             server_name="test-server",
-            state=ToolState.ENABLED
+            state=ToolState.ENABLED,
         )
 
     @pytest.fixture
@@ -61,13 +66,10 @@ class TestToolRegistry:
             description="Simulates slow response with intentional delay",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "delay_seconds": {"type": "number", "minimum": 0},
-                    "content": {"type": "string"}
-                }
+                "properties": {"delay_seconds": {"type": "number", "minimum": 0}, "content": {"type": "string"}},
             },
             server_name="performance-server",
-            state=ToolState.ENABLED
+            state=ToolState.ENABLED,
         )
 
     @pytest.fixture
@@ -78,15 +80,10 @@ class TestToolRegistry:
             description="Returns predefined fixed response",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "response_type": {
-                        "type": "string",
-                        "enum": ["success", "warning", "info"]
-                    }
-                }
+                "properties": {"response_type": {"type": "string", "enum": ["success", "warning", "info"]}},
             },
             server_name="mock-server",
-            state=ToolState.ENABLED
+            state=ToolState.ENABLED,
         )
 
     @pytest.fixture
@@ -95,12 +92,9 @@ class TestToolRegistry:
         return InternalTool(
             name="passthrough_tool",
             description="Passthrough tool that returns input unchanged",
-            inputSchema={
-                "type": "object",
-                "properties": {}
-            },
+            inputSchema={"type": "object", "properties": {}},
             server_name="utility-server",
-            state=ToolState.ENABLED
+            state=ToolState.ENABLED,
         )
 
     @pytest.fixture
@@ -111,29 +105,18 @@ class TestToolRegistry:
             description="Intentionally fails with errors",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "failure_mode": {
-                        "type": "string",
-                        "enum": ["exception", "error_response", "timeout"]
-                    }
-                }
+                "properties": {"failure_mode": {"type": "string", "enum": ["exception", "error_response", "timeout"]}},
             },
             server_name="test-server",
-            state=ToolState.DISABLED_ERROR
+            state=ToolState.DISABLED_ERROR,
         )
 
     @pytest.fixture
-    def sample_tool_list(self, echo_tool, error_all_tool, slow_response_tool,
-                         fixed_response_tool, passthrough_tool, failing_tool):
+    def sample_tool_list(
+        self, echo_tool, error_all_tool, slow_response_tool, fixed_response_tool, passthrough_tool, failing_tool
+    ):
         """Create list of sample tools for testing."""
-        return [
-            echo_tool,
-            error_all_tool,
-            slow_response_tool,
-            fixed_response_tool,
-            passthrough_tool,
-            failing_tool
-        ]
+        return [echo_tool, error_all_tool, slow_response_tool, fixed_response_tool, passthrough_tool, failing_tool]
 
     def test_tool_registry_initialization_default_expiry(self):
         """Test ToolRegistry initialization with default cache expiry."""
@@ -165,22 +148,19 @@ class TestToolRegistry:
 
         assert exc_info.value.error_type == ErrorType.VALIDATION_ERROR
 
-    @patch('pan_aisecurity_mcp.mcp_relay.tool_registry.logger')
+    @patch("pan_aisecurity_mcp_relay.tool_registry.logger")
     def test_tool_registry_initialization_logging(self, mock_logger):
         """Test that initialization logs cache expiry information."""
         expiry = 3600
         ToolRegistry(tool_registry_cache_expiry=expiry)
 
-        mock_logger.info.assert_called_with(
-            "Tool registry initialized with cache expiry %d seconds.",
-            expiry
-        )
+        mock_logger.info.assert_called_with("Tool registry initialized with cache expiry %d seconds.", expiry)
 
     def test_update_registry_with_simulated_tools(self, sample_tool_list):
         """Test updating registry with simulated tools."""
         registry = ToolRegistry()
 
-        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+        with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
@@ -216,19 +196,19 @@ class TestToolRegistry:
         registry = ToolRegistry()
 
         # Mock an exception during update
-        with patch.object(registry, '_update_available_tools', side_effect=Exception("Test error")):
+        with patch.object(registry, "_update_available_tools", side_effect=Exception("Test error")):
             with pytest.raises(AISecMcpRelayException) as exc_info:
                 registry.update_registry(sample_tool_list)
 
             assert exc_info.value.error_type == ErrorType.TOOL_REGISTRY_ERROR
             assert "Failed to update tool registry" in str(exc_info.value)
 
-    @patch('pan_aisecurity_mcp.mcp_relay.tool_registry.logger')
+    @patch("pan_aisecurity_mcp_relay.tool_registry.logger")
     def test_update_registry_logging(self, mock_logger, sample_tool_list):
         """Test that registry update logs information."""
         registry = ToolRegistry()
 
-        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+        with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
@@ -238,7 +218,7 @@ class TestToolRegistry:
             "Tool registry updated at %s with %d tools (%d available).",
             mock_now,
             6,  # total tools
-            5  # available tools (excluding failing_tool which is disabled)
+            5,  # available tools (excluding failing_tool which is disabled)
         )
 
     def test_update_available_tools_filtering(self, sample_tool_list):
@@ -273,8 +253,8 @@ class TestToolRegistry:
 
         # Verify each tool can be found by its hash
         for tool in sample_tool_list:
-            assert tool.md5_hash in registry._hash_to_tool_map
-            assert registry._hash_to_tool_map[tool.md5_hash] == tool
+            assert tool.sha256_hash in registry._hash_to_tool_map
+            assert registry._hash_to_tool_map[tool.sha256_hash] == tool
 
     def test_update_hash_mapping_with_empty_hash(self):
         """Test hash mapping with tool that has empty hash."""
@@ -282,12 +262,9 @@ class TestToolRegistry:
 
         # Create tool with empty hash (mock scenario)
         tool_with_empty_hash = InternalTool(
-            name="test_tool",
-            description="Test tool",
-            inputSchema={},
-            server_name="test_server"
+            name="test_tool", description="Test tool", inputSchema={}, server_name="test_server"
         )
-        tool_with_empty_hash.md5_hash = ""  # Force empty hash
+        tool_with_empty_hash.sha256_hash = ""  # Force empty hash
 
         registry._internal_tool_list = [tool_with_empty_hash]
         registry._update_hash_mapping()
@@ -299,7 +276,7 @@ class TestToolRegistry:
         """Test is_registry_outdated with fresh registry."""
         registry = ToolRegistry(tool_registry_cache_expiry=3600)  # 1 hour
 
-        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+        with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
@@ -311,7 +288,7 @@ class TestToolRegistry:
         """Test is_registry_outdated with expired registry."""
         registry = ToolRegistry(tool_registry_cache_expiry=3600)  # 1 hour
 
-        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+        with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
@@ -323,7 +300,7 @@ class TestToolRegistry:
         """Test is_registry_outdated at exact expiry time."""
         registry = ToolRegistry(tool_registry_cache_expiry=3600)  # 1 hour
 
-        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+        with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
@@ -365,7 +342,7 @@ class TestToolRegistry:
         registry = ToolRegistry()
         registry.update_registry([echo_tool])
 
-        found_tool = registry.get_tool_by_hash(echo_tool.md5_hash)
+        found_tool = registry.get_tool_by_hash(echo_tool.sha256_hash)
 
         assert found_tool is not None
         assert found_tool == echo_tool
@@ -453,7 +430,7 @@ class TestToolRegistry:
 
         assert len(test_server_tools) == 3
         assert all("name" in tool for tool in test_server_tools)
-        assert all("md5_hash" in tool for tool in test_server_tools)
+        assert all("sha256_hash" in tool for tool in test_server_tools)
 
     def test_get_server_tool_map_json_serialization_error(self, sample_tool_list):
         """Test server tool map JSON with serialization error."""
@@ -461,7 +438,7 @@ class TestToolRegistry:
         registry.update_registry(sample_tool_list)
 
         # Mock to_dict to raise exception
-        with patch.object(InternalTool, 'to_dict', side_effect=AttributeError("Test error")):
+        with patch.object(InternalTool, "to_dict", side_effect=AttributeError("Test error")):
             with pytest.raises(AISecMcpRelayException) as exc_info:
                 registry.get_server_tool_map_json()
 
@@ -472,7 +449,7 @@ class TestToolRegistry:
         """Test getting registry statistics."""
         registry = ToolRegistry(tool_registry_cache_expiry=1800)
 
-        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+        with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
@@ -487,14 +464,14 @@ class TestToolRegistry:
         assert stats["available_tools"] == 5
         assert stats["server_count"] == 4
         assert stats["last_updated"] == registry._last_updated_at.isoformat()
-        assert stats["is_outdated"] == True
+        assert stats["is_outdated"]
         assert stats["cache_expiry_seconds"] == 1800
 
     def test_get_registry_stats_fresh_registry(self, sample_tool_list):
         """Test registry statistics with fresh registry."""
         registry = ToolRegistry()
 
-        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+        with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
@@ -502,7 +479,7 @@ class TestToolRegistry:
 
             stats = registry.get_registry_stats()
 
-        assert stats["is_outdated"] == False
+        assert not stats["is_outdated"]
 
     def test_clear_registry(self, sample_tool_list):
         """Test clearing the registry."""
@@ -523,7 +500,7 @@ class TestToolRegistry:
         assert len(registry._hash_to_tool_map) == 0
         assert registry._last_updated_at == UNIX_EPOCH
 
-    @patch('pan_aisecurity_mcp.mcp_relay.tool_registry.logger')
+    @patch("pan_aisecurity_mcp_relay.tool_registry.logger")
     def test_clear_registry_logging(self, mock_logger):
         """Test that clear registry logs information."""
         registry = ToolRegistry()
@@ -545,18 +522,18 @@ class TestToolRegistry:
         """Test __contains__ operator for registry."""
         registry = ToolRegistry()
 
-        assert echo_tool.md5_hash not in registry
+        assert echo_tool.sha256_hash not in registry
 
         registry.update_registry([echo_tool])
 
-        assert echo_tool.md5_hash in registry
+        assert echo_tool.sha256_hash in registry
         assert "nonexistent_hash" not in registry
 
     def test_repr_operator(self, sample_tool_list):
         """Test __repr__ operator for registry."""
         registry = ToolRegistry()
 
-        with patch('pan_aisecurity_mcp.mcp_relay.tool_registry.datetime') as mock_datetime:
+        with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
             mock_now = datetime(2024, 1, 15, 12, 0, 0)
             mock_datetime.now.return_value = mock_now
 
@@ -564,11 +541,7 @@ class TestToolRegistry:
 
             repr_str = repr(registry)
 
-        expected_str = (
-            f"ToolRegistry(total_tools=6, "
-            f"available_tools=5, "
-            f"last_updated={mock_now})"
-        )
+        expected_str = f"ToolRegistry(total_tools=6, available_tools=5, last_updated={mock_now})"
         assert repr_str == expected_str
 
     def test_registry_workflow_integration(self, sample_tool_list):
@@ -588,11 +561,8 @@ class TestToolRegistry:
         assert not registry.is_registry_outdated()
 
         # Test tool lookup
-        echo_tool = next(
-            tool for tool in sample_tool_list
-            if tool.name == "echo_tool"
-        )
-        found_tool = registry.get_tool_by_hash(echo_tool.md5_hash)
+        echo_tool = next(tool for tool in sample_tool_list if tool.name == "echo_tool")
+        found_tool = registry.get_tool_by_hash(echo_tool.sha256_hash)
         assert found_tool == echo_tool
 
         # Test server mapping
@@ -627,7 +597,7 @@ class TestToolRegistry:
 
         # Verify hash mappings are correct after multiple updates
         for tool in sample_tool_list:
-            found_tool = registry.get_tool_by_hash(tool.md5_hash)
+            found_tool = registry.get_tool_by_hash(tool.sha256_hash)
             assert found_tool == tool
 
     def test_performance_considerations_large_tool_set(self):
@@ -647,7 +617,7 @@ class TestToolRegistry:
                 description=f"Simulated {tool_type} tool number {i}",
                 inputSchema={"type": "object"},
                 server_name=f"server_{i % 10}",  # 10 different servers
-                state=state
+                state=state,
             )
             large_tool_list.append(tool)
 
@@ -660,7 +630,7 @@ class TestToolRegistry:
 
         # Hash lookup should be O(1)
         first_tool = large_tool_list[0]
-        found_tool = registry.get_tool_by_hash(first_tool.md5_hash)
+        found_tool = registry.get_tool_by_hash(first_tool.sha256_hash)
         assert found_tool == first_tool
 
         # Server mapping should group correctly
@@ -679,7 +649,7 @@ class TestToolRegistry:
             description="Enabled echo tool",
             inputSchema={"type": "object"},
             server_name="test-server",
-            state=ToolState.ENABLED
+            state=ToolState.ENABLED,
         )
 
         disabled_tool = InternalTool(
@@ -687,7 +657,7 @@ class TestToolRegistry:
             description="Disabled error tool",
             inputSchema={"type": "object"},
             server_name="test-server",
-            state=ToolState.DISABLED_ERROR
+            state=ToolState.DISABLED_ERROR,
         )
 
         tools = [enabled_tool, disabled_tool]
@@ -700,8 +670,8 @@ class TestToolRegistry:
 
         # Test hash mapping includes all tools regardless of state
         assert len(registry._hash_to_tool_map) == 2
-        assert enabled_tool.md5_hash in registry._hash_to_tool_map
-        assert disabled_tool.md5_hash in registry._hash_to_tool_map
+        assert enabled_tool.sha256_hash in registry._hash_to_tool_map
+        assert disabled_tool.sha256_hash in registry._hash_to_tool_map
 
     def test_tool_registry_edge_cases(self):
         """Test edge cases for tool registry operations."""
