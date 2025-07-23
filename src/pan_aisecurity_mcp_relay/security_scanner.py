@@ -1,16 +1,33 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
 import json
 import logging
-from typing import Dict, Optional, Union
+from typing import Optional, Union
 
 import mcp.types as types
 from aisecurity.scan.asyncio.scanner import ScanResponse
-from pan_aisecurity_mcp.mcp_relay.constants import (
+
+from pan_aisecurity_mcp_relay.constants import (
     EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH,
     SECURITY_SCAN_RESPONSE_ACTION_ALLOW,
     SECURITY_SCAN_RESPONSE_ACTION_BLOCK,
     TOOL_NAME_PAN_AISECURITY_INLINE_SCAN,
 )
-from pan_aisecurity_mcp.mcp_relay.downstream_mcp_client import DownstreamMcpClient
+from pan_aisecurity_mcp_relay.downstream_mcp_client import DownstreamMcpClient
 
 
 class SecurityScanner:
@@ -32,7 +49,7 @@ class SecurityScanner:
         """
         self.pan_security_server = pan_security_server
 
-    async def _perform_scan(self, scan_type: str, params: Dict[str, str]) -> Optional[ScanResponse]:
+    async def _perform_scan(self, scan_type: str, params: dict[str, str]) -> Optional[ScanResponse]:
         """
         Execute a security scan with the specified parameters.
 
