@@ -39,10 +39,10 @@ The relay server connects to downstream MCP servers, scans all tool interactions
 risks, and provides a unified interface for clients while enforcing security policies and resource limits.
 """
 
-import argparse
-import asyncio
 import logging
+import sys
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Optional
 
 import mcp.types as types
@@ -62,10 +62,8 @@ from .constants import (
     MAX_DOWNSTREAM_TOOLS_DEFAULT,
     MCP_RELAY_NAME,
     MCP_SERVER_CONFIG_LABEL,
-    SECURITY_SERVER_NAME,
     TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO,
     TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
-    TransportType,
 )
 from .downstream_mcp_client import DownstreamMcpClient
 from .exceptions import AISecMcpRelayException, ErrorType
@@ -73,11 +71,7 @@ from .security_scanner import SecurityScanner
 from .tool import InternalTool, ToolState
 from .tool_registry import ToolRegistry
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="[MCP Relay] %(levelname)s %(message)s",
-    datefmt="%H:%M:%S",
-)
+__path__ = Path(__file__)
 
 
 class PanSecurityRelay:
@@ -163,13 +157,14 @@ class PanSecurityRelay:
     async def _update_security_scanner(self, servers_config: dict[str, Any]) -> None:
         """Initialize and configure the security scanner for downstream servers."""
         logging.info("MCP pan-aisecurity server init - Setting up security scanning configuration...")
-        for server_name, server_config in servers_config.items():
-            if server_name == SECURITY_SERVER_NAME:
-                server = DownstreamMcpClient(server_name, server_config)
-                await server.initialize()
-                self.servers[server_name] = server
-                self.security_scanner = SecurityScanner(server)
-                await server.cleanup()
+
+        mcp_server_path = __path__.parent / "mcp_server/pan_security_server.py"
+        server = DownstreamMcpClient("pan-aisecurity", {"command": sys.executable, "args": [str(mcp_server_path)]})
+        await server.initialize()
+        self.servers["pan-aisecurity"] = server
+        self.security_scanner = SecurityScanner(server)
+        await server.cleanup()
+
         if self.security_scanner is None:
             raise AISecMcpRelayException(
                 "Missing pan-aisecurity mcp server in configuration.",
@@ -462,65 +457,3 @@ def safe_str_to_int(value: str, default: int = 0) -> int:
         return int(value)
     except (ValueError, TypeError):
         return default
-
-
-async def main() -> None:
-    """Main entry point for the MCP relay server."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config-file", type=str, required=True, help="Path to config file")
-    parser.add_argument(
-        "--transport",
-        type=str,
-        default="stdio",
-        choices=["stdio", "sse"],
-        help="Transport protocol to use",
-    )
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host for SSE server")
-    parser.add_argument("--port", type=int, default=8000, help="Port for SSE server")
-    parser.add_argument(
-        "--TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS",
-        type=int,
-        required=False,
-        default=TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
-        help="Downsteam mcp tool registry cache expiry",
-    )
-    parser.add_argument(
-        "--MAX_MCP_SERVERS",
-        type=int,
-        required=False,
-        default=MAX_DOWNSTREAM_SERVERS_DEFAULT,
-        help="Max number of downstream servers",
-    )
-    parser.add_argument(
-        "--MAX_MCP_TOOLS",
-        type=int,
-        required=False,
-        default=MAX_DOWNSTREAM_TOOLS_DEFAULT,
-        help="Max number of mcp tools",
-    )
-    args = parser.parse_args()
-
-    # Initialize the relay server
-    config_path = args.config_file
-    tool_registry_cache_expiry = args.TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS
-    max_downstream_servers = args.MAX_MCP_SERVERS
-    max_downstream_tools = args.MAX_MCP_TOOLS
-    relay_server = PanSecurityRelay(
-        config_path,
-        tool_registry_cache_expiry,
-        max_downstream_servers,
-        max_downstream_tools,
-    )
-    await relay_server.initialize()
-
-    # Create and run the MCP server
-    app = await relay_server.launch_mcp_server()
-
-    if args.transport == TransportType.STDIO:
-        await relay_server.run_stdio_server(app)
-    elif args.transport == TransportType.SSE:
-        await relay_server.run_sse_server(app, args.host, args.port)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
