@@ -88,7 +88,7 @@ class InternalTool(BaseTool):
     """
     Internal tool with hash-based identification.
 
-    Extends BaseTool with MD5 hash for tool identification and caching.
+    Extends BaseTool with SHA256 hash for tool identification and caching.
     """
 
     sha256_hash: str = Field(default="", description="Hash of tool identity fields")
@@ -99,10 +99,10 @@ class InternalTool(BaseTool):
 
     def compute_hash(self) -> str:
         """
-        Compute MD5 hash of tool identity fields.
+        Compute SHA256 hash of tool identity fields.
 
         Returns:
-            MD5 hash string.
+            SHA256 hash string.
         """
         payload = {
             "server_name": self.server_name,
