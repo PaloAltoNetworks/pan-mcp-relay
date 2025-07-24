@@ -2,9 +2,6 @@
 include:
   - project: aifw/aisec-api
     ref: main
-    file: ci/lib/env.yml
-  - project: aifw/aisec-api
-    ref: main
     file: ci/security.yml
   - project: engineering-productivity/ci-templates
     ref: master
@@ -374,38 +371,9 @@ build:
     - job: test
       artifacts: false
 
-publish:
-  stage: publish
-  extends: .base-job
-  interruptible: false
-  variables:
-    GIT_DEPTH: 50
-    UV_PUBLISH_USERNAME: $SVC_AF_AIRS_API_USER
-    UV_PUBLISH_PASSWORD: $SVC_AF_AIRS_API_PASSWORD
-    UV_PUBLISH_URL: https://art.code.pan.run/artifactory/api/pypi/aisec-api-pypi
-  # language=sh
-  script:
-    - uv tool install --upgrade hatch
-    - uv tool run hatch version
-    - uv publish
-  rules:
-    # Run and Tag Docker images with git tag for valid SemVer tagged commits
-    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_TAG =~ /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)/
-    # Run for main branch pushes
-    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  dependencies:
-    - test
-    - build
-  needs:
-    - job: test
-      artifacts: false
-    - job: build
-      artifacts: true
-
 blackduck:
   extends: .blackduck
   before_script:
-    - !reference [.print-env, before_script]
     - !reference [.blackduck, before_script]
   variables:
     PIP_DISABLE_PIP_VERSION_CHECK: 1
@@ -428,6 +396,3 @@ blackduck:
 
 checkmarx:
   extends: .checkmarx
-  before_script:
-    - !reference [.print-env, before_script]
-    - !reference [.checkmarx, before_script]
