@@ -17,6 +17,7 @@ __pycache__/
 env/
 .env
 .local/
+!.local/.keep
 venv/
 .venv/
 .python-version
@@ -90,17 +91,7 @@ bin/
 
 # Apple/macOS
 .DS_Store
-# Thumbnails
-._*
 
-# JetBrains / PyCharm - only include specific project files
-.idea/*
-!.idea/
-!.idea/.gitignore
-!.idea/jsonSchemas.xml
-!.idea/vcs.xml
-.idea/modules.xml
-.idea/*.iml
-pan_aisecurity_mcp_relay/__version__.py
+# IDE's
 .idea/
 .vscode/
