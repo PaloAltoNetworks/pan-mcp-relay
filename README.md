@@ -1,8 +1,8 @@
 # Palo Alto Networks MCP Security Relay
 
-A security-enhanced [Model Context Protocol](https://modelcontextprotocol.io) (MCP) relay server that acts as an
-intermediary between clients and downstream MCP servers, providing security scanning and centralized orchestration
-capabilities.
+A security-enhanced [Model Context Protocol](https://modelcontextprotocol.io)
+(MCP) relay server that acts as an intermediary between clients and downstream
+MCP servers, providing security scanning and centralized orchestration capabilities.
 
 <!--TOC-->
 
@@ -14,17 +14,19 @@ capabilities.
   - [Server Configuration](#server-configuration)
   - [Transport Options](#transport-options)
 - [Usage](#usage)
+  - [pan-mcp-relay CLI Usage](#pan-mcp-relay-cli-usage)
   - [Running the Relay Server](#running-the-relay-server)
+    - [stdio transport (default)](#stdio-transport-default)
+    - [SSE transport](#sse-transport)
     - [Command Line Arguments](#command-line-arguments)
 - [Examples](#examples)
   - [Stdio Client Example](#stdio-client-example)
   - [SSE Client Example Configuration](#sse-client-example-configuration)
-- [Error Handling & Exceptions](#error-handling--exceptions)
 - [Legal](#legal)
 
 <!--TOC-->
 
-<a id="overview" aria-hidden="true" href="#overview">
+<a id="overview" href="#overview">
 
 # Overview
 
@@ -44,11 +46,13 @@ The MCP Security Relay provides a security-enhanced intermediary layer for Model
 
 </a>
 
-We recommend using [uv](https://docs.astral.sh/uv/) to manage your Python projects.
+This project uses [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
-1. Clone this repository.
-2. Install the project dependencies using `uv`
-3. Configure the MCP Relay
+1. Install or Update [uv https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
+   2. Update uv if already installed: `uv self update`
+2. Clone this repository.
+2. Install the project dependencies using `uv sync`
+3. Create the MCP Relay Configuration File
 4. Run the MCP Relay Server
 
 ```sh
@@ -58,7 +62,8 @@ cd aisecurity-mcp-relay
 
 uv sync
 
-# edit config/servers_config.json
+# .local/ directory is git-ignored, you may use it for your custom configuration
+cp examples/config/config-example.json .local/config.json
 ```
 
 <a id="configuration" href="#configuration">
@@ -73,7 +78,7 @@ uv sync
 
 </a>
 
-Create a `.env` file in the project root with the following variables:
+Create a `.env` file in the git repo root with the following variables:
 
 ```sh
 # Required for Palo Alto Networks AI Security scanning
@@ -88,7 +93,7 @@ PANW_AI_SEC_API_ENDPOINT=YOUR_API_ENDPOINT
 
 </a>
 
-Configure downstream MCP servers in a new `config.json`:
+Copy or create a new `config.json` file. Configure downstream MCP servers in `config.json`:
 
 ```json
 {
@@ -104,6 +109,15 @@ Configure downstream MCP servers in a new `config.json`:
   }
 }
 ```
+
+**Note:**
+
+* MCP Relay only supports local MCP servers currently.
+
+<!--
+TODO: Add Environment and CWD support to MCP Server Config
+TODO: Support Remote MCP Servers
+-->
 
 <a id="transport-options" href="#transport-options">
 
@@ -122,26 +136,11 @@ The relay supports two transport mechanisms:
 
 </a>
 
-<a id="running-the-relay-server" href="#running-the-relay-server">
-
-## Running the Relay Server
-
-</a>
-
-```sh
-# Run with STDIO transport (default)
-uv run pan-mcp-relay \
-  --config-file=config.json
-
-# Run with SSE transport
-uv run pan-mcp-relay \
-  --config-file=config.json \
-  --transport=sse \
-  --host=127.0.0.1 \
-  --port=8000
-```
+<a id="pan-mcp-relay-cli-usage" href="#pan-mcp-relay-cli-usage">
 
 ## pan-mcp-relay CLI Usage
+
+</a>
 
 ```sh
 usage: pan-mcp-relay [-h] --config-file CONFIG_FILE [--transport {stdio,sse}] [--host HOST] [--port PORT]
@@ -164,6 +163,39 @@ options:
                         Max number of MCP tool
 ```
 
+<a id="running-the-relay-server" href="#running-the-relay-server">
+
+## Running the Relay Server
+
+</a>
+
+<a id="stdio-transport-default" href="#stdio-transport-default">
+
+### stdio transport (default)
+
+</a>
+
+```sh
+# Run with STDIO transport (default)
+uv run pan-mcp-relay \
+  --config-file=config.json
+```
+
+<a id="sse-transport" href="#sse-transport">
+
+### SSE transport
+
+</a>
+
+```sh
+# Run with SSE transport
+uv run pan-mcp-relay \
+  --config-file=config.json \
+  --transport=sse \
+  --host=127.0.0.1 \
+  --port=8000
+```
+
 ### Command Line Arguments
 
 | Argument | Required | Default | Description |
@@ -175,8 +207,6 @@ options:
 | `--tool-registry-cache-expiry-in-seconds` | ❌ | `300` | Cache expiry time in seconds for the downstream MCP tool registry. Tools are re-scanned when cache expires |
 | `--max-mcp-servers` | ❌ | `32` | Maximum number of downstream MCP servers that can be configured. Prevents resource exhaustion |
 | `--max-mcp-tools` | ❌ | `64` | Maximum total number of MCP tools across all downstream servers. Enforces tool registry limits |
-
-
 
 
 <a id="examples" href="#examples">
@@ -198,9 +228,9 @@ This example demonstrates how to run the interactive client to communicate with 
 Run the `pan_security_relay_stdio_client.py` script. This script connects to the running relay and provides an interactive command prompt.
 
 ```sh
-python examples/pan_security_relay_stdio_client.py \
-  --relay-module=pan_aisecurity_mcp.mcp_relay.pan_security_relay \
-  --config-file=config/servers_config_example.json
+python examples/clients/stdio/pan_security_relay_stdio_client.py \
+  --relay-module=pan_aisecurity_mcp_relay.main \
+  --config-file=config.json
 ```
 
 **2. Interact with the Client:**
@@ -225,8 +255,8 @@ To connect a client to the relay server when it's running in SSE mode, you need 
 **1. Start the Relay Server in SSE Mode:**
 
 ```sh
-python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
-  --config-file=config/servers_config.json \
+uv run pan-mcp-relay \
+  --config-file=config/config-example.json \
   --transport=sse \
   --host=127.0.0.1 \
   --port=8000
