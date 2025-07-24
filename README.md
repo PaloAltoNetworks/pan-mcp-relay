@@ -5,9 +5,10 @@ intermediary between clients and downstream MCP servers, providing security scan
 capabilities.
 
 <!--TOC-->
+
 - [Palo Alto Networks MCP Security Relay](#palo-alto-networks-mcp-security-relay)
 - [Overview](#overview)
-- [Installation](#installation)
+- [Installation and Setup](#installation-and-setup)
 - [Configuration](#configuration)
   - [Environment Variables](#environment-variables)
   - [Server Configuration](#server-configuration)
@@ -18,12 +19,10 @@ capabilities.
 - [Examples](#examples)
   - [Stdio Client Example](#stdio-client-example)
   - [SSE Client Example Configuration](#sse-client-example-configuration)
-- [Error Handling \& Exceptions](#error-handling--exceptions)
+- [Error Handling & Exceptions](#error-handling--exceptions)
 - [Legal](#legal)
 
 <!--TOC-->
-
-
 
 <a id="overview" aria-hidden="true" href="#overview">
 
@@ -62,7 +61,6 @@ uv sync
 # edit config/servers_config.json
 ```
 
-
 <a id="configuration" href="#configuration">
 
 # Configuration
@@ -82,7 +80,6 @@ Create a `.env` file in the project root with the following variables:
 PANW_AI_PROFILE_NAME=YOUR_AI_PROFILE_NAME
 PANW_AI_SEC_API_KEY=YOUR_API_KEY
 PANW_AI_SEC_API_ENDPOINT=YOUR_API_ENDPOINT
-PANW_AI_PROFILE_ID=YOUR_PROFILE_ID
 ```
 
 <a id="server-configuration" href="#server-configuration">
@@ -91,20 +88,11 @@ PANW_AI_PROFILE_ID=YOUR_PROFILE_ID
 
 </a>
 
-Configure downstream MCP servers in `config/servers_config.json`:
-
-**Note**: The `pan-aisecurity` server configuration is required and must be included in the server configuration.
+Configure downstream MCP servers in a new `config.json`:
 
 ```json
 {
   "mcpServers": {
-    "pan-aisecurity": {
-      "command": "python",
-      "args": ["path/to/pan_security_server.py"],
-      "env": {
-        "hidden_mode": "enabled"
-      }
-    },
     "example-server": {
       "command": "node",
       "args": ["path/to/server/index.js"]
@@ -142,29 +130,38 @@ The relay supports two transport mechanisms:
 
 ```sh
 # Run with STDIO transport (default)
-python -m pan_aisecurity_mcp_relay.pan_security_relay \
-  --config-file=config/servers_config.json \
-  --transport=stdio
+uv run pan-mcp-relay \
+  --config-file=config.json
 
 # Run with SSE transport
-python -m pan_aisecurity_mcp_relay.pan_security_relay \
-  --config-file=config/servers_config.json \
+uv run pan-mcp-relay \
+  --config-file=config.json \
   --transport=sse \
   --host=127.0.0.1 \
   --port=8000
 ```
 
-Additional configuration options:
+## pan-mcp-relay CLI Usage
 
 ```sh
-python -m pan_aisecurity_mcp_relay.pan_security_relay \
-  --config-file=config/servers_config.json \
-  --transport=stdio \
-  --host=127.0.0.1 \
-  --port=8000 \
-  --TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS=300 \
-  --MAX_MCP_SERVERS=10 \
-  --MAX_MCP_TOOLS=20
+usage: pan-mcp-relay [-h] --config-file CONFIG_FILE [--transport {stdio,sse}] [--host HOST] [--port PORT]
+                     [--tool-registry-cache-expiry-in-seconds TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS] [--max-mcp-servers MAX_MCP_SERVERS]
+                     [--max-mcp-tools MAX_MCP_TOOLS]
+
+options:
+  -h, --help            show this help message and exit
+  --config-file CONFIG_FILE
+                        Path to config file
+  --transport {stdio,sse}
+                        Transport protocol to use
+  --host HOST           Host for SSE server
+  --port PORT           Port for SSE server
+  --tool-registry-cache-expiry-in-seconds TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS
+                        Downsteam mcp tool registry cache expiry
+  --max-mcp-servers MAX_MCP_SERVERS
+                        Max number of downstream servers
+  --max-mcp-tools MAX_MCP_TOOLS
+                        Max number of MCP tool
 ```
 
 ### Command Line Arguments
@@ -175,9 +172,9 @@ python -m pan_aisecurity_mcp_relay.pan_security_relay \
 | `--transport` | ❌ | `stdio` | Transport protocol to use. Options: `stdio` (local process communication) or `sse` (HTTP Server-Sent Events) |
 | `--host` | ❌ | `127.0.0.1` | Host address for SSE transport server (only used when `--transport=sse`) |
 | `--port` | ❌ | `8000` | Port number for SSE transport server (only used when `--transport=sse`) |
-| `--TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS` | ❌ | `300` | Cache expiry time in seconds for the downstream MCP tool registry. Tools are re-scanned when cache expires |
-| `--MAX_MCP_SERVERS` | ❌ | `32` | Maximum number of downstream MCP servers that can be configured. Prevents resource exhaustion |
-| `--MAX_MCP_TOOLS` | ❌ | `64` | Maximum total number of MCP tools across all downstream servers. Enforces tool registry limits |
+| `--tool-registry-cache-expiry-in-seconds` | ❌ | `300` | Cache expiry time in seconds for the downstream MCP tool registry. Tools are re-scanned when cache expires |
+| `--max-mcp-servers` | ❌ | `32` | Maximum number of downstream MCP servers that can be configured. Prevents resource exhaustion |
+| `--max-mcp-tools` | ❌ | `64` | Maximum total number of MCP tools across all downstream servers. Enforces tool registry limits |
 
 
 
@@ -251,23 +248,7 @@ Then, in your client's configuration (for example, in a `config.json` or a simil
 
 This configuration tells your client how to find and communicate with the MCP Security Relay using the SSE protocol.
 
-# Error Handling & Exceptions
-
-</a>
-
-The relay defines custom exceptions in `pan_aisecurity_mcp/mcp_relay/exceptions.py`:
-
-- **AISEC_MCP_RELAY_INTERNAL_ERROR**: Internal relay errors
-- **AISEC_INVALID_CONFIGURATION**: Configuration validation errors
-- **AISEC_TOOL_EXECUTION_ERROR**: Tool execution failures
-- **AISEC_SECURITY_BLOCK**: Security scan blocked requests
-- **AISEC_TOOL_NOT_FOUND**: Unknown tool requests
-- **AISEC_SERVER_NOT_FOUND**: Unknown server requests
-- **AISEC_VALIDATION_ERROR**: Input validation errors
-- **AISEC_TOOL_REGISTRY_ERROR**: Tool registry operation errors
-
-<a id="security-considerations" href="#security-considerations">
-
+<a id="legal" href="#legal">
 
 # Legal
 
