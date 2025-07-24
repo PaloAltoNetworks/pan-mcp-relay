@@ -30,6 +30,10 @@ import mcp.types as types
 from mcp import ClientSession, StdioServerParameters, stdio_client
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayException
+
+log = logging.getLogger(__name__)
+
 
 class DownstreamMcpClient:
     """
@@ -52,7 +56,7 @@ class DownstreamMcpClient:
         self.session: Optional[ClientSession] = None
         self._cleanup_lock: asyncio.Lock = asyncio.Lock()
         self.exit_stack: AsyncExitStack = AsyncExitStack()
-        logging.info(f"Server {name} created with config: {config}")
+        log.info(f"Server {name} created with config: {config}")
 
     async def initialize(self) -> None:
         """
@@ -64,14 +68,22 @@ class DownstreamMcpClient:
         Raises:
             Exception: If initialization fails
         """
-        logging.debug(f"Initializing downstream mcp server: {self.name}...")
+        log.debug(f"Initializing downstream mcp server: {self.name}...")
 
         # Prepare environment variables
         env = os.environ.copy()
         if self.config.get("env"):
             env.update(self.config["env"])
 
-        server_params = StdioServerParameters(command=self.config["command"], args=self.config["args"])
+        command = self.config.get("command")
+        if not command:
+            err_msg = f"invalid MCP server configuration: {self.name}"
+            log.error(err_msg)
+            raise AISecMcpRelayException(err_msg)
+        args = self.config.get("args")
+
+        # TODO: Add env=, cwd= parameters
+        server_params = StdioServerParameters(command=command, args=args)
 
         try:
             # Set up communication with the server
@@ -83,9 +95,9 @@ class DownstreamMcpClient:
             await session.initialize()
             self.session = session
 
-            logging.debug(f"Server {self.name} initialized successfully")
+            log.debug(f"Server {self.name} initialized successfully")
         except Exception as e:
-            logging.error(f"Error initializing server {self.name}: {e}", exc_info=True)
+            log.error(f"Error initializing server {self.name}: {e}", exc_info=True)
             await self.cleanup()
             raise
 
@@ -140,12 +152,12 @@ class DownstreamMcpClient:
         self._check_initialized()
 
         try:
-            logging.info(f"Executing {tool_name}...")
-            logging.info(f"arguments: {arguments}")
+            log.info(f"Executing {tool_name}...")
+            log.info(f"arguments: {arguments}")
             result = await self.session.call_tool(tool_name, arguments)
             return result
         except Exception as e:
-            logging.error(f"Error executing {tool_name}: {e}", exc_info=True)
+            log.error(f"Error executing {tool_name}: {e}", exc_info=True)
             raise e
 
     def extract_text_content(self, content: Any) -> Any:
@@ -197,5 +209,5 @@ class DownstreamMcpClient:
             try:
                 await self.exit_stack.aclose()
                 self.session = None
-            except Exception as e:
-                logging.error(f"Error during cleanup of server {self.name}: {e}")
+            except:  # noqa
+                log.exception(f"Error during cleanup of server {self.name}")
