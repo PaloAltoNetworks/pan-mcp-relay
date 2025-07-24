@@ -101,6 +101,6 @@ bin/
 !.idea/vcs.xml
 .idea/modules.xml
 .idea/*.iml
-aisecurity/__version__.py
+pan_aisecurity_mcp_relay/__version__.py
 .idea/
 .vscode/
