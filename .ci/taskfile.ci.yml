@@ -12,15 +12,15 @@ tasks:
       # Show the current contents of the pytest cache
       - uv run --all-extras --frozen pytest --cache-show
       - >-
-        uv run coverage run -m pytest
+        uv run --all-extras --frozen pytest
+        --cov
         -ra
         --tb=short
         --override-ini=cache_dir=${PYTEST_CACHE_DIR:-.cache/pytest}
         --junit-xml=reports/coverage.xml
         --numprocesses=auto
-        --cov=aisecurity --cov=tests
+        --cov=src --cov=tests
         --cov-report=term-missing
-        --ignore=tests/aisecurity/{functional,performance}
         {{.CLI_ARGS}}
 
   install-uv:
