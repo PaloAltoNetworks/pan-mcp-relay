@@ -1,3 +1,4 @@
+#:schema https://raw.githubusercontent.com/SchemaStore/schemastore/master/src/schemas/json/pyproject.json
 ####################
 # Project Metadata #
 ####################
@@ -15,24 +16,23 @@ keywords = [
   "AI Security",
   "AI Runtime Security",
   "Model Context Protocol",
+  "MCP Security",
+  "MCP Relay",
+  "Prompt Injection",
 ]
 dependencies = [
-  "pan-aisecurity",
-  "python-dotenv",
-  "mcp[cli,rich,ws]",
-  "pydantic",
-  "tenacity",
-  "fastmcp",
+  "mcp[cli,rich,ws]>=1.12.1",
+  "pan-aisecurity>=0.4.0.5.post2",
+  "pydantic>=2.11.7",
+  "python-dotenv>=1.1.1",
+  "rich>=14.0",
+  "tenacity>=9.1.2",
 ]
-[project.urls]
-Homepage = "https://www.paloaltonetworks.com/prisma/prisma-ai-runtime-security"
-Documentation = "https://pan.dev/prisma-airs/scan/api/"
 
 [dependency-groups]
 dev = [
   "types-python-dateutil>=2.8",
-  "truststore>=0.10.1; python_full_version >= '3.10'",
-  "rich>=14.0",
+  "truststore>=0.10.1",
   "packaging>=25.0",
   "versioningit>=3.1",
   "python-dotenv>=1.1",
@@ -42,6 +42,17 @@ ci = [
   "google-auth",
   "requests",
 ]
+
+[project.urls]
+Homepage = "https://www.paloaltonetworks.com/prisma/prisma-ai-runtime-security"
+Documentation = "https://pan.dev/prisma-airs/scan/api/"
+Docs = "https://docs.paloaltonetworks.com/ai-runtime-security"
+Repository = "https://github.com/paloaltonetworks/aisecurity-mcp-relay.git"
+Issues = "https://github.com/paloaltonetworks/aisecurity-mcp-relay/issues"
+# Changelog = "https://github.com/paloaltonetworks/aisecurity-mcp-relay/blob/main/CHANGELOG.md"
+
+[project.scripts]
+pan-mcp-relay = "pan_aisecurity_mcp_relay.main:entrypoint"
 
 [project.optional-dependencies]
 test = [
@@ -151,6 +162,23 @@ testpaths = [
   "examples",
 ]
 
+##################################
+# pyright - static type checking #
+##################################
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+include = [
+  "src",
+]
+exclude = [
+  "__pycache__",
+  "venv",
+  ".venv",
+  "dist",
+]
+
 #############################
 # Bandit - Security Linting #
 #############################
@@ -182,21 +210,3 @@ default-groups = [
 [[tool.uv.index]]
 url = "https://pypi.org/simple/"
 default = true
-
-
-##################################
-# pyright - static type checking #
-##################################
-
-[tool.pyright]
-venvPath = "."
-venv = ".venv"
-include = [
-  "aisecurity",
-]
-exclude = [
-  "**/__pycache__",
-  "examples",
-  "scripts",
-  "tests",
-]
