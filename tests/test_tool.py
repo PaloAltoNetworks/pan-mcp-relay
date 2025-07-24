@@ -294,7 +294,7 @@ class TestInternalTool:
         }
 
     def test_internal_tool_creation_with_hash_generation(self, error_all_tool_data):
-        """Test InternalTool creation and MD5 hash generation for registry management."""
+        """Test InternalTool creation and SHA256 hash generation for registry management."""
         error_tool = InternalTool(**error_all_tool_data)
 
         assert error_tool.name == "error_all_tool"
@@ -302,10 +302,10 @@ class TestInternalTool:
         assert error_tool.server_name == "test_server"
         assert error_tool.state == ToolState.ENABLED
         assert error_tool.sha256_hash != ""
-        assert len(error_tool.sha256_hash) == 32  # MD5 hash length for registry key
+        assert len(error_tool.sha256_hash) == 64  # SHA256 hash length for registry key
 
     def test_internal_tool_hash_computation_for_deduplication(self, error_all_tool_data):
-        """Test MD5 hash computation for tool deduplication across servers."""
+        """Test SHA256 hash computation for tool deduplication across servers."""
         error_tool = InternalTool(**error_all_tool_data)
 
         # Manually compute expected hash for verification
@@ -316,7 +316,7 @@ class TestInternalTool:
             "input_schema": error_all_tool_data["inputSchema"],
         }
         json_str = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-        expected_hash = hashlib.md5(json_str.encode("utf-8")).hexdigest()
+        expected_hash = hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
         assert error_tool.sha256_hash == expected_hash
 
@@ -345,7 +345,7 @@ class TestInternalTool:
         computed_registry_hash = external_tool.compute_hash()
 
         assert computed_registry_hash == external_tool.sha256_hash
-        assert len(computed_registry_hash) == 32
+        assert len(computed_registry_hash) == 64
 
     def test_internal_tool_hash_with_complex_schema(self):
         """Test hash computation with complex tool schema."""
@@ -377,7 +377,7 @@ class TestInternalTool:
         )
 
         assert complex_tool.sha256_hash != ""
-        assert len(complex_tool.sha256_hash) == 32
+        assert len(complex_tool.sha256_hash) == 64
 
     def test_internal_tool_to_dict_for_storage(self, error_all_tool_data):
         """Test conversion to dictionary for database storage."""
@@ -450,7 +450,7 @@ class TestInternalTool:
         )
 
         assert unicode_tool.sha256_hash != ""
-        assert len(unicode_tool.sha256_hash) == 32
+        assert len(unicode_tool.sha256_hash) == 64
 
         # Hash should be reproducible for unicode content
         unicode_tool_2 = InternalTool(
@@ -835,7 +835,7 @@ class TestExternalToolIntegration:
 
         # All should have valid hashes regardless of state
         assert all(tool.sha256_hash for tool in tools)
-        assert all(len(tool.sha256_hash) == 32 for tool in tools)
+        assert all(len(tool.sha256_hash) == 64 for tool in tools)
 
         # All should convert to MCP tools regardless of state
         mcp_tools = [tool.to_mcp_tool() for tool in tools]
@@ -870,7 +870,7 @@ class TestExternalToolIntegration:
 
         # Should handle large schema efficiently
         assert large_schema_tool.sha256_hash != ""
-        assert len(large_schema_tool.sha256_hash) == 32
+        assert len(large_schema_tool.sha256_hash) == 64
 
         # Serialization should work with large schema
         tool_dict = large_schema_tool.to_dict()
@@ -1287,7 +1287,7 @@ class TestExternalToolValidationAndErrorHandling:
 
         # Hash should be computed successfully
         assert complex_tool.sha256_hash != ""
-        assert len(complex_tool.sha256_hash) == 32
+        assert len(complex_tool.sha256_hash) == 64
 
     def test_external_tool_internationalization_support(self):
         """Test external tool support for international characters and formats."""
@@ -1325,7 +1325,7 @@ class TestExternalToolValidationAndErrorHandling:
 
             # Should handle international characters
             assert tool.sha256_hash != ""
-            assert len(tool.sha256_hash) == 32
+            assert len(tool.sha256_hash) == 64
 
             # Serialization should preserve international characters
             tool_dict = tool.to_dict()
