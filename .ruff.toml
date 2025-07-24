@@ -36,9 +36,7 @@ exclude = [
   "venv",
 ]
 
-extend-include = [
-  ".ruff.toml"
-]
+extend-include = [".ruff.toml"]
 
 line-length = 120
 
@@ -50,8 +48,6 @@ preview = true
 [per-file-target-version]
 "examples/**.py" = "py310"
 "scripts/**.py" = "py313"
-"tests/aisecurity/integration" = "py313"
-"tests/aisecurity/performance" = "py313"
 
 ###############################
 # Linting & Code Auto-Fix     #
@@ -63,27 +59,27 @@ preview = true
 # McCabe complexity (`C901`) by default.
 select = [
   # PyCodeStyle - https://pycodestyle.pycqa.org/en/latest/intro.html#error-codes
-  "E1", # pycodestyle indentation
-  "E2", # pycodestyle whitespace
-  "E3", # pycodestyle blank lines
-  "E4", # pycodestyle imports
-  "E7", # pycodestyle statements
-  "E9", # pycodestyle runtime (Python Interpreter Exceptions/Errors)
+  "E1",   # pycodestyle indentation
+  "E2",   # pycodestyle whitespace
+  "E3",   # pycodestyle blank lines
+  "E4",   # pycodestyle imports
+  "E7",   # pycodestyle statements
+  "E9",   # pycodestyle runtime (Python Interpreter Exceptions/Errors)
   "W191", # No tabs allowed
   "W291", # trailing whitespace
   "W292", # Missing end of file newline
   # others
   "ASYNC", # Flake8-Async
-  "D", # pydocstyle
-  "F", # PyFlakes
-  "I", # isort
-  "RUF", # Ruff specific rules
-  "CPY", # Copyright
-  "N", # pep8-naming
-  "UP", # pyupgrade
+  "D",     # pydocstyle
+  "F",     # PyFlakes
+  "I",     # isort
+  "RUF",   # Ruff specific rules
+  "CPY",   # Copyright
+  "N",     # pep8-naming
+  "UP",    # pyupgrade
 ]
 ignore = [
-  "D1", # undocumented packages/modules/classes/methods/functions/etc
+  "D1",   # undocumented packages/modules/classes/methods/functions/etc
   "D200", # unnecessary-multiline-docstring
   "D212", # multi-line-summary-first-line
   "D415", # missing-terminal-punctuation
@@ -102,7 +98,7 @@ convention = "google"
 
 [lint.per-file-ignores]
 "__init__.py" = [
-  "E401", # Unused import
+  "E401",   # Unused import
   "CPY001", # Missing copyright notice at top of file
 ]
 "__version__.py" = [
@@ -112,27 +108,6 @@ convention = "google"
   "CPY001", # Missing copyright notice at top of file
 ]
 
-"aisecurity/generated_openapi_client/**" = [
-  "D", # All documentation from OpenAPI Generated clients
-  "E721", # Use `is` and `is not` for type comparisons, or `isinstance()` for isinstance checks
-  "N802", # Ignore CamelCase function names
-  "N818", # error-suffix-on-exception-name
-  "RUF036", # `None` not at the end of the type annotation.
-  "RUF052", # Local placeholder variable `{var}` is accessed
-  "RUF100", # Unused `noqa` directive
-  "UP", # pyupgrade
-  "UP006", # pyupgrade
-]
-
-"aisecurity/generated_openapi_client/*/api_client.py" = [
-  "RUF012"  # Ignore mutable class variable annotation lint errors
-]
-
-"tests/aisecurity/generated_openapi_client/**" = [
-  "N802", # Ignore CamelCase function names
-  "N803", # Ignore CamelCase function/method argument names
-  "D205", # Ignore generated documentation
-]
 ".ci/scripts/*" = [
   "CPY", # no copyright notice required on these utilities
 ]
