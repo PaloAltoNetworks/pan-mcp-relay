@@ -188,41 +188,28 @@ tasks:
     preconditions:
       - command -v hatch
 
-  test:unit:
-    desc: "Run project unit tests"
+  test:
+    desc: "Run project unit tests with pyteset"
     # language=sh
     cmds:
       - >-
         uv run --all-extras --frozen pytest
+        --cov
+        --cov-config=pyproject.toml
         -ra
         --tb=short
         --numprocesses=auto
-        --cov=aisecurity --cov=tests
-        --cov-report=term-missing
-        --ignore=tests/aisecurity/{functional,performance}
         {{.CLI_ARGS}}
     preconditions:
       - command -v uv
 
-  test:full:
+  test:matrix:
     desc: "Run test suite with all currently supported Python Versions"
     deps:
       - task: _hatch
     # language=sh
     cmds:
       - uv run --frozen hatch test --all --cover
-
-  test:mypy:
-    desc: "Run mypy type-checking tests"
-    # language=sh
-    cmds:
-      - uv run --all-extras --frozen mypy check {{.CLI_ARGS}}
-
-  test:pyright:
-    desc: "Run mypy & pyright type-checking tests"
-    # language=sh
-    cmds:
-      - uv run --all-extras --frozen pyright {{.CLI_ARGS}}
 
   build:
     desc: "Build the project artifacts"
@@ -262,7 +249,6 @@ tasks:
     # language=sh
     cmds:
       - uv run --frozen hatch version {{.CLI_ARGS | default "dev" }}
-
   _publish:
     internal: true
     silent: false
@@ -318,6 +304,22 @@ tasks:
     # language=sh
     cmds:
       - ruff check --fix --preview --unsafe-fixes
+
+  lint:mypy:
+    desc: "Run mypy type-checking tests"
+    deps:
+      - task: lint
+    # language=sh
+    cmds:
+      - uv run --all-extras --frozen mypy check {{.CLI_ARGS}}
+
+  lint:pyright:
+    desc: "Run mypy & pyright type-checking tests"
+    deps:
+      - task: lint
+    # language=sh
+    cmds:
+      - uv run --all-extras --frozen pyright {{.CLI_ARGS}}
 
   pre-commit:
     desc: "Run pre-commit hooks"
@@ -411,14 +413,13 @@ tasks:
           --debug=FILTER \
           --filter="- /.gitlab-ci.yml" \
           --filter="+ /tests/" \
-          --filter="+ /tests/aisecurity/" \
-          --filter="+ /tests/aisecurity/scan/***" \
-          --filter="+ /tests/aisecurity/generated_openapi_client/***" \
+          --filter="+ /tests/" \
+          --filter="+ /tests/***" \
           --filter="- /tests/***" \
           --filter="+ LICENSE" \
           --filter="+ README.md" \
           --filter="+ CHANGELOG.md" \
-          --filter="+ aisecurity/***" \
+          --filter="+ pan_aisecurity_mcp_relay/***" \
           --filter="+ examples/***" \
           --filter="+ .*ignore" \
           --filter="+ /.ci/***" \
