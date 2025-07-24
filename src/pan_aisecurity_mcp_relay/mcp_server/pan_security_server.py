@@ -45,8 +45,8 @@ from aisecurity.generated_openapi_client.models.ai_profile import AiProfile
 from aisecurity.scan.asyncio.scanner import Scanner
 from aisecurity.scan.models.content import Content
 from aisecurity.utils import safe_flatten
-from fastmcp import FastMCP
-from fastmcp.exceptions import ToolError
+from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 from typing_extensions import Any, TypedDict
 
 ai_profile: AiProfile
@@ -59,8 +59,11 @@ async def mcp_lifespan_manager(*args, **kwargs) -> AsyncIterator[Any]:
 
     This is required to close the shared aiohttp connection pool on server shutdown.
     """
-    yield
-    await scanner.close()
+    try:
+        yield
+    finally:
+        # Cleanup on shutdown
+        await scanner.close()
 
 
 # Create the MCP Server with the lifespan context manager
@@ -231,7 +234,12 @@ def maybe_monkeypatch_itertools_batched():
         setattr(itertools, "batched", batched)
 
 
-if __name__ == "__main__":
+def entrypoint():
+    """CLI script entrypoint"""
     pan_init()
     maybe_monkeypatch_itertools_batched()
-    asyncio.run(mcp.run_async())
+    asyncio.run(mcp.run_stdio_async())
+
+
+if __name__ == "__main__":
+    sys.exit(entrypoint())
