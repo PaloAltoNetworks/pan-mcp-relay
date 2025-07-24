@@ -49,3 +49,12 @@ repos:
           - medium
         additional_dependencies:
           - "bandit[toml]"
+
+  - repo: local
+    hooks:
+      - id: readme:generate-toc
+        name: Generate README Table of Contents
+        language: system
+        entry: uvx --from md-toc md_toc --in-place cmark README.md
+        files: |-
+          ^README\.md$
