@@ -47,7 +47,7 @@ class ToolRegistry:
     Attributes:
         internal_tool_list: Complete list of all registered internal tools
         available_tool_list: Filtered list containing only enabled tools
-        hash_to_tool_map: Dictionary mapping MD5 hashes to tools for quick lookup
+        hash_to_tool_map: Dictionary mapping SHA256 hashes to tools for quick lookup
     """
 
     def __init__(self, tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT) -> None:
@@ -154,13 +154,13 @@ class ToolRegistry:
 
     def get_tool_by_hash(self, sha256_hash: str) -> Optional[InternalTool]:
         """
-        Look up a specific tool using its MD5 hash identifier.
+        Look up a specific tool using its SHA256 hash identifier.
 
         Provides fast O(1) lookup for tools when the hash is known,
         useful for tool identification and retrieval operations.
 
         Args:
-            sha256_hash: The MD5 hash string identifying the desired tool
+            sha256_hash: The SHA256 hash string identifying the desired tool
 
         Returns:
             Optional[InternalTool]: The tool object if found, None if hash doesn't exist
@@ -169,7 +169,7 @@ class ToolRegistry:
             ValidationError: If sha256_hash is invalid
         """
         if not isinstance(sha256_hash, str):
-            raise AISecMcpRelayException("MD5 hash must be a string", ErrorType.VALIDATION_ERROR)
+            raise AISecMcpRelayException("SHA256 hash must be a string", ErrorType.VALIDATION_ERROR)
 
         if not sha256_hash:
             return None
@@ -186,10 +186,12 @@ class ToolRegistry:
         Returns:
             dict[str, list[InternalTool]]: Dictionary mapping server names to their tool lists
         """
+        # TODO: Use defaultdict
         server_tool_map: dict[str, list[InternalTool]] = {}
 
         for tool in self._internal_tool_list:
             server_name = tool.server_name
+            # TODO: Use defaultdict
             if server_name not in server_tool_map:
                 server_tool_map[server_name] = []
             server_tool_map[server_name].append(tool)
