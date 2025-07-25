@@ -128,17 +128,22 @@ features = []
 # Automatic Versioning using Git Tags
 # https://versioningit.readthedocs.io/en/stable/index.html
 #
+[tool.versioningit.vcs]
+method = "git"
+default-tag = "0.0.0"
+
 [tool.versioningit.next-version]
 method = "smallest-release"
 
 [tool.versioningit.format]
+# Examples use base (current) version 1.2.3
 distance = "{next_version}.dev{distance}+{rev}"
 # Example formatted version: 1.2.4.dev42+ge174a1f
 
 dirty = "{base_version}+d{build_date:%Y%m%d}"
 # Example formatted version: 1.2.3+d20230922
 
-distance-dirty = "{base_version}.dev{distance}+{rev}.d{build_date:%Y%m%d}"
+distance-dirty = "{next_version}.dev{distance}+{rev}.d{build_date:%Y%m%d}"
 # Example formatted version: 1.2.4.dev42+ge174a1f.d20230922
 
 [tool.versioningit.write]
