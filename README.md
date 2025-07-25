@@ -49,7 +49,7 @@ The MCP Security Relay provides a security-enhanced intermediary layer for Model
 This project uses [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 1. Install or Update [uv https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
-   2. Update uv if already installed: `uv self update`
+  1. Update uv if already installed: `uv self update`
 2. Clone this repository.
 2. Install the project dependencies using `uv sync`
 3. Create the MCP Relay Configuration File
