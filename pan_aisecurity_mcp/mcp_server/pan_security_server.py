@@ -35,6 +35,7 @@ import aisecurity
 from aisecurity.constants.base import (
     MAX_NUMBER_OF_BATCH_SCAN_OBJECTS,
     MAX_NUMBER_OF_SCAN_IDS,
+    MAX_NUMBER_OF_REPORT_IDS,
 )
 from aisecurity.generated_openapi_client import (
     AsyncScanObject,
@@ -119,7 +120,7 @@ async def pan_inline_scan(
 
     Returns a complete Scan Response, notably the category (benign/malicious) and action (allow/block).
 
-    See also: https://pan.dev/ai-runtime-security/api/scan-sync-request/
+    See also: https://pan.dev/prisma-airs/api/airuntimesecurity/scan-sync-request/
     """
     pan_init()
     if not prompt and not response:
@@ -147,7 +148,7 @@ async def pan_batch_scan(
     Returns a list of AsyncScanResponse objects, each includes a scan_id and report_id,
     which can be used to retrieve scan results after the asynchronous scans are complete.
 
-    See also: https://pan.dev/ai-runtime-security/api/scan-async-request/
+    See also: https://pan.dev/prisma-airs/api/airuntimesecurity/scan-async-request/
     """
     global ai_profile
 
@@ -189,7 +190,7 @@ async def pan_get_scan_results(scan_ids: list[str]) -> list[ScanIdResult]:
 
     A Scan ID is a UUID string.
 
-    See also: https://pan.dev/ai-runtime-security/api/get-scan-results-by-scan-i-ds/
+    See also: https://pan.dev/prisma-airs/api/airuntimesecurity/get-scan-results-by-scan-i-ds/
     """
     pan_init()
     request_batches: list[list[str]] = []
@@ -212,20 +213,22 @@ async def pan_get_scan_reports(report_ids: list[str]) -> list[ThreatScanReportOb
 
     A Scan Report ID is a Scan ID (UUID) prefixed with "R".
 
-    See also: https://pan.dev/ai-runtime-security/api/get-scan-results-by-scan-i-ds/
+    See also: https://pan.dev/prisma-airs/api/airuntimesecurity/get-threat-scan-reports/
     """
     pan_init()
 
     request_batches: list[list[str]] = []
-    for batch in itertools.batched(report_ids, MAX_NUMBER_OF_SCAN_IDS):
+    for batch in itertools.batched(report_ids, MAX_NUMBER_OF_REPORT_IDS):
         request_batches.append(list(batch))
 
     # Process each batch concurrently via asyncio
-    tasks = [scanner.query_by_scan_ids(batch) for batch in request_batches]
-    await asyncio.gather(*tasks, return_exceptions=True)
+    tasks = [scanner.query_by_report_ids(batch) for batch in request_batches]
+    batch_results: list[list[ThreatScanReportObject]] = await asyncio.gather(
+        *tasks, return_exceptions=True
+    )
 
-    threat_scan_reports = await scanner.query_by_report_ids(report_ids=report_ids)
-    return threat_scan_reports
+    # flatten nested list
+    return safe_flatten(batch_results)
 
 
 def maybe_monkeypatch_itertools_batched():
