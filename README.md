@@ -101,6 +101,10 @@ Configure downstream MCP servers in `config/servers_config.json`:
     "another-server": {
       "command": "python",
       "args": ["path/to/another/server.py"]
+    },
+      "other-server-SSE-mode": {
+      "type": "sse",
+      "baseUrl": "URL_OF_other-server-SSE-mode"
     }
   }
 }
