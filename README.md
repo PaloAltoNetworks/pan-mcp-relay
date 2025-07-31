@@ -104,7 +104,7 @@ Configure downstream MCP servers in `config/servers_config.json`:
     },
       "other-server-SSE-mode": {
       "type": "sse",
-      "baseUrl": "URL_OF_other-server-SSE-mode"
+      "baseUrl": "URL_OF_Other-server-SSE-mode"
     }
   }
 }
