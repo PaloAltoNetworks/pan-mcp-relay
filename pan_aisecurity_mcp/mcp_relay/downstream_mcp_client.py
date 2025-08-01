@@ -60,12 +60,12 @@ class DownstreamMcpClient:
         try:
             if connection_type == "sse":
                 # SSE connection
-                base_url = self.config.get("baseUrl")
-                if not base_url:
-                    raise ValueError("SSE connection requires 'baseUrl'")
+                url = self.config.get("url")
+                if not url:
+                    raise ValueError("SSE connection requires 'url'")
                 
                 sse_transport = await self.exit_stack.enter_async_context(
-                    sse_client(base_url)
+                    sse_client(url)
                 )
                 read, write = sse_transport
             else:

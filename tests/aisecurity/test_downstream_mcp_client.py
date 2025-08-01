@@ -64,7 +64,7 @@ def sse_server_config():
     """Create SSE server configuration for testing."""
     return {
         "type": "sse",
-        "baseUrl": "http://url_to_sse_server"
+        "url": "http://url_to_sse_server"
     }
 
 
@@ -292,12 +292,12 @@ class TestDownstreamMcpClient:
         mock_session.initialize.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_initialize_sse_server_missing_baseurl(self):
-        """Test that ValueError is raised for SSE connection without baseUrl."""
-        sse_config_no_baseurl = {"type": "sse"}
-        client = DownstreamMcpClient("sse-server", sse_config_no_baseurl)
+    async def test_initialize_sse_server_missing_url(self):
+        """Test that ValueError is raised for SSE connection without url."""
+        sse_config_no_url = {"type": "sse"}
+        client = DownstreamMcpClient("sse-server", sse_config_no_url)
 
-        with pytest.raises(ValueError, match="SSE connection requires 'baseUrl'"):
+        with pytest.raises(ValueError, match="SSE connection requires 'url'"):
             await client.initialize()
 
     @pytest.mark.asyncio
