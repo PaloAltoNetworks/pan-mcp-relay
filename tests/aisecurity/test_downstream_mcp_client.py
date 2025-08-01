@@ -64,7 +64,7 @@ def sse_server_config():
     """Create SSE server configuration for testing."""
     return {
         "type": "sse",
-        "baseUrl": "http://localhost:8080/test"
+        "baseUrl": "http://url_to_sse_server"
     }
 
 
