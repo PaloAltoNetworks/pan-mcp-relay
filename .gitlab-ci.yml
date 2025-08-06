@@ -30,6 +30,8 @@ variables:
   PYTHONUNBUFFERED: 1
   CACHE_DIR: ${CI_PROJECT_DIR}/.cache
   FF_SCRIPT_SECTIONS: true # for GitLab CI Runner
+  PYTHON_BASE_IMAGE: python
+  PYTHON_IMAGE_VERSION: 3.12-bookworm
   ########################
   # Python - Hatch
   HATCH_CACHE_DIR: ${CACHE_DIR}/hatch
@@ -326,13 +328,13 @@ test:
   parallel:
     matrix:
       - PYTHON_IMAGE_TAG:
-          - latest-python39
-          - latest-python310
-          - latest-python311
+          - python39
+          - python310
+          - python311
         PIP_TRUSTED_HOST: art.code.pan.run
       - PYTHON_IMAGE_TAG:
-          - latest-python312
-          - latest-python313
+          - python312
+          - python313
   dependencies: []
   needs: []
 
