@@ -398,3 +398,5 @@ blackduck:
 
 checkmarx:
   extends: .checkmarx
+  variables:
+    CX_BASE_BRANCH: $CI_COMMIT_REF_NAME
