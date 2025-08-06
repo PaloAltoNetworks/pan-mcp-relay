@@ -28,6 +28,7 @@ from typing import Any, Optional
 
 import mcp.types as types
 from mcp import ClientSession, StdioServerParameters, stdio_client
+from mcp.client.streamable_http import create_mcp_http_client  # noqa
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayException
@@ -75,6 +76,8 @@ class DownstreamMcpClient:
         if self.config.get("env"):
             env.update(self.config["env"])
 
+        # TODO: Add Streamable HTTP Support
+
         command = self.config.get("command")
         if not command:
             err_msg = f"invalid MCP server configuration: {self.name} (missing command)"
@@ -89,7 +92,6 @@ class DownstreamMcpClient:
         env = {**env, **config_env}  # merge env + config_env, giving priority to config_env
         cwd = self.config.get("cwd")
 
-        # TODO: Add env=, cwd= parameters
         server_params = StdioServerParameters(command=command, args=args, env=env, cwd=cwd)
 
         try:

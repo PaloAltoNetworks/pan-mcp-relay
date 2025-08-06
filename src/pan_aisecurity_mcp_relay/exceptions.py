@@ -57,3 +57,19 @@ class AISecMcpRelayException(Exception):
             types.CallToolResult: A structured error result
         """
         return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=self.__str__())])
+
+
+class AISecMcpRelayInvalidConfigurationError(AISecMcpRelayException):
+    """Exception for invalid configuration errors."""
+
+
+class AISecMcpRelayToolExecutionError(AISecMcpRelayException):
+    """Exception for tool execution errors."""
+
+
+class AISecMcpRelaySecurityBlockError(AISecMcpRelayException):
+    """Exception for security block errors."""
+
+
+# TODO: Add the rest of the exception types
+# TODO: Use the new exceptions in the MCP Relay Code...
