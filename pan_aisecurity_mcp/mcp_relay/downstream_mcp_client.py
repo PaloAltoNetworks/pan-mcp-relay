@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 import mcp.types as types
 from mcp import ClientSession, StdioServerParameters, stdio_client
 from tenacity import retry, stop_after_attempt, wait_fixed
+from mcp.client.sse import sse_client
 
 
 class DownstreamMcpClient:
@@ -55,17 +56,27 @@ class DownstreamMcpClient:
         if self.config.get("env"):
             env.update(self.config["env"])
 
-        server_params = StdioServerParameters(
-            command=self.config["command"], args=self.config["args"]
-        )
-
+        connection_type = self.config.get("type")
         try:
-            # Set up communication with the server
-            stdio_transport = await self.exit_stack.enter_async_context(
-                stdio_client(server_params)
-            )
-            read, write = stdio_transport
-
+            if connection_type == "sse":
+                # SSE connection
+                url = self.config.get("url")
+                if not url:
+                    raise ValueError("SSE connection requires 'url'")
+                
+                sse_transport = await self.exit_stack.enter_async_context(
+                    sse_client(url)
+                )
+                read, write = sse_transport
+            else:
+                # Stdio connection (default)
+                server_params = StdioServerParameters(
+                    command=self.config["command"], args=self.config["args"]
+                )
+                stdio_transport = await self.exit_stack.enter_async_context(
+                    stdio_client(server_params)
+                )
+                read, write = stdio_transport
             # Create and initialize session
             session = await self.exit_stack.enter_async_context(
                 ClientSession(read, write)

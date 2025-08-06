@@ -101,6 +101,10 @@ Configure downstream MCP servers in `config/servers_config.json`:
     "another-server": {
       "command": "python",
       "args": ["path/to/another/server.py"]
+    },
+      "other-server-SSE-mode": {
+      "type": "sse",
+      "url": "url_of_other_SSE_server"
     }
   }
 }
@@ -232,7 +236,7 @@ Then, in your client's configuration (for example, in a `config.json` or a simil
   "mcpServers": {
     "pan_security_relay_SSE": {
       "type": "sse",
-      "baseUrl": "http://127.0.0.1:8000/sse"
+      "url": "http://127.0.0.1:8000/sse"
     }
   }
 }
