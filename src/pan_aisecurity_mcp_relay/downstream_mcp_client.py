@@ -77,13 +77,20 @@ class DownstreamMcpClient:
 
         command = self.config.get("command")
         if not command:
-            err_msg = f"invalid MCP server configuration: {self.name}"
+            err_msg = f"invalid MCP server configuration: {self.name} (missing command)"
             log.error(err_msg)
             raise AISecMcpRelayException(err_msg)
         args = self.config.get("args")
+        config_env = self.config.get("env")
+        if not isinstance(config_env, dict):
+            err_msg = f"invalid MCP server configuration: {self.name} (env is not a map)"
+            log.error(err_msg)
+            raise AISecMcpRelayException(err_msg)
+        env = {**env, **config_env}  # merge env + config_env, giving priority to config_env
+        cwd = self.config.get("cwd")
 
         # TODO: Add env=, cwd= parameters
-        server_params = StdioServerParameters(command=command, args=args)
+        server_params = StdioServerParameters(command=command, args=args, env=env, cwd=cwd)
 
         try:
             # Set up communication with the server
