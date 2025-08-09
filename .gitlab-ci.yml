@@ -30,8 +30,6 @@ variables:
   PYTHONUNBUFFERED: 1
   CACHE_DIR: ${CI_PROJECT_DIR}/.cache
   FF_SCRIPT_SECTIONS: true # for GitLab CI Runner
-  PYTHON_BASE_IMAGE: python
-  PYTHON_IMAGE_VERSION: 3.12-bookworm
   ########################
   # Python - Hatch
   HATCH_CACHE_DIR: ${CACHE_DIR}/hatch
@@ -136,18 +134,6 @@ default:
         -o Dpkg::Options::="--force-confold" \
         git curl ca-certificates
 
-.install-internal-ca:
-  # language=sh
-  script:
-    - &install-internal-ca |
-      if [[ -n "${INTERNAL_CA_BUNDLE_URL}" && -n "${INTERNAL_CA_BUNDLE}" ]]; then
-      mkdir -p /usr/local/share/ca-certificates/ &&
-      curl -fsSL \
-        "${INTERNAL_CA_BUNDLE_URL}" \
-        -o ${INTERNAL_CA_BUNDLE} &&
-      update-ca-certificates
-      fi
-
 .unshallow:
   # language=sh
   script: &unshallow |
@@ -167,7 +153,7 @@ default:
 # Template job
 .base-job: &base-job
   image:
-    name: $PYTHON_BASE_IMAGE:$PYTHON_IMAGE_VERSION
+    name: $PYTHON_BASE_IMAGE:$PYTHON_BASE_IMAGE_TAG
     entrypoint:
       - /bin/bash
       - -l
@@ -192,7 +178,6 @@ default:
   before_script:
     - set -o xtrace -o nounset -o pipefail -o errexit
     - *install-apt-tools
-    - *install-internal-ca
     - cd $CI_PROJECT_DIR
     - *unshallow
     - bash ${CI_PROJECT_DIR}/scripts/install-task.sh -b ${UV_TOOL_BIN_DIR} -d latest
