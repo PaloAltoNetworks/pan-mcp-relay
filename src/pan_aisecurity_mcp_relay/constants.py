@@ -112,6 +112,26 @@ TOOL_NAME_PAN_AISECURITY_INLINE_SCAN: Final[str] = "pan_inline_scan"
 # SECURITY SCAN CONSTANTS
 # =============================================================================
 
+SECURITY_ENV_KEYS = [
+    "PANW_AI_SEC_API_KEY",
+    "PANW_AI_SEC_API_ENDPOINT",
+    "PANW_AI_PROFILE_NAME",
+    "PANW_AI_PROFILE_ID",
+]
+"""
+List of environment variable keys used for Security Scanner configuration.
+
+Environment Variables:
+    PANW_AI_SEC_API_KEY: Palo Alto Networks AI Runtime Security API authentication key
+    PANW_AI_SEC_API_ENDPOINT: AI Runtime Security API endpoint URL (optional, uses default if not provided)
+    PANW_AI_PROFILE_NAME: Name of the AI Runtime Security profile to use for scanning
+    PANW_AI_PROFILE_ID: ID of the AI Runtime Security profile (alternative to profile name)
+
+Note:
+    Either PANW_AI_PROFILE_NAME or PANW_AI_PROFILE_ID must be provided.
+    Configuration precedence: command line args > environment variables > .env file.
+"""
+
 EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH: Final[int] = 1
 """Expected number of content items in security scan results."""
 

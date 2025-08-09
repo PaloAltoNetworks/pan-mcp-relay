@@ -24,6 +24,7 @@ from .constants import (
     MAX_DOWNSTREAM_TOOLS_DEFAULT,
     TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
     TransportType,
+    SECURITY_ENV_KEYS,
 )
 from .pan_security_relay import PanSecurityRelay
 
@@ -31,7 +32,9 @@ from .pan_security_relay import PanSecurityRelay
 async def main() -> None:
     """Main entry point for the MCP relay server."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config-file", type=str, required=True, help="Path to config file")
+    parser.add_argument(
+        "--config-file", type=str, required=True, help="Path to config file"
+    )
     parser.add_argument(
         "--transport",
         type=str,
@@ -39,7 +42,9 @@ async def main() -> None:
         choices=["stdio", "sse"],
         help="Transport protocol to use",
     )
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host for SSE server")
+    parser.add_argument(
+        "--host", type=str, default="127.0.0.1", help="Host for SSE server"
+    )
     parser.add_argument("--port", type=int, default=8000, help="Port for SSE server")
     parser.add_argument(
         "--tool-registry-cache-expiry-in-seconds",
@@ -62,7 +67,22 @@ async def main() -> None:
         default=MAX_DOWNSTREAM_TOOLS_DEFAULT,
         help="Max number of MCP tools",
     )
+    parser.add_argument(
+        "--PANW_AI_SEC_API_KEY", type=str, help="PANW AI Security API Key"
+    )
+    parser.add_argument(
+        "--PANW_AI_SEC_API_ENDPOINT", type=str, help="PANW AI Security API Endpoint"
+    )
+    parser.add_argument("--PANW_AI_PROFILE_NAME", type=str, help="PANW AI Profile Name")
+    parser.add_argument("--PANW_AI_PROFILE_ID", type=str, help="PANW AI Profile ID")
+
     args = parser.parse_args()
+
+    security_scanner_config: dict[str, str] = {
+        k: v
+        for k in SECURITY_ENV_KEYS
+        if (v := getattr(args, k, None)) is not None and str(v).strip() != ""
+    }
 
     # Initialize the relay server
     config_path = args.config_file
@@ -71,6 +91,7 @@ async def main() -> None:
     max_downstream_tools = args.max_mcp_tools
     relay_server = PanSecurityRelay(
         config_path,
+        security_scanner_config,
         tool_registry_cache_expiry,
         max_downstream_servers,
         max_downstream_tools,

@@ -85,22 +85,34 @@ class DownstreamMcpClient:
             raise AISecMcpRelayException(err_msg)
         args = self.config.get("args")
         config_env = self.config.get("env")
-        if not isinstance(config_env, dict):
-            err_msg = f"invalid MCP server configuration: {self.name} (env is not a map)"
-            log.error(err_msg)
-            raise AISecMcpRelayException(err_msg)
-        env = {**env, **config_env}  # merge env + config_env, giving priority to config_env
+        if config_env:
+            if not isinstance(config_env, dict):
+                err_msg = (
+                    f"invalid MCP server configuration: {self.name} (env is not a map)"
+                )
+                log.error(err_msg)
+                raise AISecMcpRelayException(err_msg)
+            env = {
+                **env,
+                **config_env,
+            }  # merge env + config_env, giving priority to config_env
         cwd = self.config.get("cwd")
 
-        server_params = StdioServerParameters(command=command, args=args, env=env, cwd=cwd)
+        server_params = StdioServerParameters(
+            command=command, args=args, env=env, cwd=cwd
+        )
 
         try:
             # Set up communication with the server
-            stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
+            stdio_transport = await self.exit_stack.enter_async_context(
+                stdio_client(server_params)
+            )
             read, write = stdio_transport
 
             # Create and initialize session
-            session = await self.exit_stack.enter_async_context(ClientSession(read, write))
+            session = await self.exit_stack.enter_async_context(
+                ClientSession(read, write)
+            )
             await session.initialize()
             self.session = session
 
@@ -184,7 +196,9 @@ class DownstreamMcpClient:
             return [self.extract_text_content(item) for item in content]
 
         # Handle specific MCP content types
-        if isinstance(content, (types.EmbeddedResource, types.ImageContent, types.TextContent)):
+        if isinstance(
+            content, (types.EmbeddedResource, types.ImageContent, types.TextContent)
+        ):
             return content.model_dump_json()
 
         # Handle objects with text attribute
