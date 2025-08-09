@@ -182,7 +182,10 @@ default:
     - *unshallow
     - bash ${CI_PROJECT_DIR}/scripts/install-task.sh -b ${UV_TOOL_BIN_DIR} -d latest
     - export PATH="${UV_TOOL_BIN_DIR}:${HOME}/.local/bin:${PATH}"
-    - python3 -m pip config --user set global.cert $INTERNAL_CA_BUNDLE
+    - |
+      if [[ -v INTERNAL_CA_BUNDLE && -f "$INTERNAL_CA_BUNDLE" ]]; then
+      python3 -m pip config --user set global.cert "$INTERNAL_CA_BUNDLE"
+      fi
     - python3 -m pip config debug
     - python3 -m pip install ${PIP_CI_ARGS:-} --user --upgrade uv
     - uv sync --all-extras --frozen # install all project dependencies
