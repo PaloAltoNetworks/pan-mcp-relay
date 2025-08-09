@@ -144,8 +144,10 @@ The relay supports two transport mechanisms:
 
 ```sh
 usage: pan-mcp-relay [-h] --config-file CONFIG_FILE [--transport {stdio,sse}] [--host HOST] [--port PORT]
-                     [--tool-registry-cache-expiry-in-seconds TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS] [--max-mcp-servers MAX_MCP_SERVERS]
-                     [--max-mcp-tools MAX_MCP_TOOLS]
+                     [--tool-registry-cache-expiry-in-seconds TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS] 
+                     [--max-mcp-servers MAX_MCP_SERVERS] [--max-mcp-tools MAX_MCP_TOOLS]
+                     [--PANW_AI_SEC_API_KEY PANW_AI_SEC_API_KEY] [--PANW_AI_SEC_API_ENDPOINT PANW_AI_SEC_API_ENDPOINT]
+                     [--PANW_AI_PROFILE_NAME PANW_AI_PROFILE_NAME] [--PANW_AI_PROFILE_ID PANW_AI_PROFILE_ID]
 
 options:
   -h, --help            show this help message and exit
@@ -160,7 +162,15 @@ options:
   --max-mcp-servers MAX_MCP_SERVERS
                         Max number of downstream servers
   --max-mcp-tools MAX_MCP_TOOLS
-                        Max number of MCP tool
+                        Max number of MCP tools
+  --PANW_AI_SEC_API_KEY PANW_AI_SEC_API_KEY
+                        PANW AI Security API Key
+  --PANW_AI_SEC_API_ENDPOINT PANW_AI_SEC_API_ENDPOINT
+                        PANW AI Security API Endpoint
+  --PANW_AI_PROFILE_NAME PANW_AI_PROFILE_NAME
+                        PANW AI Profile Name
+  --PANW_AI_PROFILE_ID PANW_AI_PROFILE_ID
+                        PANW AI Profile ID
 ```
 
 <a id="running-the-relay-server" href="#running-the-relay-server">
@@ -180,7 +190,28 @@ options:
 uv run pan-mcp-relay \
   --config-file=config.json
 ```
+<a id="stdio-transport-security" href="#stdio-transport-security">
 
+### stdio transport with security configuration
+
+</a>
+
+```sh
+# Run with STDIO transport and security scanning enabled
+uv run pan-mcp-relay \
+  --config-file=config.json \
+  --PANW_AI_PROFILE_NAME=default-profile-name \
+  --PANW_AI_SEC_API_KEY=your-api-key \
+  --PANW_AI_SEC_API_ENDPOINT=https://service.api.aisecurity.paloaltonetworks.com \
+  --PANW_AI_PROFILE_ID=default-profile-id
+
+# Alternative: Using environment variables (recommended for sensitive information)
+export PANW_AI_SEC_API_KEY=your-api-key
+export PANW_AI_SEC_API_ENDPOINT=https://service.api.aisecurity.paloaltonetworks.com
+export PANW_AI_PROFILE_NAME=default-profile-name
+export PANW_AI_PROFILE_ID=default-profile-id
+uv run pan-mcp-relay --config-file=config.json
+```
 <a id="sse-transport" href="#sse-transport">
 
 ### SSE transport
@@ -207,7 +238,14 @@ uv run pan-mcp-relay \
 | `--tool-registry-cache-expiry-in-seconds` | ❌ | `300` | Cache expiry time in seconds for the downstream MCP tool registry. Tools are re-scanned when cache expires |
 | `--max-mcp-servers` | ❌ | `32` | Maximum number of downstream MCP servers that can be configured. Prevents resource exhaustion |
 | `--max-mcp-tools` | ❌ | `64` | Maximum total number of MCP tools across all downstream servers. Enforces tool registry limits |
+| `--PANW_AI_SEC_API_KEY` | ❌ | - | Palo Alto Networks AI Security API authentication key. Can also be set via environment variable |
+| `--PANW_AI_SEC_API_ENDPOINT` | ❌ | - | AI Security API endpoint URL. Uses default endpoint if not provided. Can also be set via environment variable |
+| `--PANW_AI_PROFILE_NAME` | ❌* | - | Name of the AI security profile to use for scanning. Either this or `--PANW_AI_PROFILE_ID` is required |
+| `--PANW_AI_PROFILE_ID` | ❌* | - | ID of the AI security profile to use for scanning. Either this or `--PANW_AI_PROFILE_NAME` is required |
 
+**Note:** Arguments marked with * indicate that at least one of the profile options (name or ID) must be provided either via command line or environment variables.
+
+**Configuration Priority:** Command line arguments take precedence over environment variables, which take precedence over `.env` file values.
 
 <a id="examples" href="#examples">
 
