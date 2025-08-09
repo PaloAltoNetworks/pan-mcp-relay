@@ -279,13 +279,24 @@ format:
 test:
   stage: test
   extends: .base-job
-  image: $PYTHON_BASE_IMAGE:$PYTHON_IMAGE_TAG
+  image: $PYTHON_BASE_IMAGE:latest-$PY_VERSION-fips
+  allow_failure: true
   cache:
     - <<: *uv-cache
     - <<: *task-cache
     - paths:
         - ${HATCH_CACHE_DIR}
         - ${PYTEST_CACHE_DIR}
+  parallel:
+    matrix:
+      - PY_VERSION:
+          - python39
+          - python310
+          - python311
+        PIP_TRUSTED_HOST: $PYTHON_PIP_TRUSTED_HOST
+      - PY_VERSION:
+          - python312
+          - python313
   # variables:
   #   PANW_AI_PROFILE_NAME: $AI_PROFILE_STG
   #   PANW_AI_SEC_API_ENDPOINT: $API_ENDPOINT_STG
@@ -313,16 +324,6 @@ test:
           - "pyproject.toml"
           - "uv.lock"
           - "requirements*.txt"
-  parallel:
-    matrix:
-      - PYTHON_IMAGE_TAG:
-          - python39
-          - python310
-          - python311
-        PIP_TRUSTED_HOST: art.code.pan.run
-      - PYTHON_IMAGE_TAG:
-          - python312
-          - python313
   dependencies: []
   needs: []
 
