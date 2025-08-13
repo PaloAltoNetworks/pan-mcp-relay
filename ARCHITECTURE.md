@@ -3,11 +3,11 @@
 
 ## 1. Overview
 
-The MCP Security Relay is a Python-based application that acts as a secure intermediary between clients and downstream Model Context Protocol (MCP) servers. Its primary purpose is to enhance security by scanning all tool requests and responses for potential threats, while also providing centralized orchestration and management of multiple downstream MCP servers.
+The MCP Security Relay is a Python-based application that acts as a secure intermediary between clients and downstream Model Context Protocol (MCP) servers. Its primary purpose is to enhance security by scanning all tool descriptions, requests, and responses for potential threats, while also providing centralized orchestration and management of multiple downstream MCP servers.
 
 ### 1.1. Purpose and Use Cases
 
-The key objectives of the MCP Security Relay are:
+The key goals of the MCP Security Relay are:
 
 - **Security Enchancement**: To provide a layer of security by scanning all communications between clients and MCP servers. This helps in preventing prompt injection, data leakage, and other security threats.
 - **Centralized Orchestration**: To manage and interact with multiple downstream MCP servers from a single point of entry. This simplifies the client-side configuration and logic.
@@ -15,7 +15,7 @@ The key objectives of the MCP Security Relay are:
 
 **Example Use Cases:**
 
-- **Secure AI Agent**: An AI agent that uses various tools (e.g., file system access, code execution) can be configured to communicate with the MCP Security Relay. The relay will ensure that all tool calls and their responses are scanned for security risks.
+- **Secure AI Agent**: An AI agent that uses various tools (e.g., file system access, code execution) can be configured to communicate with the MCP Security Relay. The relay will scan all tool function call requests and responses, ensuring all MCP Tool interactions are scanned for security risks.
 - **Multi-Server Environment**: In a scenario with multiple specialized MCP servers (e.g., one for database access, another for web scraping), the relay can provide a single, unified interface to all of them, while enforcing security policies across the board.
 
 ## 2. Technical Walkthrough
@@ -37,12 +37,13 @@ The project is structured as a standard Python application:
     - **`mcp_server/`**: Contains the implementation of the MCP server that provides the security scanning functionality.
 - **`tests/`**: Contains unit and integration tests.
 - **`examples/`**: Contains example configurations and clients.
-- **`pyproject.toml`**: Defines project metadata and dependencies.
+- **`pyproject.toml`**: Defines Python project metadata, packaging information, and dependencies.
 
 ### 2.2. Execution Logic and Data Flow
 
 1.  **Initialization**:
-    - The application is started via the `pan-mcp-relay` script, which calls the `entrypoint` function in `main.py`.
+    - A user invokes the command `uvx pan-mcp-relay` to download, install, and execute the application.
+    - The application is started via the `pan-mcp-relay` [package entrypoint] script, which calls the `entrypoint` function in `main.py`.
     - The `main` function parses command-line arguments, including the path to the configuration file.
     - An instance of `PanSecurityRelay` is created.
     - The `initialize` method of `PanSecurityRelay` is called. This method:
@@ -51,7 +52,7 @@ The project is structured as a standard Python application:
         - Updates the `ToolRegistry` by connecting to each configured downstream MCP server, listing its tools, and scanning them for security risks.
 
 2.  **Client Interaction**:
-    - The relay server can be run with either a `stdio` or `sse` transport.
+    - The relay server is invoked with either `stdio` or Streamable HTTP transports.
     - A client connects to the relay server.
     - The client requests the list of available tools by sending a `list_tools` request.
     - The `PanSecurityRelay` handles this request by consulting its `ToolRegistry` and returning a list of all enabled tools.
@@ -84,3 +85,6 @@ The application uses a set of custom exception classes defined in `exceptions.py
 - **`ToolNotFound`**: If the requested tool is not found in the registry.
 
 When an exception is caught, it is logged, and a structured error message is sent back to the client in the MCP format.
+
+
+[package entrypoint]: https://packaging.python.org/en/latest/specifications/pyproject-toml/#entry-points
