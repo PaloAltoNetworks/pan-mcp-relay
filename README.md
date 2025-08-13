@@ -11,7 +11,8 @@ MCP servers, providing security scanning and centralized orchestration capabilit
 - [Installation and Setup](#installation-and-setup)
 - [Configuration](#configuration)
   - [Environment Variables](#environment-variables)
-  - [Server Configuration](#server-configuration)
+  - [Relay Server Configuration](#relay-server-configuration)
+  - [MCP Server Configuration](#mcp-server-configuration)
   - [Transport Options](#transport-options)
 - [Usage](#usage)
   - [pan-mcp-relay CLI Usage](#pan-mcp-relay-cli-usage)
@@ -87,13 +88,42 @@ PANW_AI_SEC_API_KEY=YOUR_API_KEY
 PANW_AI_SEC_API_ENDPOINT=YOUR_API_ENDPOINT
 ```
 
+
 <a id="server-configuration" href="#server-configuration">
 
-## Server Configuration
+## Relay Server Configuration
 
 </a>
 
-Copy or create a new `config.json` file. Configure downstream MCP servers in `config.json`:
+Create a new config file `mcp-relay.json` to use with your IDE, Chat Client, or MCP System.
+
+```json
+{
+  "mcpServers": {
+    "pan-mcp-relay": {
+      "command": "uvx",
+      "args": [
+        "pan-mcp-relay",
+        "--config",
+        "pan-mcp-relay-config.json"
+      ],
+      "env": {
+        "PRISMA_AIRS_API_KEY": "YOUR_PRISMA_AIRS_API_KEY"
+      },
+      "cwd": "$HOME/optional/working/directory"
+    }
+  }
+}
+```
+
+<a id="server-configuration" href="#server-configuration">
+
+## MCP Server Configuration
+
+</a>
+
+
+Copy or create a new `mcp-servers.json` file. Configure downstream MCP servers in `mcp-servers.json`:
 
 ```json
 {
