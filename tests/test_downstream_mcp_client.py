@@ -61,6 +61,12 @@ def performance_server_config():
 
 
 @pytest.fixture
+def sse_server_config():
+    """Create SSE server configuration for testing."""
+    return {"type": "sse", "url": "http://url_to_sse_server"}
+
+
+@pytest.fixture
 def mock_echo_tool():
     """Create mock echo tool that returns input."""
     return types.Tool(
@@ -205,6 +211,16 @@ class TestDownstreamMcpClient:
         assert isinstance(client._cleanup_lock, asyncio.Lock)
         assert isinstance(client.exit_stack, AsyncExitStack)
 
+    def test_downstream_mcp_client_initialization_sse(self, sse_server_config):
+        """Test DownstreamMcpClient initialization with SSE server configuration."""
+        client = DownstreamMcpClient("sse-server", sse_server_config)
+
+        assert client.name == "sse-server"
+        assert client.config == sse_server_config
+        assert client.session is None
+        assert isinstance(client._cleanup_lock, asyncio.Lock)
+        assert isinstance(client.exit_stack, AsyncExitStack)
+
     @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.logging")
     def test_downstream_mcp_client_initialization_logging(self, mock_logging, test_server_config):
         """Test that client initialization logs configuration information."""
@@ -236,6 +252,39 @@ class TestDownstreamMcpClient:
 
         assert client.session == mock_session
         mock_session.initialize.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.sse_client")
+    async def test_initialize_sse_server_success(self, mock_sse_client, sse_server_config):
+        """Test successful initialization of SSE server connection."""
+        # Setup mocks for SSE connection
+        mock_read = AsyncMock()
+        mock_write = AsyncMock()
+        mock_sse_transport = (mock_read, mock_write)
+        mock_sse_client.return_value = AsyncMock()
+        mock_sse_client.return_value.__aenter__.return_value = mock_sse_transport
+
+        mock_session = AsyncMock(spec=ClientSession)
+        mock_session.initialize.return_value = None
+
+        client = DownstreamMcpClient("sse-server", sse_server_config)
+
+        with patch.object(client.exit_stack, "enter_async_context") as mock_enter_context:
+            mock_enter_context.side_effect = [mock_sse_transport, mock_session]
+
+            await client.initialize()
+
+        assert client.session == mock_session
+        mock_session.initialize.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_initialize_sse_server_missing_url(self):
+        """Test that ValueError is raised for SSE connection without url."""
+        sse_config_no_url = {"type": "sse"}
+        client = DownstreamMcpClient("sse-server", sse_config_no_url)
+
+        with pytest.raises(ValueError, match="SSE connection requires 'url'"):
+            await client.initialize()
 
     @pytest.mark.asyncio
     @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.stdio_client")
@@ -278,6 +327,26 @@ class TestDownstreamMcpClient:
 
         mock_logging.error.assert_called_with(
             "Error initializing server test-server: Test server connection failed", exc_info=True
+        )
+
+    @pytest.mark.asyncio
+    @patch("pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.sse_client")
+    @patch("pan_aisecurity_mcp.mcp_relay.downstream_mcp_client.logging")
+    async def test_initialize_sse_server_failure(self, mock_logging, mock_sse_client, sse_server_config):
+        """Test SSE server initialization failure handling."""
+        # Simulate connection failure
+        mock_sse_client.side_effect = Exception("Test SSE connection failed")
+
+        client = DownstreamMcpClient("sse-server", sse_server_config)
+
+        with patch.object(client, "cleanup") as mock_cleanup:
+            with pytest.raises(Exception, match="Test SSE connection failed"):
+                await client.initialize()
+
+            mock_cleanup.assert_called_once()
+
+        mock_logging.error.assert_called_with(
+            "Error initializing server sse-server: Test SSE connection failed", exc_info=True
         )
 
     @pytest.mark.asyncio
@@ -508,16 +577,13 @@ class TestDownstreamMcpClient:
 
         extracted = client.extract_text_content(content_list)
 
-        # The method returns a JSON string representation of the list
-        assert isinstance(extracted, str)
-
-        # Parse the JSON string to verify the structure
-        parsed_list = json.loads(extracted)
-        assert isinstance(parsed_list, list)
-        assert len(parsed_list) == 2
+        # The method returns a list of JSON string representations of the list items.
+        assert isinstance(extracted, list)
+        assert len(extracted) == 2
 
         # Each item in the list should be a JSON string of the TextContent object
-        for item_json in parsed_list:
+        for item_json in extracted:
+            assert isinstance(item_json, str)
             item_data = json.loads(item_json)
             assert item_data["type"] == "text"
             assert "Response" in item_data["text"]

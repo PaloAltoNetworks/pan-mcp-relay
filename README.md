@@ -18,6 +18,7 @@ MCP servers, providing security scanning and centralized orchestration capabilit
   - [pan-mcp-relay CLI Usage](#pan-mcp-relay-cli-usage)
   - [Running the Relay Server](#running-the-relay-server)
     - [stdio transport (default)](#stdio-transport-default)
+    - [stdio transport with security configuration](#stdio-transport-with-security-configuration)
     - [SSE transport](#sse-transport)
     - [Command Line Arguments](#command-line-arguments)
 - [Examples](#examples)
@@ -135,6 +136,10 @@ Copy or create a new `mcp-servers.json` file. Configure downstream MCP servers i
     "another-server": {
       "command": "python",
       "args": ["path/to/another/server.py"]
+    },
+      "other-server-SSE-mode": {
+      "type": "sse",
+      "url": "url_of_other_SSE_server"
     }
   }
 }
@@ -174,7 +179,7 @@ The relay supports two transport mechanisms:
 
 ```sh
 usage: pan-mcp-relay [-h] --config-file CONFIG_FILE [--transport {stdio,sse}] [--host HOST] [--port PORT]
-                     [--tool-registry-cache-expiry-in-seconds TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS] 
+                     [--tool-registry-cache-expiry-in-seconds TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS]
                      [--max-mcp-servers MAX_MCP_SERVERS] [--max-mcp-tools MAX_MCP_TOOLS]
                      [--PANW_AI_SEC_API_KEY PANW_AI_SEC_API_KEY] [--PANW_AI_SEC_API_ENDPOINT PANW_AI_SEC_API_ENDPOINT]
                      [--PANW_AI_PROFILE_NAME PANW_AI_PROFILE_NAME] [--PANW_AI_PROFILE_ID PANW_AI_PROFILE_ID]
@@ -338,7 +343,7 @@ Then, in your client's configuration (for example, in a `config.json` or a simil
   "mcpServers": {
     "pan_security_relay_SSE": {
       "type": "sse",
-      "baseUrl": "http://127.0.0.1:8000/sse"
+      "url": "http://127.0.0.1:8000/sse"
     }
   }
 }
