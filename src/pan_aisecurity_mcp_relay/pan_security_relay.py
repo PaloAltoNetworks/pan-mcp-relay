@@ -42,6 +42,7 @@ risks, and provides a unified interface for clients while enforcing security pol
 import logging
 import sys
 from copy import deepcopy
+from os import environ
 from pathlib import Path
 from typing import Any, Optional
 
@@ -80,6 +81,7 @@ class PanSecurityRelay:
     def __init__(
         self,
         config_path: str,
+        security_scanner_config: dict[str, Any],
         tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
         max_downstream_servers: int = MAX_DOWNSTREAM_SERVERS_DEFAULT,
         max_downstream_tools: int = MAX_DOWNSTREAM_TOOLS_DEFAULT,
@@ -96,6 +98,7 @@ class PanSecurityRelay:
         self.servers: dict[str, DownstreamMcpClient] = {}  # Maps server_name to server
         self.tool_registry = ToolRegistry(tool_registry_cache_expiry)
         self.config_path = config_path
+        self.security_scanner_config = security_scanner_config
         self.max_downstream_servers = max_downstream_servers
         self.max_downstream_tools = max_downstream_tools
         self.security_scanner: Optional[SecurityScanner] = None
@@ -108,7 +111,7 @@ class PanSecurityRelay:
             servers_config = self._load_config()
 
             # Store the pan_security server for security scanning
-            await self._update_security_scanner(servers_config)
+            await self._update_security_scanner(self.security_scanner_config)
 
             # Configure downstream MCP servers from configuration
             await self._update_tool_registry()
@@ -118,7 +121,9 @@ class PanSecurityRelay:
             logging.error(f"MCP Relay initialization error: {relay_error}")
             raise relay_error
         except Exception as other_error:
-            logging.error(f"Failed to initialize MCP relay server, error: {other_error}")
+            logging.error(
+                f"Failed to initialize MCP relay server, error: {other_error}"
+            )
             raise AISecMcpRelayException(
                 f"Unexpected initialization error: {other_error}",
                 ErrorType.AISEC_MCP_RELAY_INTERNAL_ERROR,
@@ -152,14 +157,25 @@ class PanSecurityRelay:
             raise validate_error
         except Exception as e:
             logging.error(f"Configuration loading error: {e}")
-            raise AISecMcpRelayException(f"Could not load configuration: {e}", ErrorType.INVALID_CONFIGURATION)
+            raise AISecMcpRelayException(
+                f"Could not load configuration: {e}", ErrorType.INVALID_CONFIGURATION
+            )
 
-    async def _update_security_scanner(self, servers_config: dict[str, Any]) -> None:
+    async def _update_security_scanner(self, security_scanner_config) -> None:
         """Initialize and configure the security scanner for downstream servers."""
-        logging.info("MCP pan-aisecurity server init - Setting up security scanning configuration...")
+        logging.info(
+            "MCP pan-aisecurity server init - Setting up security scanning configuration..."
+        )
 
         mcp_server_path = __path__.parent / "mcp_server/pan_security_server.py"
-        server = DownstreamMcpClient("pan-aisecurity", {"command": sys.executable, "args": [str(mcp_server_path)]})
+        server = DownstreamMcpClient(
+            "pan-aisecurity",
+            {
+                "command": sys.executable,
+                "args": [str(mcp_server_path)],
+                "env": security_scanner_config,
+            },
+        )
         await server.initialize()
         self.servers["pan-aisecurity"] = server
         self.security_scanner = SecurityScanner(server)
@@ -201,9 +217,12 @@ class PanSecurityRelay:
             server_tools = await server.list_tools()
             hidden_mode_enabled = (
                 server_config.get(ENVIRONMENT_CONFIG_LABEL) is not None
-                and server_config.get(ENVIRONMENT_CONFIG_LABEL).get(HIDDEN_MODE_LABEL) == HIDDEN_MODE_ENABLED
+                and server_config.get(ENVIRONMENT_CONFIG_LABEL).get(HIDDEN_MODE_LABEL)
+                == HIDDEN_MODE_ENABLED
             )
-            await self._prepare_tool(server_name, server_tools, hidden_mode_enabled, full_tool_list)
+            await self._prepare_tool(
+                server_name, server_tools, hidden_mode_enabled, full_tool_list
+            )
             await server.cleanup()
         return full_tool_list
 
@@ -237,11 +256,15 @@ class PanSecurityRelay:
             if hidden_mode_enabled:
                 internal_tool.state = ToolState.DISABLED_HIDDEN_MODE
             else:
-                exist_tool = self.tool_registry.get_tool_by_hash(internal_tool.sha256_hash)
+                exist_tool = self.tool_registry.get_tool_by_hash(
+                    internal_tool.sha256_hash
+                )
                 if exist_tool is None:
                     # Security scan
                     logging.info(f"Scan tool info: {server_tool.model_dump()!s}")
-                    if self.security_scanner.should_block(await self.security_scanner.scan_tool(server_tool)):
+                    if self.security_scanner.should_block(
+                        await self.security_scanner.scan_tool(server_tool)
+                    ):
                         internal_tool.state = ToolState.DISABLED_SECURITY_RISK
                     else:
                         internal_tool.state = ToolState.ENABLED
@@ -255,13 +278,17 @@ class PanSecurityRelay:
         for tool in tools:
             if tool.state == ToolState.ENABLED:
                 if tool.name in name_to_tool_dict:
-                    logging.info(f"Tool '{tool.name}' already in dict, skipping or updating...")
+                    logging.info(
+                        f"Tool '{tool.name}' already in dict, skipping or updating..."
+                    )
                     name_to_tool_dict[tool.name].state = ToolState.DISABLED_DUPLICATE
                     tool.state = ToolState.DISABLED_DUPLICATE
                 else:
                     name_to_tool_dict[tool.name] = tool
         duplicate_tool_names = [
-            f"{tool.server_name}:{tool.name}" for tool in tools if tool.state == ToolState.DISABLED_DUPLICATE
+            f"{tool.server_name}:{tool.name}"
+            for tool in tools
+            if tool.state == ToolState.DISABLED_DUPLICATE
         ]
         if len(duplicate_tool_names) > 0:
             logging.warning(f"Duplicate tool names: {duplicate_tool_names}")
@@ -293,7 +320,9 @@ class PanSecurityRelay:
             try:
                 result = await self._handle_tool_execution(name, arguments)
                 if result.isError:
-                    raise AISecMcpRelayException(result.content, ErrorType.TOOL_EXECUTION_ERROR)
+                    raise AISecMcpRelayException(
+                        result.content, ErrorType.TOOL_EXECUTION_ERROR
+                    )
                 return result.content
             except AISecMcpRelayException as relay_error:
                 logging.error(f"MCP Relay call tool error: {relay_error}")
@@ -317,7 +346,9 @@ class PanSecurityRelay:
         for tool in self.tool_registry.get_available_tools():
             logging.debug(f"Processing tool: {tool.name}")
             available_tool_list.append(tool.to_mcp_tool())
-            logging.debug(f"Tool {tool.name}: State={tool.state}, Total tools={len(available_tool_list)}")
+            logging.debug(
+                f"Tool {tool.name}: State={tool.state}, Total tools={len(available_tool_list)}"
+            )
 
         # Add the relay info tool
         available_tool_list.append(
@@ -330,13 +361,17 @@ class PanSecurityRelay:
 
         return available_tool_list
 
-    async def _handle_tool_execution(self, name: str, arguments: dict) -> types.CallToolResult:
+    async def _handle_tool_execution(
+        self, name: str, arguments: dict
+    ) -> types.CallToolResult:
         """Handle tool execution requests."""
         input_text = f"{name}: {arguments!s}"
 
         # Scan the request for security issues
         if self.security_scanner:
-            if self.security_scanner.should_block(await self.security_scanner.scan_request(input_text)):
+            if self.security_scanner.should_block(
+                await self.security_scanner.scan_request(input_text)
+            ):
                 raise AISecMcpRelayException(
                     "Unsafe Request: Security scan blocked this request",
                     ErrorType.SECURITY_BLOCK,
@@ -355,17 +390,23 @@ class PanSecurityRelay:
                 break
 
         if not target_tool:
-            raise AISecMcpRelayException(f"Unknown tool: {name}", ErrorType.TOOL_NOT_FOUND)
+            raise AISecMcpRelayException(
+                f"Unknown tool: {name}", ErrorType.TOOL_NOT_FOUND
+            )
 
         # Execute the tool on the downstream server
         result = await self._execute_on_server(target_tool.server_name, name, arguments)
 
-        result_content = self.security_scanner.pan_security_server.extract_text_content(result.content)
+        result_content = self.security_scanner.pan_security_server.extract_text_content(
+            result.content
+        )
 
         if self.security_scanner:
             logging.info(f"scanning: {result_content}")
             if self.security_scanner.should_block(
-                await self.security_scanner.scan_response(input_text, str(result_content))
+                await self.security_scanner.scan_response(
+                    input_text, str(result_content)
+                )
             ):
                 raise AISecMcpRelayException(
                     "Unsafe Response: Security scan blocked this response",
@@ -378,16 +419,26 @@ class PanSecurityRelay:
         return result
 
     async def _handle_list_downstream_servers_info(self) -> types.CallToolResult:
-        logging.info(f"Current tool registry status: {self.tool_registry.get_registry_stats()}")
+        logging.info(
+            f"Current tool registry status: {self.tool_registry.get_registry_stats()}"
+        )
         return types.CallToolResult(
-            content=[types.TextContent(type="text", text=self.tool_registry.get_server_tool_map_json())],
+            content=[
+                types.TextContent(
+                    type="text", text=self.tool_registry.get_server_tool_map_json()
+                )
+            ],
             isError=False,
         )
 
-    async def _execute_on_server(self, server_name: str, tool_name: str, arguments: dict) -> types.CallToolResult:
+    async def _execute_on_server(
+        self, server_name: str, tool_name: str, arguments: dict
+    ) -> types.CallToolResult:
         """Execute a tool on a specific downstream server."""
         if server_name not in self.servers:
-            raise AISecMcpRelayException(f"Server not found: {server_name}", ErrorType.SERVER_NOT_FOUND)
+            raise AISecMcpRelayException(
+                f"Server not found: {server_name}", ErrorType.SERVER_NOT_FOUND
+            )
 
         server = self.servers[server_name]
         await server.initialize()
@@ -405,7 +456,9 @@ class PanSecurityRelay:
 
         async def arun():
             async with stdio_server() as streams:
-                await app.run(streams[0], streams[1], app.create_initialization_options())
+                await app.run(
+                    streams[0], streams[1], app.create_initialization_options()
+                )
 
         await arun()
 
@@ -439,7 +492,9 @@ class SseEndpoint:
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         async with self.transport.connect_sse(scope, receive, send) as streams:
-            await self.app.run(streams[0], streams[1], self.app.create_initialization_options())
+            await self.app.run(
+                streams[0], streams[1], self.app.create_initialization_options()
+            )
 
 
 class MessagesEndpoint:
