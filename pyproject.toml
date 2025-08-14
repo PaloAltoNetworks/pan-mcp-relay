@@ -36,6 +36,7 @@ dev = [
   "packaging>=25.0",
   "versioningit>=3.1",
   "python-dotenv>=1.1",
+  "unittest2pytest>=0.5",
 ]
 ci = [
   "httpx[http2]>=0.28",
@@ -161,7 +162,7 @@ append-line = "__version__ = \"{version}\""
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-ra -q --tb=short --numprocesses=auto --cov=pan_aisecurity_mcp_relay --cov=tests --cov-report=term-missing"
+addopts = "-ra -q --tb=short --numprocesses=auto --import-mode=importlib --cov=pan_aisecurity_mcp_relay --cov=tests --cov-report=term-missing"
 testpaths = [
   "tests",
   "examples",
