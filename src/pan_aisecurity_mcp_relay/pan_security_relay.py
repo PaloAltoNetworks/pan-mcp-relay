@@ -67,7 +67,7 @@ from .constants import (
 )
 from .downstream_mcp_client import DownstreamMcpClient
 from .exceptions import (
-    AISecMcpRelayException,
+    AISecMcpRelayBaseException,
     AISecMcpRelayInternalError,
     AISecMcpRelayInvalidConfigurationError,
     AISecMcpRelaySecurityBlockError,
@@ -127,7 +127,7 @@ class PanSecurityRelay:
             await self._update_tool_registry()
 
             logging.info("MCP relay server initialized successfully.")
-        except AISecMcpRelayException as relay_error:
+        except AISecMcpRelayBaseException as relay_error:
             logging.error(f"MCP Relay initialization error: {relay_error}")
             raise relay_error
         except Exception as other_error:
@@ -150,7 +150,7 @@ class PanSecurityRelay:
                 return servers_config
             else:
                 raise AISecMcpRelayInvalidConfigurationError("Unexpected configuration format for servers.")
-        except AISecMcpRelayException as validate_error:
+        except AISecMcpRelayBaseException as validate_error:
             logging.error(f"Configuration validation error: {validate_error}")
             raise validate_error
         except Exception as e:
@@ -281,7 +281,7 @@ class PanSecurityRelay:
             logging.info(f"-------------- {MCP_RELAY_NAME}: list_tools --------------")
             try:
                 return await self._handle_list_tools()
-            except AISecMcpRelayException as relay_error:
+            except AISecMcpRelayBaseException as relay_error:
                 logging.error(f"MCP Relay list tool error: {relay_error}")
                 raise relay_error
             except Exception as e:
@@ -298,7 +298,7 @@ class PanSecurityRelay:
                 if result.isError:
                     raise AISecMcpRelayToolExecutionError(str(result.content))
                 return result.content
-            except AISecMcpRelayException as relay_error:
+            except AISecMcpRelayBaseException as relay_error:
                 logging.error(f"MCP Relay call tool error: {relay_error}")
                 raise relay_error
             except Exception as e:

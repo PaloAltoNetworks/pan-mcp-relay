@@ -22,14 +22,19 @@ Defines tool classes and states for managing tools across different servers.
 
 import hashlib
 import json
-from enum import Enum
+import sys
 from typing import Any
 
 import mcp.types as types
 from pydantic import ConfigDict, Field
 
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    from backports.strenum import StrEnum
 
-class ToolState(str, Enum):
+
+class ToolState(StrEnum):
     """Tool state enumeration."""
 
     ENABLED = "enabled"

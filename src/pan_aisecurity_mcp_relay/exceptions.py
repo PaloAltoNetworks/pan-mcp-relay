@@ -18,14 +18,14 @@
 import mcp.types as types
 
 
-class AISecMcpRelayException(Exception):
+class AISecMcpRelayBaseException(Exception):
     """Base exception class for mcp-relay-related exceptions."""
 
     def __init__(self, message: str = "") -> None:
         self.message = message
 
-    def __str__(self) -> str:
-        return f"{self.__class__.__name__}:{self.message}"
+    # def __str__(self) -> str:
+    #     return f"{self.__class__.__name__}:{self.message}"
 
     def to_mcp_format(self) -> types.CallToolResult:
         """
@@ -37,33 +37,33 @@ class AISecMcpRelayException(Exception):
         return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=str(self))])
 
 
-class AISecMcpRelayInternalError(AISecMcpRelayException):
+class AISecMcpRelayInternalError(AISecMcpRelayBaseException):
     """Exception for internal errors."""
 
 
-class AISecMcpRelayInvalidConfigurationError(AISecMcpRelayException):
+class AISecMcpRelayInvalidConfigurationError(AISecMcpRelayBaseException):
     """Exception for invalid configuration errors."""
 
 
-class AISecMcpRelayToolExecutionError(AISecMcpRelayException):
+class AISecMcpRelayToolExecutionError(AISecMcpRelayBaseException):
     """Exception for tool execution errors."""
 
 
-class AISecMcpRelaySecurityBlockError(AISecMcpRelayException):
+class AISecMcpRelaySecurityBlockError(AISecMcpRelayBaseException):
     """Exception for security block errors."""
 
 
-class AISecMcpRelayToolNotFoundError(AISecMcpRelayException):
+class AISecMcpRelayToolNotFoundError(AISecMcpRelayBaseException):
     """Exception for tool not found errors."""
 
 
-class AISecMcpRelayServerNotFoundError(AISecMcpRelayException):
+class AISecMcpRelayServerNotFoundError(AISecMcpRelayBaseException):
     """Exception for server not found errors."""
 
 
-class AISecMcpRelayValidationError(AISecMcpRelayException):
+class AISecMcpRelayValidationError(AISecMcpRelayBaseException):
     """Exception for validation errors."""
 
 
-class AISecMcpRelayToolRegistryError(AISecMcpRelayException):
+class AISecMcpRelayToolRegistryError(AISecMcpRelayBaseException):
     """Exception for tool registry errors."""

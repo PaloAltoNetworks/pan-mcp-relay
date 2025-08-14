@@ -21,9 +21,14 @@ This module defines all constants used throughout the Pan AI Security MCP Relay 
 Constants are organized into logical groups for better maintainability and clarity.
 """
 
+import sys
 from datetime import datetime
-from enum import Enum
 from typing import Final
+
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    from backports.strenum import StrEnum
 
 # =============================================================================
 # SERVER IDENTIFICATION
@@ -41,7 +46,7 @@ MCP_RELAY_NAME: Final[str] = "pan-aisecurity-relay"
 # =============================================================================
 
 
-class TransportType(str, Enum):
+class TransportType(StrEnum):
     """
     Enumeration of supported transport types for MCP communication.
 
@@ -52,10 +57,7 @@ class TransportType(str, Enum):
 
     STDIO = "stdio"
     SSE = "sse"
-
-    def __str__(self) -> str:
-        """Return the string representation of the transport type."""
-        return self.value
+    STREAMABLE_HTTP = "streamable_http"
 
 
 # =============================================================================
