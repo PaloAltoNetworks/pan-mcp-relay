@@ -24,30 +24,24 @@ with expiration-based refresh logic and efficient lookup capabilities.
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Optional
 
 from pan_aisecurity_mcp_relay.constants import (
     TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
     UNIX_EPOCH,
 )
-from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayException, ErrorType
+from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayToolRegistryError, AISecMcpRelayValidationError
 from pan_aisecurity_mcp_relay.tool import InternalTool, ToolState
 
 logger = logging.getLogger(__name__)
 
 
 class ToolRegistry:
-    """
-    A registry for managing and caching internal tools with expiration-based refresh logic.
+    """A registry for managing and caching internal tools with expiration-based refresh logic.
 
     The ToolRegistry maintains collections of tools, provides filtering capabilities,
     and includes caching mechanisms to optimize performance. It supports operations
     like retrieving available tools, mapping tools by server, and tool lookup by hash.
-
-    Attributes:
-        internal_tool_list: Complete list of all registered internal tools
-        available_tool_list: Filtered list containing only enabled tools
-        hash_to_tool_map: Dictionary mapping SHA256 hashes to tools for quick lookup
     """
 
     def __init__(self, tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT) -> None:
@@ -62,10 +56,7 @@ class ToolRegistry:
             AISecMcpRelayException: VALIDATION_ERROR: If cache expiry is invalid
         """
         if tool_registry_cache_expiry <= 0:
-            raise AISecMcpRelayException(
-                "Tool registry cache expiry must be a positive integer",
-                ErrorType.VALIDATION_ERROR,
-            )
+            raise AISecMcpRelayValidationError("Tool registry cache expiry must be a positive integer")
 
         self._internal_tool_list: list[InternalTool] = []
         self._available_tool_list: list[InternalTool] = []
@@ -93,10 +84,10 @@ class ToolRegistry:
                                     RegistryError: If registry update operation fails
         """
         if internal_tool_list is None:
-            raise AISecMcpRelayException("Tool list cannot be None", ErrorType.VALIDATION_ERROR)
+            raise AISecMcpRelayValidationError("Tool list cannot be None")
 
         if not isinstance(internal_tool_list, list):
-            raise AISecMcpRelayException("Tool list must be a list", ErrorType.VALIDATION_ERROR)
+            raise AISecMcpRelayValidationError("Tool list must be a list")
 
         try:
             self._internal_tool_list = internal_tool_list
@@ -111,7 +102,7 @@ class ToolRegistry:
                 len(self._available_tool_list),
             )
         except Exception as e:
-            raise AISecMcpRelayException(f"Failed to update tool registry {e}", ErrorType.TOOL_REGISTRY_ERROR)
+            raise AISecMcpRelayToolRegistryError(f"Failed to update tool registry {e}")
 
     def _update_available_tools(self) -> None:
         """Update the available tools list with only enabled tools."""
@@ -169,7 +160,7 @@ class ToolRegistry:
             ValidationError: If sha256_hash is invalid
         """
         if not isinstance(sha256_hash, str):
-            raise AISecMcpRelayException("SHA256 hash must be a string", ErrorType.VALIDATION_ERROR)
+            raise AISecMcpRelayValidationError("SHA256 hash must be a string")
 
         if not sha256_hash:
             return None
@@ -221,9 +212,9 @@ class ToolRegistry:
 
         except (AttributeError, TypeError) as e:
             logger.error("Failed to serialize tools to JSON: %s", e)
-            raise AISecMcpRelayException(f"Tool serialization failed {e}", ErrorType.TOOL_REGISTRY_ERROR)
+            raise AISecMcpRelayToolRegistryError(f"Tool serialization failed {e}")
 
-    def get_registry_stats(self) -> dict[str, any]:
+    def get_registry_stats(self) -> dict[str, Any]:
         """
         Get statistics about the current registry state.
 

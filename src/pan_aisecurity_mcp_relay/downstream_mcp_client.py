@@ -28,7 +28,14 @@ from typing import Any, Optional
 
 import mcp.types as types
 from mcp import ClientSession, StdioServerParameters, stdio_client
-from mcp.client.streamable_http import create_mcp_http_client  # noqa
+from mcp.client.session_group import (  # noqa usage TBD
+    SseServerParameters,
+    StreamableHttpParameters,
+    sse_client,
+    streamablehttp_client,
+)
+from mcp.client.sse import create_mcp_http_client
+from mcp.client.streamable_http import create_mcp_http_client  # noqa usage TBD
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayException
@@ -70,13 +77,12 @@ class DownstreamMcpClient:
             Exception: If initialization fails
         """
         log.debug(f"Initializing downstream mcp server: {self.name}...")
+        # TODO: Add Streamable HTTP Support
 
         # Prepare environment variables
         env = os.environ.copy()
         if self.config.get("env"):
             env.update(self.config["env"])
-
-        # TODO: Add Streamable HTTP Support
 
         command = self.config.get("command")
         if not command:

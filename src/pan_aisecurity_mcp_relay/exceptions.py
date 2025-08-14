@@ -14,40 +14,18 @@
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
 
-from enum import Enum
-from typing import Optional
 
 import mcp.types as types
-
-
-class ErrorType(Enum):
-    """Enum defining error type codes for AISecMcpRelay exceptions.
-
-    These error types are used to categorize different errors that can occur
-    within the SDK and are included in exception messages.
-    """
-
-    AISEC_MCP_RELAY_INTERNAL_ERROR = "AISEC_MCP_RELAY_INTERNAL_ERROR"
-    INVALID_CONFIGURATION = "AISEC_INVALID_CONFIGURATION"
-    TOOL_EXECUTION_ERROR = "AISEC_TOOL_EXECUTION_ERROR"
-    SECURITY_BLOCK = "AISEC_SECURITY_BLOCK"
-    TOOL_NOT_FOUND = "AISEC_TOOL_NOT_FOUND"
-    SERVER_NOT_FOUND = "AISEC_SERVER_NOT_FOUND"
-    VALIDATION_ERROR = "AISEC_VALIDATION_ERROR"
-    TOOL_REGISTRY_ERROR = "AISEC_TOOL_REGISTRY_ERROR"
 
 
 class AISecMcpRelayException(Exception):
     """Base exception class for mcp-relay-related exceptions."""
 
-    def __init__(self, message: str = "", error_type: Optional[ErrorType] = None) -> None:
+    def __init__(self, message: str = "") -> None:
         self.message = message
-        self.error_type = error_type
 
     def __str__(self) -> str:
-        if self.error_type:
-            return f"{self.error_type.value}:{self.message}"
-        return f"{self.message}"
+        return f"{self.__class__.__name__}:{self.message}"
 
     def to_mcp_format(self) -> types.CallToolResult:
         """
@@ -56,7 +34,11 @@ class AISecMcpRelayException(Exception):
         Returns:
             types.CallToolResult: A structured error result
         """
-        return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=self.__str__())])
+        return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=str(self))])
+
+
+class AISecMcpRelayInternalError(AISecMcpRelayException):
+    """Exception for internal errors."""
 
 
 class AISecMcpRelayInvalidConfigurationError(AISecMcpRelayException):
@@ -71,5 +53,17 @@ class AISecMcpRelaySecurityBlockError(AISecMcpRelayException):
     """Exception for security block errors."""
 
 
-# TODO: Add the rest of the exception types
-# TODO: Use the new exceptions in the MCP Relay Code...
+class AISecMcpRelayToolNotFoundError(AISecMcpRelayException):
+    """Exception for tool not found errors."""
+
+
+class AISecMcpRelayServerNotFoundError(AISecMcpRelayException):
+    """Exception for server not found errors."""
+
+
+class AISecMcpRelayValidationError(AISecMcpRelayException):
+    """Exception for validation errors."""
+
+
+class AISecMcpRelayToolRegistryError(AISecMcpRelayException):
+    """Exception for tool registry errors."""
