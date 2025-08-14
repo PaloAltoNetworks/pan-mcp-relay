@@ -21,6 +21,7 @@ keywords = [
   "Prompt Injection",
 ]
 dependencies = [
+  "fastmcp>=2.11.3",
   "mcp[cli,rich,ws]>=1.12.1",
   "pan-aisecurity>=0.4.0.5.post2",
   "pydantic>=2.11.7",
