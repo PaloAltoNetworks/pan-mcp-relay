@@ -16,7 +16,7 @@
 
 import mcp.types as types
 
-from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayException, AISecMcpRelayServerNotFoundError
+from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayBaseException, AISecMcpRelayServerNotFoundError
 
 """Test cases for AISecMcpRelayException class."""
 
@@ -24,14 +24,14 @@ from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayException, AISecMcp
 def test_init_with_message_only():
     """Test exception initialization with message only."""
     message = "Test error message"
-    exception = AISecMcpRelayException(message)
+    exception = AISecMcpRelayBaseException(message)
 
     assert exception.message == message
 
 
 def test_init_with_empty_message():
     """Test exception initialization with empty message."""
-    exception = AISecMcpRelayException()
+    exception = AISecMcpRelayBaseException()
 
     assert exception.message == ""
 
@@ -39,9 +39,9 @@ def test_init_with_empty_message():
 def test_str_with_message_only():
     """Test string representation with message only."""
     message = "Something went wrong"
-    exception = AISecMcpRelayException(message)
+    exception = AISecMcpRelayBaseException(message)
 
-    assert str(exception) == message
+    assert str(exception) == f"{message}"
 
 
 def test_to_mcp_format_with_message_and_error_type():
@@ -65,4 +65,4 @@ def test_to_mcp_format_with_message_and_error_type():
     content_item = result.content[0]
     assert isinstance(content_item, types.TextContent)
     assert content_item.type == "text"
-    assert content_item.text == "AISecMcpRelayServerNotFoundError:Server not found"
+    assert content_item.text == "Server not found"

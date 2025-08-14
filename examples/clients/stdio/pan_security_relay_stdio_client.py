@@ -4,12 +4,17 @@ import json
 import logging
 import sys
 from contextlib import AsyncExitStack
-from enum import Enum
 from typing import Any
 
 import mcp.types as types
 from mcp import StdioServerParameters, stdio_client
 from mcp.client.session import ClientSession
+
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    from backports.strenum import StrEnum
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,7 +23,7 @@ logging.basicConfig(
 )
 
 
-class InteractiveCommand(str, Enum):
+class InteractiveCommand(StrEnum):
     """
     Enumeration of supported interactive commands used in the interactive_mode.
 
