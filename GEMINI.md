@@ -50,9 +50,11 @@ This document contains critical information about working with this codebase. Fo
 - NEVER ever mention a `co-authored-by` or similar aspects. In particular, never
   mention the tool used to create the commit message or PR.
 
-## Python Tools
+# Python Tools
 
 ## Code Formatting
+
+After every file change is written, reformat, run lint checks using `ruff`, and perform type checking with `pylint`.
 
 1. Ruff
    - Format: `uv run --frozen ruff format .`
@@ -113,7 +115,7 @@ This document contains critical information about working with this codebase. Fo
    - Pytest:
      - If the tests aren't finding the anyio pytest mark, try adding PYTEST_DISABLE_PLUGIN_AUTOLOAD=""
        to the start of the pytest run command eg:
-       `PYTEST_DISABLE_PLUGIN_AUTOLOAD="" uv run --frozen pytest`
+       `uv run --frozen pytest`
 
 3. Best Practices
    - Check git status before commits
@@ -134,3 +136,18 @@ This document contains critical information about working with this codebase. Fo
 - **Only catch `Exception` for**:
   - Top-level handlers that must not crash
   - Cleanup blocks (log at debug level)
+
+
+## Unit Tests
+
+- Execute test cases using `uv run --frozen pytest`
+- Use pytest style test cases
+  - Use the `assert` keyword with logical operators
+  - Use top-level module functions
+  - Use pytest-style fixtures
+  - Do not subclass from unittest.TestClass
+- Avoid using Test Classes, unless explicitly necessary for certain unit test functionality
+- After fixing any test case, execute code formatting, linting and type checking commands:
+  - `uv run --frozen ruff format .`
+  - `uv run --frozen ruff check --fix. `
+  - `uv run --frozen pylint .`

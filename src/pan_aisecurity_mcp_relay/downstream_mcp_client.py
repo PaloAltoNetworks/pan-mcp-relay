@@ -23,22 +23,18 @@ Manages connections and communication with downstream MCP servers.
 import asyncio
 import logging
 import os
+import string
 from contextlib import AsyncExitStack
 from typing import Any, Optional
 
 import mcp.types as types
 from mcp import ClientSession, StdioServerParameters, stdio_client
-from mcp.client.session_group import (  # noqa usage TBD
-    SseServerParameters,
-    StreamableHttpParameters,
-    sse_client,
-    streamablehttp_client,
-)
-from mcp.client.sse import create_mcp_http_client
-from mcp.client.streamable_http import create_mcp_http_client  # noqa usage TBD
+from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamablehttp_client
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayException
+from pan_aisecurity_mcp_relay.constants import TransportType
+from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayBaseException, AISecMcpRelayInvalidConfigurationError
 
 log = logging.getLogger(__name__)
 
@@ -74,51 +70,129 @@ class DownstreamMcpClient:
         a client session for tool operations.
 
         Raises:
+            AISecMcpRelayInvalidConfigurationError: If the server configuration is invalid
             Exception: If initialization fails
         """
         log.debug(f"Initializing downstream mcp server: {self.name}...")
         # TODO: Add Streamable HTTP Support
 
+        client_type = self.config.get("type")
+        command = self.config.get("command")
+        url = self.config.get("url")
+        if not client_type:
+            if command:
+                client_type = TransportType.STDIO
+            elif url:
+                client_type = TransportType.STREAMABLE_HTTP
+            else:
+                raise AISecMcpRelayInvalidConfigurationError(f"invalid MCP server configuration: {self.name}")
+
+        if client_type == TransportType.STDIO:
+            client = await self.setup_stdio_client()
+        elif client_type == TransportType.STREAMABLE_HTTP or client_type == TransportType.SSE:
+            client = await self.setup_http_client(client_type)
+        else:
+            raise AISecMcpRelayInvalidConfigurationError(f"invalid MCP server configuration: {self.name}")
+
+        try:
+            # Set up communication with the server
+            read, write = await self.exit_stack.enter_async_context(client)
+
+            # Create and initialize session
+            self.session = await self.exit_stack.enter_async_context(ClientSession(read, write))
+            await self.session.initialize()
+
+            log.debug(f"Server {self.name} initialized successfully")
+        except Exception as e:
+            log.error(f"Error initializing server {self.name}: {e}", exc_info=True)
+            raise
+        finally:
+            await self.cleanup()
+
+    async def setup_http_client(self, client_type: TransportType):
+        if client_type == TransportType.STREAMABLE_HTTP:
+            client_constructor = streamablehttp_client
+        elif client_type == TransportType.SSE:
+            client_constructor = sse_client
+        else:
+            raise AISecMcpRelayBaseException(f"Invalid client HTTP type: {client_type}")
+        url = self.config.get("url")
+        headers = self.config.get("headers", {})
+        if not url:
+            err_msg = f"invalid MCP server configuration: {self.name} (missing url)"
+            log.error(err_msg)
+            raise AISecMcpRelayInvalidConfigurationError(err_msg)
+        if not isinstance(headers, dict):
+            err_msg = f"invalid MCP server configuration: {self.name} (headers is not a map)"
+            log.error(err_msg)
+            raise AISecMcpRelayInvalidConfigurationError(err_msg)
+        try:
+            timeout = float(self.config.get("timeout", 30))
+        except ValueError:
+            log.exception("Unable to convert timeout to float. Using default value of 30 seconds.")
+            timeout = 30.0
+
+        try:
+            sse_read_timeout = float(self.config.get("sse_read_timeout", 60 * 5))
+        except ValueError:
+            log.exception("Unable to convert sse_read_timeout to float. Using default value of 5 minutes.")
+            sse_read_timeout = 60 * 5.0
+
+        terminate_on_close = self.config.get("terminate_on_close", True)
+        if isinstance(terminate_on_close, bool):
+            pass
+        elif isinstance(terminate_on_close, str):
+            if terminate_on_close.lower() == "true":
+                terminate_on_close = True
+            elif terminate_on_close.lower() == "false":
+                terminate_on_close = False
+            else:
+                raise AISecMcpRelayBaseException(f"Invalid terminate_on_close value: {terminate_on_close}")
+        else:
+            raise AISecMcpRelayBaseException(f"Invalid terminate_on_close value: {terminate_on_close}")
+
+        # Parse HTTP Header Values using Environment variables
+        env = os.environ.copy()
+        for k, v in headers.items():
+            headers[k] = string.Template(v).safe_substitute(env)
+
+        kwargs = dict(
+            url=url,
+            headers=headers,
+            timeout=timeout,
+            sse_read_timeout=sse_read_timeout,
+        )
+        if client_type == TransportType.STREAMABLE_HTTP:
+            kwargs.update(dict(terminate_on_close=terminate_on_close))
+
+        client = client_constructor(**kwargs)
+        return client
+
+    async def setup_stdio_client(self):
         # Prepare environment variables
         env = os.environ.copy()
         if self.config.get("env"):
             env.update(self.config["env"])
-
         command = self.config.get("command")
         if not command:
             err_msg = f"invalid MCP server configuration: {self.name} (missing command)"
             log.error(err_msg)
-            raise AISecMcpRelayException(err_msg)
+            raise AISecMcpRelayInvalidConfigurationError(err_msg)
         args = self.config.get("args")
         config_env = self.config.get("env")
         if config_env:
             if not isinstance(config_env, dict):
                 err_msg = f"invalid MCP server configuration: {self.name} (env is not a map)"
                 log.error(err_msg)
-                raise AISecMcpRelayException(err_msg)
+                raise AISecMcpRelayInvalidConfigurationError(err_msg)
             env = {
                 **env,
                 **config_env,
             }  # merge env + config_env, giving priority to config_env
         cwd = self.config.get("cwd")
-
         server_params = StdioServerParameters(command=command, args=args, env=env, cwd=cwd)
-
-        try:
-            # Set up communication with the server
-            stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-            read, write = stdio_transport
-
-            # Create and initialize session
-            session = await self.exit_stack.enter_async_context(ClientSession(read, write))
-            await session.initialize()
-            self.session = session
-
-            log.debug(f"Server {self.name} initialized successfully")
-        except Exception as e:
-            log.error(f"Error initializing server {self.name}: {e}", exc_info=True)
-            await self.cleanup()
-            raise
+        client = stdio_client(server_params)
+        return client
 
     async def list_tools(self) -> list[types.Tool]:
         """
