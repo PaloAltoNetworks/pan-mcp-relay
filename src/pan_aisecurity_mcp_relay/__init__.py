@@ -14,4 +14,6 @@
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
 
-"""Test package."""
+from .configuration import Configuration as Configuration
+from .main import main as main
+from .mcp_server import pan_security_server as pan_security_server

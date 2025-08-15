@@ -1,0 +1,130 @@
+version: '3.38'
+
+tasks:
+
+  test:coverage:
+    desc: "Run project unit tests with coverage report. No integration or functional tests."
+    env:
+      UV_FROZEN: 1
+
+    # language=sh
+    cmds:
+      # Show versions
+      - uv sync --all-extras
+      - uv run pytest -VV
+      - uv run coverage --version
+      - >-
+        uv run pytest
+        --override-ini=cache_dir=${PYTEST_CACHE_DIR:-.cache/pytest}
+        --junit-xml=reports/coverage.xml
+        --numprocesses=auto
+        --cov
+        --cov-report=term-missing
+        {{.CLI_ARGS}}
+
+  install-uv:
+    platforms: [linux]
+    set: [xtrace, nounset, pipefail, errexit]
+    # language=sh
+    cmds:
+      - |
+        ARCH=$(uname -m)
+        LIBC="gnu"
+        if ldd --version 2>&1 | grep -q 'musl'; then
+          LIBC="musl"
+        fi
+        UV_URL_BASE=https://github.com/astral-sh/uv/releases/latest/download
+        UV_ARCHIVE=uv-${ARCH}-unknown-linux-${LIBC}.tar.gz
+        UV_CHECKSUM=${UV_ARCHIVE}.sha256
+        curl --tlsv1.3 -fsSL ${UV_URL_BASE}/${UV_ARCHIVE}  -o ${UV_ARCHIVE}
+        curl --tlsv1.3 -fsSL ${UV_URL_BASE}/${UV_CHECKSUM} -o ${UV_CHECKSUM}
+        sha256sum --check --strict --ignore-missing ${UV_CHECKSUM}
+        tar -zxv --strip-components 1 -f ${UV_ARCHIVE}
+        install uv uvx /usr/local/bin/
+    requires:
+      vars:
+        - CI
+
+  bandit:
+    platforms: [linux]
+    set: [xtrace, nounset, pipefail, errexit]
+    # language=sh
+    cmds:
+      - uv tool install "bandit[toml]"
+      - mkdir -p reports
+      - >-
+        uv run --all-extras --frozen
+        bandit
+        --format=xml
+        --output=reports/bandit.xml
+        --configfile pyproject.toml
+        --confidence-level {{.BANDIT_CONFIDENCE_LEVEL}}
+        --severity-level {{.BANDIT_SEVERITY_LEVEL}}
+        --recursive {{.BANDIT_SCAN_PATH}}
+    preconditions:
+      - sh: >-
+          command -v uv
+        msg: "Command not found: uv"
+    requires:
+      vars:
+        - CI
+
+  container:
+    platforms: [darwin]
+    interactive: true
+    silent: false
+    set: [xtrace, nounset, pipefail, errexit]
+    env:
+      PYTHONUNBUFFERED: 1
+      FORCE_COLOR: 1
+      # https://docs.astral.sh/uv/guides/integration/gitlab/#caching
+      HATCH_CACHE_DIR: >-
+        {{.MOUNT_PATH}}/.cache/hatch
+      TASK_TEMP_DIR: >-
+        {{.MOUNT_PATH}}/.cache/task
+      UV_CACHE_DIR: >-
+        {{.MOUNT_PATH}}/.cache/uv
+      # https://docs.astral.sh/uv/configuration/authentication/#custom-ca-certificates
+      UV_NATIVE_TLS: true
+      UV_TOOL_BIN_DIR: >-
+        {{.MOUNT_PATH}}/bin
+
+    vars:
+      PYTHON_IMAGE_VERSION: >-
+        {{ .PYTHON_IMAGE_VERSION | default "3.13-bookworm" }}
+      PYTHON_BASE_IMAGE: >-
+        {{ .PYTHON_BASE_IMAGE | default "docker.io/library/python" }}
+      MOUNT_PATH: >-
+        /{{.ROOT_DIR | osBase}}
+      ENGINE:
+        sh: command -v podman || command -v docker
+      # language=gotemplate
+      ARGS: >-
+        {{- $cliArgs := splitArgs (trim .CLI_ARGS) }}
+        {{- if not (empty $cliArgs) }}
+        {{- $argv := list }}
+        {{- range $arg := $cliArgs }}
+        {{- $arg = shellQuote $arg }}
+        {{- $arg = regexReplaceAll "^'(.+)'$" $arg "${1}" }}
+        {{- $argv = append $argv $arg }}
+        {{- end -}}
+        -c '{{ $argv | join " " }}'
+        {{- end }}{{/* not empty */}}
+    # language=sh
+    cmds:
+      - >-
+        {{.ENGINE}} run -it --rm
+        -v {{.ROOT_DIR}}:{{.MOUNT_PATH}}
+        -w {{.MOUNT_PATH}}
+        -e CI_PROJECT_DIR={{.MOUNT_PATH}}
+        -e PYTHONUNBUFFERED
+        -e FORCE_COLOR
+        -e HATCH_CACHE_DIR
+        -e TASK_TEMP_DIR
+        -e UV_CACHE_DIR
+        -e UV_INDEX_URL
+        -e UV_NATIVE_TLS
+        -e UV_TOOL_BIN_DIR
+        --platform=linux/amd64
+        {{.PYTHON_BASE_IMAGE}}:{{.PYTHON_IMAGE_VERSION}}
+        bash -l -i -x {{.ARGS}}

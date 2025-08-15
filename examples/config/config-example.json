@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "Homebrew": {
+      "command": "brew",
+      "args": ["mcp-server"],
+      "cwd": "/opt/homebrew"
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/var/tmp/change/this/path"
+      ],
+      "env": {
+        "ENV_KEY": "ENV_VALUE"
+      }
+    }
+  }
+}

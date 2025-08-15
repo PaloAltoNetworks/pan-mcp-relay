@@ -1,0 +1,435 @@
+version: '3.38'
+
+includes:
+  ci:
+    taskfile: .ci/taskfile.ci.yml
+
+set: [nounset, pipefail, errexit, xtrace]
+vars:
+  PROJECT_NAME: python-aisec
+  REPO_ROOT:
+    sh: >-
+      echo -n "${CI_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+  PYTHON_MIN_VERSION: >-
+    3.9
+  PUBLISH_URL_PYPI_MAIN: https://upload.pypi.org/legacy/
+  PUBLISH_URL_PYPI_TEST: https://test.pypi.org/legacy/
+
+env:
+  UV_NATIVE_TLS: true
+  UV_DEFAULT_INDEX: https://pypi.org/simple/
+  HATCH_ENV_TYPE_VIRTUAL_UV_PATH:
+    sh: |
+      command -v uv || true
+
+tasks:
+  default:
+    desc: "Show task --help and task --list"
+    interactive: true
+    aliases:
+      - help
+      - list
+    cmds:
+      - task --help
+      - task --list
+
+  setup:uv:
+    desc: "Install 'pipx' and 'uv' (Python Project & Dependency Management)"
+    interactive: true
+    # language=sh
+    cmds:
+      - |
+        if !command -v pipx &>/dev/null; then
+          python3 -m pip install pipx --user
+        fi
+        python3 -m pipx install uv
+    status:
+      - command -v uv
+
+  setup:ruff:
+    desc: "Install 'Ruff' (Python Linting and Formatting) using 'uv'"
+    deps:
+      - setup:uv
+    # language=sh
+    cmds:
+      - uv tool install --upgrade ruff
+    preconditions:
+      - command -v uv
+    status:
+      - command -v ruff
+
+  setup:pre-commit:
+    desc: "Install pre-commit and pre-commit hooks"
+    # language=sh
+    cmds:
+      - uv tool install pre-commit
+      - uv tool run pre-commit install --install-hooks
+    preconditions:
+      - command -v uv
+    # language=sh
+    status:
+      - command -v pre-commit
+      - test -f .git/hooks/pre-commit
+      - grep -q '\.pre-commit-config\.yaml' .git/hooks/pre-commit
+
+  sync:
+    desc: "uv sync --all-extras"
+    run: once
+    silent: true
+    # language=sh
+    cmds:
+      - >-
+        {{if not .SKIP_SYNC}}uv sync --all-extras {{.SYNC_ARGS}} {{.CLI_ARGS}}{{end}}
+      - |
+        cat <<'EOT' | tee requirements.txt requirements.in &>/dev/null
+        #
+        # THIS FILE IS AUTO-GENERATED
+        # YOUR CHANGES WILL BE OVERWRITTEN
+        # DO NOT MANUALLY EDIT THIS FILE
+        #
+        # Add dependencies with 'uv add':
+        #
+        #   for package/release dependencies:
+        #     uv add package_name
+        #
+        #   for development dependencies:
+        #    uv add --dev package_name
+        #
+        # Regenerate this file with:
+        #   'task sync' or 'task export'
+        EOT
+      - uv export --frozen --no-emit-project --no-hashes >> requirements.txt
+      - |
+        uv tree --frozen --depth 1 --no-dev --no-default-groups |
+        sed -E -e '1d' -e 's/^[^a-z]+//' -e 's/ v[0-9].+$//' |
+        sort -b >> requirements.in
+
+  export:
+    run: once
+    desc: "uv export > requirements.txt"
+    cmds:
+      - task: sync
+        vars:
+          SKIP_SYNC: true
+
+  dep:
+    desc: "Ensure Python package dependencies are installed"
+    deps:
+      - task: setup:uv
+    # language=sh
+    cmds:
+      - uv tool install --upgrade hatch
+      - task: export
+
+  update:
+    desc: "Update Python Dependencies"
+    # language=sh
+    cmds:
+      - uv tool install --upgrade hatch
+      - uv sync --all-extras --reinstall --upgrade
+      - task: export
+        vars:
+          SKIP_SYNC: true
+    deps:
+      - task: setup:uv
+
+  venv:
+    desc: "(Re)Create a Python Virtual Environment (.venv)"
+    aliases:
+      - .venv
+      - virtualenv
+    summary: |-
+      (Re)Create a '.venv' directory using the 'uv venv' command.
+      Optionally pass additional arguments to uv using 'task venv -- <EXTRA_UV_VENV_OPTS>'
+
+      Examples:
+        task venv
+        task -v venv -- --python 3.13 --native-tls
+    deps:
+      - task: setup:uv
+    # language=sh
+    cmds:
+      - uv venv --seed --prompt {{.PROJECT_NAME}} {{.CLI_ARGS}}
+      - task: dep
+    preconditions:
+      - command -v uv
+
+  _hatch:
+    internal: true
+    run: once
+    env:
+      UV_FROZEN: 1
+    # language=sh
+    cmds:
+      - uv tool install hatch
+    preconditions:
+      - command -v uv
+    status:
+      - command -v hatch
+
+  clean:
+    desc: "Remove all local build and test artifacts"
+    run: once
+    deps:
+      - task: _hatch
+    # language=sh
+    cmds:
+      - |
+        cd "{{.REPO_ROOT}}"
+        uv tool run hatch clean
+        rm -rf .mypy_cache/ .pytest_cache/ .coverage
+        [[ -d dist ]] && find dist \! -name .gitignore -mindepth 1 | xargs rm -rf;
+        find . -type d \( \
+              -name __pycache__ \
+          -or -name ".*cache" \
+          -or -name ".coverage*" \
+        \) -exec rm -rf "{}" "+"
+        find . -type f \( -name "*.pyc" -or -name "*.log" -or -name "*.tmp" \) -exec rm -f "{}" "+"
+    preconditions:
+      - command -v hatch
+
+  test:
+    desc: "Run project unit tests with pyteset"
+    # language=sh
+    cmds:
+      - >-
+        uv run --all-extras --frozen
+        pytest --cov --numprocesses=auto
+        {{.CLI_ARGS}}
+    preconditions:
+      - command -v uv
+
+  test:matrix:
+    desc: "Run test suite with all currently supported Python Versions"
+    deps:
+      - task: _hatch
+    # language=sh
+    cmds:
+      - uvx hatch@latest test --all --cover
+
+  build:
+    desc: "Build the project artifacts"
+    deps:
+      - task: _hatch
+      - task: clean
+    env:
+      UV_FROZEN: 1
+    # language=sh
+    cmds:
+      - uv run --frozen hatch build
+
+  build:inspect:
+    desc: "Build and Inspect project artifacts"
+    deps:
+      - task: build
+    # language=sh
+    cmds:
+      - |
+        latest_whl="$(find dist/ -name "*.whl" | sort --version-sort | tail -n 1 | xargs basename)" &&
+        whl_dst="${latest_whl%%-py3-none-any.whl}_py3_none_any_whl" &&
+        { [[ ! -d "dist/${whl_dst}" ]] || rm -rf "dist/${whl_dst}"; } &&
+        unzip -d "dist/${whl_dst}" "dist/${latest_whl}"
+      - |
+        latest_tar_gz="$(find dist/ -name "*.tar.gz" | sort --version-sort | tail -n 1 | xargs basename)" &&
+        tar_gz_dst="${latest_tar_gz%%.tar.gz}_tar_gz"
+        { [[ ! -d "dist/${tar_gz_dst}" ]] || rm -rf "dist/${tar_gz_dst}"; } &&
+        mkdir -p "dist/${tar_gz_dst}" &&
+        tar -C "dist/${tar_gz_dst}" --strip-components=1 -zxvf "dist/${latest_tar_gz}"
+
+  bump:
+    desc: "Bump the project version. See 'hatch version' docs: https://hatch.pypa.io/latest/version/"
+    deps:
+      - task: _hatch
+    env:
+      UV_FROZEN: 1
+    # language=sh
+    cmds:
+      - uv run --frozen hatch version {{.CLI_ARGS | default "dev" }}
+  _publish:
+    internal: true
+    silent: false
+    deps:
+      - task: _hatch
+      - task: build
+    env:
+      UV_FROZEN: 1
+      HATCH_INDEX_REPO: "{{.HATCH_INDEX_REPO}}"
+    requires:
+      vars:
+        - HATCH_INDEX_REPO
+    # language=sh
+    cmds:
+      - uv run --frozen .ci/scripts/check_version.py --index={{.HATCH_INDEX_REPO}}
+      - uv run --frozen hatch publish
+
+  publish:test.pypi.org:
+    desc: "Publish project artifacts to test.pypi.org"
+    silent: false
+    cmds:
+      - task: _publish
+        vars:
+          HATCH_INDEX_REPO: test
+
+  publish:pypi.org:
+    desc: "Publish project artifacts to pypi.org"
+    cmds:
+      - task: _publish
+        vars:
+          HATCH_INDEX_REPO: main
+
+  fmt:
+    desc: "Automatically format project files"
+    deps:
+      - task: fmt:py
+      - task: fmt:yaml
+
+  fmt:py:
+    desc: "Automatically format Python files"
+    # language=sh
+    cmds:
+      - ruff format .
+
+  fmt:yaml:
+    desc: "Automatically format YAML files"
+    # language=sh
+    cmds:
+      - yamlfmt -conf {{.REPO_ROOT}}/.yamlfmt.yaml -gitignore_excludes -dstar "**.yaml" "**.yml"
+
+  lint:
+    desc: "ruff check --fix --preview --unsafe-fixes"
+    # language=sh
+    cmds:
+      - ruff check --fix --preview --unsafe-fixes
+
+  lint:mypy:
+    desc: "Run mypy type-checking tests"
+    deps:
+      - task: lint
+    # language=sh
+    cmds:
+      - uv run --all-extras --frozen mypy check {{.CLI_ARGS}}
+
+  lint:pyright:
+    desc: "Run mypy & pyright type-checking tests"
+    deps:
+      - task: lint
+    # language=sh
+    cmds:
+      - uv run --all-extras --frozen pyright {{.CLI_ARGS}}
+
+  pre-commit:
+    desc: "Run pre-commit hooks"
+    # language=sh
+    cmds:
+      - uv tool run pre-commit run -v
+    preconditions:
+      - command -v pre-commit
+
+  sec:
+    desc: "Run Security Linters"
+    cmds:
+      - task: sec:bandit
+      - task: sec:trufflehog
+
+  sec:bandit:
+    desc: "Run Bandit security linter"
+    vars:
+      BANDIT_SEVERITY_LEVEL: medium
+      BANDIT_CONFIDENCE_LEVEL: medium
+      BANDIT_SCAN_PATH: >-
+        {{.REPO_ROOT}}
+    cmds:
+      # language=sh
+      - >-
+        uvx --from="bandit[toml]" bandit
+        --configfile pyproject.toml
+        --confidence-level {{.BANDIT_CONFIDENCE_LEVEL}}
+        --severity-level {{.BANDIT_SEVERITY_LEVEL}}
+        --recursive {{.BANDIT_SCAN_PATH}}
+    preconditions:
+      - command -v uv
+
+  sec:trufflehog:
+    desc: "Run Trufflehog security linter"
+    # language=sh
+    cmds:
+      - >-
+        uvx trufflehog --regex --entropy=true
+        --exclude_paths .trufflehogignore .
+    preconditions:
+      - command -v git
+      - command -v uv
+
+  readme:generate-toc:
+    desc: Generate the Table of Contents in README.md
+    # language=sh
+    cmds:
+      - uvx --from md-toc md_toc --in-place cmark README.md
+    preconditions:
+      - sh: command -v uvx
+        msg: "Command not found: uvx"
+
+  readme:render:
+    desc: Render README.md using PyPi's Markdown to HTML Renderer (readme-renderer)
+    deps:
+      - task: readme:generate-toc
+    # language=sh
+    cmds:
+      - mkdir -p .local
+      - uv run --all-extras --frozen -m readme_renderer -f md README.md -o .local/index.html
+      - screen -dmS http.server .venv/bin/python3 -m http.server -d .local
+      - open http://[::]:8000
+      - screen -r http.server
+
+  keyring:update-key:main:
+    desc: Update {{.PUBLISH_URL_PYPI_MAIN}} API Token using 'keyring' (secure password storage)
+    # language=sh
+    cmds:
+      - >-
+        uvx keyring set {{.PUBLISH_URL_PYPI_MAIN}} __token__
+
+  keyring:update-key:test:
+    desc: Update {{.PUBLISH_URL_PYPI_TEST}} API Token using 'keyring' (secure password storage)
+    # language=sh
+    cmds:
+      - >-
+        uvx keyring set {{.PUBLISH_URL_PYPI_TEST}} __token__
+
+  github:sync:
+    set: [xtrace, nounset, pipefail, errexit]
+    # language=sh
+    cmds:
+      - |
+        rsync \
+          {{.CLI_ARGS}} \
+          --checksum --recursive \
+          --update --recursive \
+          --links --safe-links --perms --times --crtimes --open-noatime --group --owner \
+          --one-file-system --delete --fsync \
+          --debug=FILTER \
+          --filter="- /.gitlab-ci.yml" \
+          --filter="+ /tests/" \
+          --filter="+ /tests/" \
+          --filter="+ /tests/***" \
+          --filter="- /tests/***" \
+          --filter="+ LICENSE" \
+          --filter="+ README.md" \
+          --filter="+ CHANGELOG.md" \
+          --filter="+ pan_aisecurity_mcp_relay/***" \
+          --filter="+ examples/***" \
+          --filter="+ .*ignore" \
+          --filter="+ /.ci/***" \
+          --filter="+ /*.y*ml" \
+          --filter="+ /*.toml" \
+          --filter="+ /uv.lock" \
+          --filter="- *" \
+          * .* \
+          "{{.DEST_DIR}}"
+    preconditions:
+      - sh: test -n "{{.DEST_DIR}}"
+        msg: "Destination directory must be set"
+      - sh: test -d "{{.DEST_DIR}}"
+        msg: "Destination directory {{.DEST_DIR}} does not exist"
+    requires:
+      vars:
+        - DEST_DIR

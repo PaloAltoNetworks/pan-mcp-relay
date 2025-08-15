@@ -1,0 +1,9 @@
+# https://github.com/google/yamlfmt/blob/v0.14.0/docs/config-file.md
+formatter:
+  type: basic
+  trim_trailing_whitespace: true
+  retain_line_breaks_single: true
+  drop_merge_tag: true
+  scan_folded_as_literal: true
+
+gitignore_excludes: true

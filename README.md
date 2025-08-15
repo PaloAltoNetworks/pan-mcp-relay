@@ -1,55 +1,71 @@
 # Palo Alto Networks MCP Security Relay
 
-A implementation of a security-enhanced Model Context Protocol (MCP) relay server that acts as an intermediary between clients and downstream MCP servers, providing security scanning and centralized orchestration capabilities.
+A security-enhanced [Model Context Protocol](https://modelcontextprotocol.io)
+(MCP) relay server that acts as an intermediary between clients and downstream
+MCP servers, providing security scanning and centralized orchestration capabilities.
 
 <!--TOC-->
+
 - [Palo Alto Networks MCP Security Relay](#palo-alto-networks-mcp-security-relay)
 - [Overview](#overview)
-- [Installation](#installation)
+- [Installation and Setup](#installation-and-setup)
 - [Configuration](#configuration)
   - [Environment Variables](#environment-variables)
-  - [Server Configuration](#server-configuration)
+  - [Relay Server Configuration](#relay-server-configuration)
+  - [MCP Server Configuration](#mcp-server-configuration)
   - [Transport Options](#transport-options)
 - [Usage](#usage)
+  - [pan-mcp-relay CLI Usage](#pan-mcp-relay-cli-usage)
   - [Running the Relay Server](#running-the-relay-server)
+    - [stdio transport (default)](#stdio-transport-default)
+    - [stdio transport with security configuration](#stdio-transport-with-security-configuration)
+    - [SSE transport](#sse-transport)
     - [Command Line Arguments](#command-line-arguments)
 - [Examples](#examples)
   - [Stdio Client Example](#stdio-client-example)
   - [SSE Client Example Configuration](#sse-client-example-configuration)
-- [Error Handling \& Exceptions](#error-handling--exceptions)
 - [Legal](#legal)
 
 <!--TOC-->
 
-
-
-<a id="overview" aria-hidden="true" href="#overview">
+<a id="overview" href="#overview">
 
 # Overview
 
 </a>
 
-The MCP Security Relay provides a security-enhanced intermediary layer for Model Context Protocol communications. It enables:
+The MCP Security Relay provides a security-enhanced intermediary layer for Model Context Protocol communications
 
 - **Security scanning** of tool requests and responses using integrated AI security services
 - **Tool registry management** with deduplication, caching, and state management
-- **Multi-server orchestration** supporting multiple downstream MCP servers
+- **Multiserver orchestration** supporting multiple downstream MCP servers
 - **Hidden mode support** for bypassing security scans on trusted servers
 - **Automatic tool discovery** and registration from configured downstream servers
 
 <a id="installation" href="#installation">
 
-# Installation
+# Installation and Setup
 
 </a>
 
+This project uses [uv](https://docs.astral.sh/uv/getting-started/installation/).
+
+1. Install or Update [uv https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
+  1. Update uv if already installed: `uv self update`
+2. Clone this repository.
+2. Install the project dependencies using `uv sync`
+3. Create the MCP Relay Configuration File
+4. Run the MCP Relay Server
+
 ```sh
+git clone https://github.com/paloaltonetworks/aisecurity-mcp-relay.git
 
-# Create and activate a virtual environment
-python3 -m venv --prompt ${PWD##*/} .venv && source .venv/bin/activate
+cd aisecurity-mcp-relay
 
-# Install required dependencies
-python3 -m pip install -r requirements.txt
+uv sync
+
+# .local/ directory is git-ignored, you may use it for your custom configuration
+cp examples/config/config-example.json .local/config.json
 ```
 
 <a id="configuration" href="#configuration">
@@ -64,36 +80,55 @@ python3 -m pip install -r requirements.txt
 
 </a>
 
-Create a `.env` file in the project root with the following variables:
+Create a `.env` file in the git repo root with the following variables:
 
 ```sh
 # Required for Palo Alto Networks AI Security scanning
 PANW_AI_PROFILE_NAME=YOUR_AI_PROFILE_NAME
 PANW_AI_SEC_API_KEY=YOUR_API_KEY
 PANW_AI_SEC_API_ENDPOINT=YOUR_API_ENDPOINT
-PANW_AI_PROFILE_ID=YOUR_PROFILE_ID
 ```
+
 
 <a id="server-configuration" href="#server-configuration">
 
-## Server Configuration
+## Relay Server Configuration
 
 </a>
 
-Configure downstream MCP servers in `config/servers_config.json`:
-
-**Note**: The `pan-aisecurity` server configuration is required and must be included in the servers configuration.
+Create a new config file `mcp-relay.json` to use with your IDE, Chat Client, or MCP System.
 
 ```json
 {
   "mcpServers": {
-    "pan-aisecurity": {
-      "command": "python",
-      "args": ["path/to/pan_security_server.py"],
+    "pan-mcp-relay": {
+      "command": "uvx",
+      "args": [
+        "pan-mcp-relay",
+        "--config",
+        "pan-mcp-relay-config.json"
+      ],
       "env": {
-        "hidden_mode": "enabled"
-      }
-    },
+        "PRISMA_AIRS_API_KEY": "YOUR_PRISMA_AIRS_API_KEY"
+      },
+      "cwd": "$HOME/optional/working/directory"
+    }
+  }
+}
+```
+
+<a id="server-configuration" href="#server-configuration">
+
+## MCP Server Configuration
+
+</a>
+
+
+Copy or create a new `mcp-servers.json` file. Configure downstream MCP servers in `mcp-servers.json`:
+
+```json
+{
+  "mcpServers": {
     "example-server": {
       "command": "node",
       "args": ["path/to/server/index.js"]
@@ -109,6 +144,15 @@ Configure downstream MCP servers in `config/servers_config.json`:
   }
 }
 ```
+
+**Note:**
+
+* MCP Relay only supports local MCP servers currently.
+
+<!--
+TODO: Add Environment and CWD support to MCP Server Config
+TODO: Support Remote MCP Servers
+-->
 
 <a id="transport-options" href="#transport-options">
 
@@ -127,37 +171,95 @@ The relay supports two transport mechanisms:
 
 </a>
 
+<a id="pan-mcp-relay-cli-usage" href="#pan-mcp-relay-cli-usage">
+
+## pan-mcp-relay CLI Usage
+
+</a>
+
+```sh
+usage: pan-mcp-relay [-h] --config-file CONFIG_FILE [--transport {stdio,sse}] [--host HOST] [--port PORT]
+                     [--tool-registry-cache-expiry-in-seconds TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS]
+                     [--max-mcp-servers MAX_MCP_SERVERS] [--max-mcp-tools MAX_MCP_TOOLS]
+                     [--PANW_AI_SEC_API_KEY PANW_AI_SEC_API_KEY] [--PANW_AI_SEC_API_ENDPOINT PANW_AI_SEC_API_ENDPOINT]
+                     [--PANW_AI_PROFILE_NAME PANW_AI_PROFILE_NAME] [--PANW_AI_PROFILE_ID PANW_AI_PROFILE_ID]
+
+options:
+  -h, --help            show this help message and exit
+  --config-file CONFIG_FILE
+                        Path to config file
+  --transport {stdio,sse}
+                        Transport protocol to use
+  --host HOST           Host for SSE server
+  --port PORT           Port for SSE server
+  --tool-registry-cache-expiry-in-seconds TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS
+                        Downsteam mcp tool registry cache expiry
+  --max-mcp-servers MAX_MCP_SERVERS
+                        Max number of downstream servers
+  --max-mcp-tools MAX_MCP_TOOLS
+                        Max number of MCP tools
+  --PANW_AI_SEC_API_KEY PANW_AI_SEC_API_KEY
+                        PANW AI Security API Key
+  --PANW_AI_SEC_API_ENDPOINT PANW_AI_SEC_API_ENDPOINT
+                        PANW AI Security API Endpoint
+  --PANW_AI_PROFILE_NAME PANW_AI_PROFILE_NAME
+                        PANW AI Profile Name
+  --PANW_AI_PROFILE_ID PANW_AI_PROFILE_ID
+                        PANW AI Profile ID
+```
+
 <a id="running-the-relay-server" href="#running-the-relay-server">
 
 ## Running the Relay Server
 
 </a>
 
+<a id="stdio-transport-default" href="#stdio-transport-default">
+
+### stdio transport (default)
+
+</a>
+
 ```sh
 # Run with STDIO transport (default)
-python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
-  --config-file=config/servers_config.json \
-  --transport=stdio
+uv run pan-mcp-relay \
+  --config-file=config.json
+```
+<a id="stdio-transport-security" href="#stdio-transport-security">
 
+### stdio transport with security configuration
+
+</a>
+
+```sh
+# Run with STDIO transport and security scanning enabled
+uv run pan-mcp-relay \
+  --config-file=config.json \
+  --PANW_AI_PROFILE_NAME=default-profile-name \
+  --PANW_AI_SEC_API_KEY=your-api-key \
+  --PANW_AI_SEC_API_ENDPOINT=https://service.api.aisecurity.paloaltonetworks.com \
+  --PANW_AI_PROFILE_ID=default-profile-id
+
+# Alternative: Using environment variables (recommended for sensitive information)
+export PANW_AI_SEC_API_KEY=your-api-key
+export PANW_AI_SEC_API_ENDPOINT=https://service.api.aisecurity.paloaltonetworks.com
+export PANW_AI_PROFILE_NAME=default-profile-name
+export PANW_AI_PROFILE_ID=default-profile-id
+uv run pan-mcp-relay --config-file=config.json
+```
+<a id="sse-transport" href="#sse-transport">
+
+### SSE transport
+
+</a>
+
+```sh
 # Run with SSE transport
-python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
-  --config-file=config/servers_config.json \
+uv run pan-mcp-relay \
+  --config-file=config.json \
   --transport=sse \
   --host=127.0.0.1 \
   --port=8000
-```
-
-Additional configuration options:
-
-```sh
-python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
-  --config-file=config/servers_config.json \
-  --transport=stdio \
-  --host=127.0.0.1 \
-  --port=8000 \
-  --TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS=300 \
-  --MAX_MCP_SERVERS=10 \
-  --MAX_MCP_TOOLS=20
 ```
 
 ### Command Line Arguments
@@ -168,12 +270,17 @@ python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
 | `--transport` | ❌ | `stdio` | Transport protocol to use. Options: `stdio` (local process communication) or `sse` (HTTP Server-Sent Events) |
 | `--host` | ❌ | `127.0.0.1` | Host address for SSE transport server (only used when `--transport=sse`) |
 | `--port` | ❌ | `8000` | Port number for SSE transport server (only used when `--transport=sse`) |
-| `--TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS` | ❌ | `300` | Cache expiry time in seconds for the downstream MCP tool registry. Tools are re-scanned when cache expires |
-| `--MAX_MCP_SERVERS` | ❌ | `32` | Maximum number of downstream MCP servers that can be configured. Prevents resource exhaustion |
-| `--MAX_MCP_TOOLS` | ❌ | `64` | Maximum total number of MCP tools across all downstream servers. Enforces tool registry limits |
+| `--tool-registry-cache-expiry-in-seconds` | ❌ | `300` | Cache expiry time in seconds for the downstream MCP tool registry. Tools are re-scanned when cache expires |
+| `--max-mcp-servers` | ❌ | `32` | Maximum number of downstream MCP servers that can be configured. Prevents resource exhaustion |
+| `--max-mcp-tools` | ❌ | `64` | Maximum total number of MCP tools across all downstream servers. Enforces tool registry limits |
+| `--PANW_AI_SEC_API_KEY` | ❌ | - | Palo Alto Networks AI Security API authentication key. Can also be set via environment variable |
+| `--PANW_AI_SEC_API_ENDPOINT` | ❌ | - | AI Security API endpoint URL. Uses default endpoint if not provided. Can also be set via environment variable |
+| `--PANW_AI_PROFILE_NAME` | ❌* | - | Name of the AI security profile to use for scanning. Either this or `--PANW_AI_PROFILE_ID` is required |
+| `--PANW_AI_PROFILE_ID` | ❌* | - | ID of the AI security profile to use for scanning. Either this or `--PANW_AI_PROFILE_NAME` is required |
 
+**Note:** Arguments marked with * indicate that at least one of the profile options (name or ID) must be provided either via command line or environment variables.
 
-
+**Configuration Priority:** Command line arguments take precedence over environment variables, which take precedence over `.env` file values.
 
 <a id="examples" href="#examples">
 
@@ -194,9 +301,9 @@ This example demonstrates how to run the interactive client to communicate with 
 Run the `pan_security_relay_stdio_client.py` script. This script connects to the running relay and provides an interactive command prompt.
 
 ```sh
-python examples/pan_security_relay_stdio_client.py \
-  --relay-module=pan_aisecurity_mcp.mcp_relay.pan_security_relay \
-  --config-file=config/servers_config_example.json
+python examples/clients/stdio/pan_security_relay_stdio_client.py \
+  --relay-module=pan_aisecurity_mcp_relay.main \
+  --config-file=config.json
 ```
 
 **2. Interact with the Client:**
@@ -221,8 +328,8 @@ To connect a client to the relay server when it's running in SSE mode, you need 
 **1. Start the Relay Server in SSE Mode:**
 
 ```sh
-python -m pan_aisecurity_mcp.mcp_relay.pan_security_relay \
-  --config-file=config/servers_config.json \
+uv run pan-mcp-relay \
+  --config-file=config/config-example.json \
   --transport=sse \
   --host=127.0.0.1 \
   --port=8000
@@ -244,24 +351,27 @@ Then, in your client's configuration (for example, in a `config.json` or a simil
 
 This configuration tells your client how to find and communicate with the MCP Security Relay using the SSE protocol.
 
-# Error Handling & Exceptions
-
-</a>
-
-The relay defines custom exceptions in `pan_aisecurity_mcp/mcp_relay/exceptions.py`:
-
-- **AISEC_MCP_RELAY_INTERNAL_ERROR**: Internal relay errors
-- **AISEC_INVALID_CONFIGURATION**: Configuration validation errors
-- **AISEC_TOOL_EXECUTION_ERROR**: Tool execution failures
-- **AISEC_SECURITY_BLOCK**: Security scan blocked requests
-- **AISEC_TOOL_NOT_FOUND**: Unknown tool requests
-- **AISEC_SERVER_NOT_FOUND**: Unknown server requests
-- **AISEC_VALIDATION_ERROR**: Input validation errors
-- **AISEC_TOOL_REGISTRY_ERROR**: Tool registry operation errors
-
-<a id="security-considerations" href="#security-considerations">
+<a id="legal" href="#legal">
 
 # Legal
 
+</a>
+
 Copyright (c) 2025, Palo Alto Networks
+
+Licensed under the [Polyform Internal Use License 1.0.0](https://polyformproject.org/licenses/internal-use/1.0.0)
+(the "License"); you may not use this file except in compliance with the License.
+
+You may obtain a copy of the License at:
+
+https://polyformproject.org/licenses/internal-use/1.0.0
+
+(or)
+
+https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+
+As far as the law allows, the software comes as is, without any warranty
+or condition, and the licensor will not be liable to you for any damages
+arising out of these terms or the use or nature of the software, under
+any kind of legal claim.
 <!---Protected_by_PANW_Code_Armor_2024 - Y3ByfC9haWZ3L29wZW5zb3VyY2UvYWlzZWN1cml0eS1tY3AtcmVsYXl8MjE5NDV8bWFpbg== --->

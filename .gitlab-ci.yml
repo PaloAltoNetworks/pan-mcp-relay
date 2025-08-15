@@ -1,49 +1,388 @@
-# This file is a template, and might need editing before it works on your project.
-# This is a sample GitLab CI/CD configuration file that should run without any modifications.
-# It demonstrates a basic 3 stage CI/CD pipeline. Instead of real tests or scripts,
-# it uses echo commands to simulate the pipeline execution.
-#
-# A pipeline is composed of independent jobs that run scripts, grouped into stages.
-# Stages run in sequential order, but jobs within stages run in parallel.
-#
-# For more information, see: https://docs.gitlab.com/ee/ci/yaml/index.html#stages
-#
-# You can copy and paste this template into a new `.gitlab-ci.yml` file.
-# You should not add this template to an existing `.gitlab-ci.yml` file by using the `include:` keyword.
-#
-# To contribute improvements to CI/CD templates, please follow the Development guide at:
-# https://docs.gitlab.com/ee/development/cicd/templates.html
-# This specific template is located at:
-# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
+# yaml-language-server: $schema=https://gitlab.com/gitlab-org/gitlab/-/raw/master/app/assets/javascripts/editor/schema/ci.json
+include:
+  - project: aifw/aisec-api
+    ref: main
+    file: ci/security.yml
+  - project: engineering-productivity/ci-templates
+    ref: master
+    file: output/ai-review/auto-ai-review.yaml
+  - project: engineering-productivity/ci-templates
+    ref: master
+    file: output/security/base.yaml
 
-stages:          # List of stages for jobs, and their order of execution
-  - build
+stages:
+  - security
+  - ai-review
+  - lint
   - test
-  - deploy
+  - build
+  - publish
+  - post-publish
+  - release
 
-build-job:       # This job runs in the build stage, which runs first.
+variables:
+  ########################
+  # Pipeline Variables
+  GIT_STRATEGY: clone
+  GIT_DEPTH: 50
+  FORCE_COLOR: 1
+  LOCAL_PIPELINE_NAME: ""
+  PYTHONUNBUFFERED: 1
+  CACHE_DIR: ${CI_PROJECT_DIR}/.cache
+  FF_SCRIPT_SECTIONS: true # for GitLab CI Runner
+  ########################
+  # Python - Hatch
+  HATCH_CACHE_DIR: ${CACHE_DIR}/hatch
+  ########################
+  # Python - pytest
+  PYTEST_CACHE_DIR: ${CACHE_DIR}/pytest
+  ########################
+  # go-task
+  TASK_TEMP_DIR: ${CACHE_DIR}/task
+  ########################
+  # Python - uv
+  # https://docs.astral.sh/uv/guides/integration/gitlab/#caching
+  UV_CACHE_DIR: ${CACHE_DIR}/uv
+  UV_LINK_MODE: copy
+  # https://docs.astral.sh/uv/configuration/authentication/#custom-ca-certificates
+  UV_NATIVE_TLS: true
+  UV_TOOL_BIN_DIR: ${CI_PROJECT_DIR}/bin
+  ########################
+  # Python pip
+  PIP_CACHE_DIR: ${CACHE_DIR}/pip
+  PIP_DISABLE_PIP_VERSION_CHECK: "true"
+  PIP_INDEX_URL: $UV_INDEX_URL
+  PIP_NO_INPUT: "true"
+  PIP_PREFER_BINARY: "true"
+  PIP_PROGRESS_BAR: "off"
+  PIP_ROOT_USER_ACTION: ignore
+  PIP_UPGRADE: "true"
+  PIP_USE_PEP517: "true"
+  PIP_USER_BIN_DIR: ${HOME}/.local/bin
+  ########################
+  # ProdSec Secure CI/CD #
+  ALLOW_FAILURE_SBI: false
+  ENABLE_BUILD_BREAK: true
+  ENABLE_TWISTCLI_PRE_PUSH: true
+  SKIP_SBI_CHECK: false
+
+workflow:
+  name: $LOCAL_PIPELINE_NAME
+  # Automatically cancel all interruptible jobs
+  auto_cancel:
+    on_new_commit: interruptible
+  # CI_PIPELINE_SOURCE: https://archives.docs.gitlab.com/16.11/ee/ci/jobs/job_control.html#common-if-clauses-for-rules
+  rules:
+    # Don't duplicate pipeline runs for branch pushes with an open MR
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
+      when: never
+
+    # Include MR ID in the pipeline for MR pipelines
+    - if: $CI_MERGE_REQUEST_IID
+      variables:
+        LOCAL_PIPELINE_NAME: >-
+          [!$CI_MERGE_REQUEST_IID $GITLAB_USER_LOGIN: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME]: $CI_MERGE_REQUEST_TITLE
+
+    # Unique pipeline name for Scheduled pipelines
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        LOCAL_PIPELINE_NAME: >-
+          Scheduled pipeline for $CI_COMMIT_REF_NAME ($CI_PIPELINE_CREATED_AT)
+
+    # Include the username on branch/tag pipelines
+    - if: $GITLAB_USER_LOGIN && $CI_COMMIT_REF_NAME && $CI_PIPELINE_SOURCE == "push"
+      variables:
+        LOCAL_PIPELINE_NAME: >-
+          [$GITLAB_USER_LOGIN: $CI_COMMIT_REF_NAME]: $CI_COMMIT_TITLE
+
+        # All other cases
+    - variables:
+        LOCAL_PIPELINE_NAME: >-
+          [$CI_PIPELINE_SOURCE: $CI_COMMIT_REF_NAME]: $CI_COMMIT_TITLE
+
+default:
+  interruptible: true
+  # https://docs.gitlab.com/ee/ci/yaml/#retry
+  retry:
+    max: 2
+    when:
+      # - always                    # Retry on any failure (default).
+      - unknown_failure # Retry when the failure reason is unknown.
+      - script_failure # Retry if the script failed or the runner failed to pull the Docker image.
+      - api_failure # Retry on API failure.
+      - stuck_or_timeout_failure # Retry when the job got stuck or timed out.
+      - runner_system_failure # Retry if there is a runner system failure (for example, job setup failed).
+      # - runner_unsupported        # Retry if the runner is unsupported.
+      # - stale_schedule            # Retry if a delayed job could not be executed.
+      - job_execution_timeout # Retry if the script exceeded the maximum execution time set for the job.
+      # - archived_failure          # Retry if the job is archived and can’t be run.
+      - unmet_prerequisites # Retry if the job failed to complete prerequisite tasks.
+      - scheduler_failure # Retry if the scheduler failed to assign the job to a runner.
+      - data_integrity_failure # Retry if there is an unknown job problem.
+
+  tags:
+    - gke
+    - us-central1
+
+.install-apt-tools:
+  # language=sh
+  script:
+    - &install-apt-tools |
+      apt-get update -qq &&
+      apt-get install -qqy \
+        --no-install-recommends \
+        -o Dpkg::Options::="--force-confold" \
+        git curl ca-certificates
+
+.unshallow:
+  # language=sh
+  script: &unshallow |
+    set -xe;
+    if ! command -v git &>/dev/null; then
+      apt-get update -qq && \
+      apt-get install -qqy --no-install-recommends -o Dpkg::Options::="--force-confold" \
+        git
+    fi
+    # fetch full git history
+    if [[ -f "${CI_PROJECT_DIR}/.git/shallow" ]]; then
+      git fetch --all --unshallow --refetch --tags
+    else
+      git fetch --all --refetch --tags
+    fi
+
+# Template job
+.base-job: &base-job
+  image:
+    name: $PYTHON_BASE_IMAGE:$PYTHON_BASE_IMAGE_TAG
+    entrypoint:
+      - /bin/bash
+      - -l
+  allow_failure: false
+  cache:
+    - &uv-cache
+      key:
+        files:
+          - pyproject.toml
+          - uv.lock
+      paths:
+        - $UV_CACHE_DIR
+        - $CI_PROJECT_DIR/.venv
+    - &task-cache
+      key:
+        files:
+          - taskfile.yml
+          - .gitlab/taskfile.ci.yml
+      paths:
+        - $TASK_TEMP_DIR
+  # language=sh
+  before_script:
+    - set -o xtrace -o nounset -o pipefail -o errexit
+    - *install-apt-tools
+    - cd $CI_PROJECT_DIR
+    - *unshallow
+    - bash ${CI_PROJECT_DIR}/scripts/install-task.sh -b ${UV_TOOL_BIN_DIR} -d latest
+    - export PATH="${UV_TOOL_BIN_DIR}:${HOME}/.local/bin:${PATH}"
+    - |
+      if [[ -v INTERNAL_CA_BUNDLE && -f "$INTERNAL_CA_BUNDLE" ]]; then
+      python3 -m pip config --user set global.cert "$INTERNAL_CA_BUNDLE"
+      fi
+    - python3 -m pip config debug
+    - python3 -m pip install ${PIP_CI_ARGS:-} --user --upgrade uv
+    - uv sync --all-extras --frozen # install all project dependencies
+    - mkdir $CI_PROJECT_DIR/reports
+
+.base-rules:
+  rules:
+    # Run and Tag Docker images with git tag for valid SemVer tagged commits
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_TAG =~ /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)/
+    # Always Run Full CI pipeline for Merge Requests
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # Always Run Full CI pipeline for Main Branch
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+.security:
+  extends: .base-job
+  stage: security
+  interruptible: true
+
+trufflehog:
+  extends: .security
+  <<: *base-job
+  # language=sh
+  script:
+    - task sec:trufflehog
+
+bandit:
+  extends: .base-job
+  stage: security
+  interruptible: true
+  # language=sh
+  script:
+    - task sec:bandit
+  # noinspection YAMLSchemaValidation
+  rules:
+    # changes to python files on non-main branch
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      changes:
+        paths:
+          - "*.py"
+          - "**/*.py"
+    - !reference [.base-rules, rules]
+  artifacts:
+    reports:
+      junit: reports/bandit.xml
+
+.base_lint:
+  stage: lint
+  extends: .base-job
+  interruptible: true
+  # language=sh
+  before_script:
+    - !reference [.base-job, before_script]
+    - uv tool install --upgrade ruff
+    - uv run ruff --version
+    - IFS=$'\n' read -r -d '' -a CHANGED_PY_FILES < <(git diff --diff-filter=d --no-renames --name-only origin/main -- '*.py' && printf '\0')
+    - |
+      # Include entire repo if there are no python changes compared to main branch
+      if [[ ${#CHANGED_PY_FILES} -eq 0 ]]; then CHANGED_PY_FILES=( . ); fi
+  rules:
+    - !reference [.base-rules, rules]
+    - if: $CI_COMMIT_BRANCH
+      changes:
+        compare_to: refs/heads/main
+        paths:
+          - "*.py"
+          - "**/*.py"
+          - "pyproject.toml"
+  dependencies: []
+  needs: []
+
+lint:
+  extends: .base_lint
+  # language=sh
+  script:
+    - uv run ruff check --output-format=concise --exit-zero "${CHANGED_PY_FILES[@]}"
+    - uv run ruff check --statistics --exit-zero "${CHANGED_PY_FILES[@]}"
+    - uv run ruff check --output-format=gitlab --output-file=reports/code-quality-report.json "${CHANGED_PY_FILES[@]}"
+  artifacts:
+    reports:
+      codequality: reports/code-quality-report.json
+
+format:
+  extends: .base_lint
+  # language=sh
+  script:
+    - uv run ruff format --check --respect-gitignore "${CHANGED_PY_FILES[@]}"
+
+test:
+  stage: test
+  extends: .base-job
+  image: $PYTHON_BASE_IMAGE:latest-$PY_VERSION
+  cache:
+    - <<: *uv-cache
+    - <<: *task-cache
+    - paths:
+        - ${HATCH_CACHE_DIR}
+        - ${PYTEST_CACHE_DIR}
+  parallel:
+    matrix:
+      - PY_VERSION:
+          - python39
+          - python310
+          - python311
+        PIP_TRUSTED_HOST: $PYTHON_PIP_TRUSTED_HOST
+      - PY_VERSION:
+          - python312
+          - python313
+  # variables:
+  #   PANW_AI_PROFILE_NAME: $AI_PROFILE_STG
+  #   PANW_AI_SEC_API_ENDPOINT: $API_ENDPOINT_STG
+  #   PANW_AI_SEC_API_KEY: $PANW_AI_SEC_API_KEY_STG
+  # language=sh
+  script:
+    # Uses PYTHON_VERSION from parallel:matrix: below to run CI jobs in parallel with multiple python versions
+    - task -v ci:test:coverage
+  # https://docs.gitlab.com/ee/ci/testing/code_coverage.html
+  # noinspection YAMLSchemaValidation
+  coverage: >-
+    /^TOTAL .*? (100(?:\.0+)?%|[1-9]?\d(?:\.\d+)?%)$/
+  artifacts:
+    reports:
+      junit: reports/coverage.xml
+  # noinspection YAMLSchemaValidation
+  rules:
+    - !reference [.base-rules, rules]
+    - if: $CI_COMMIT_BRANCH
+      changes:
+        compare_to: refs/heads/main
+        paths:
+          - "*.py"
+          - "**/*.py"
+          - "pyproject.toml"
+          - "uv.lock"
+          - "requirements*.txt"
+  dependencies: []
+  needs: []
+
+build:
   stage: build
+  extends: .base-job
+  variables:
+    GIT_DEPTH: 50
+  cache:
+    - <<: *uv-cache
+    - <<: *task-cache
+    - paths:
+        - ${HATCH_CACHE_DIR}
+  # language=sh
   script:
-    - echo "Compiling the code..."
-    - echo "Compile complete."
+    - uv tool install --upgrade hatch
+    - uv tool run hatch version
+    - git status --short -uall
+    - uv tool run hatch build --clean
+  artifacts:
+    paths:
+      - dist/
+  # noinspection YAMLSchemaValidation
+  rules:
+    - !reference [.base-rules, rules]
+    - if: $CI_COMMIT_BRANCH != null || $CI_COMMIT_TAG != null
+      changes:
+        compare_to: refs/heads/main
+        paths:
+          - "*.py"
+          - "**/*.py"
+          - "pyproject.toml"
+          - "requirements*.txt"
+  dependencies: []
+  needs:
+    - job: test
+      artifacts: false
 
-unit-test-job:   # This job runs in the test stage.
-  stage: test    # It only starts when the job in the build stage completes successfully.
-  script:
-    - echo "Running unit tests... This will take about 60 seconds."
-    - sleep 60
-    - echo "Code coverage is 90%"
+blackduck:
+  extends: .blackduck
+  before_script:
+    - !reference [.blackduck, before_script]
+  variables:
+    PIP_DISABLE_PIP_VERSION_CHECK: 1
+    PIP_NO_PYTHON_VERSION_WARNING: 1
+    PIP_NO_COLOR: 1
+    PIP_NO_INPUT: 1
+    PIP_NO_CACHE_DIR: 1
+    PIP_PROGRESS_BAR: "off"
+    PIP_ROOT_USER_ACTION: ignore
 
-lint-test-job:   # This job also runs in the test stage.
-  stage: test    # It can run at the same time as unit-test-job (in parallel).
-  script:
-    - echo "Linting code... This will take about 10 seconds."
-    - sleep 10
-    - echo "No lint issues found."
+    DETECT_DETECTOR_SEARCH_DEPTH: 4
+    DETECTOR_PIP_REQUIREMENTS_PATH: |
+      requirements.txt
+    SECURE_CICD_BD_BEFORE_SCRIPT: >-
+      set -xe &&
+      python3 -m pip install --upgrade pip &&
+      python3 -m pip install -e .
+    DETECT_TOOLS_EXCLUDED: SIGNATURE_SCAN
+    SKIP_PCC_REPORTING: false
 
-deploy-job:      # This job runs in the deploy stage.
-  stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
-  environment: production
-  script:
-    - echo "Deploying application..."
-    - echo "Application successfully deployed."
+checkmarx:
+  extends: .checkmarx
+  variables:
+    CX_BASE_BRANCH: $CI_COMMIT_REF_NAME
