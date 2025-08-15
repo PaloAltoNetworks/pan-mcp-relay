@@ -236,8 +236,6 @@ bandit:
   stage: lint
   extends: .base-job
   interruptible: true
-  # TODO: Disable allow_failure after we've addressed all lint issues
-  allow_failure: true
   # language=sh
   before_script:
     - !reference [.base-job, before_script]

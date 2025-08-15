@@ -205,7 +205,7 @@ tasks:
       - task: _hatch
     # language=sh
     cmds:
-      - uv run --frozen hatch test --all --cover
+      - uvx hatch@latest test --all --cover
 
   build:
     desc: "Build the project artifacts"

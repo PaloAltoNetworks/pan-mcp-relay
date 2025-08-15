@@ -4,22 +4,21 @@ tasks:
 
   test:coverage:
     desc: "Run project unit tests with coverage report. No integration or functional tests."
+    env:
+      UV_FROZEN: 1
+
     # language=sh
     cmds:
       # Show versions
-      - uv run --all-extras --frozen pytest --version
-      - uv run --all-extras --frozen coverage --version
-      # Show the current contents of the pytest cache
-      - uv run --all-extras --frozen pytest --cache-show
+      - uv sync --all-extras
+      - uv run pytest -VV
+      - uv run coverage --version
       - >-
-        uv run --all-extras --frozen pytest
-        --cov
-        -ra
-        --tb=short
+        uv run pytest
         --override-ini=cache_dir=${PYTEST_CACHE_DIR:-.cache/pytest}
         --junit-xml=reports/coverage.xml
         --numprocesses=auto
-        --cov=src --cov=tests
+        --cov
         --cov-report=term-missing
         {{.CLI_ARGS}}
 
