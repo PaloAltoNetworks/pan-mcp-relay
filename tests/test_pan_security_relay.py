@@ -50,6 +50,7 @@ def valid_config():
 # ===================== Initialization Tests =====================
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._update_tool_registry", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._update_security_scanner", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._load_config", autospec=True)
@@ -68,6 +69,7 @@ async def test_initialize_success(
     mock_update_tool_registry.assert_called_once()
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._load_config", autospec=True)
 async def test_initialize_config_load_failure(mock_load_config, relay):
     """Test initialization failure when config loading fails."""
@@ -80,6 +82,7 @@ async def test_initialize_config_load_failure(mock_load_config, relay):
     assert "Configuration file not found" in str(exc_info.value)
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._load_config", autospec=True)
 async def test_initialize_generic_exception_handling(mock_load_config, relay):
     """Test handling of generic exceptions during initialization."""
@@ -153,6 +156,7 @@ def test_load_config_exceed_max_servers(mock_load_config):
 # ===================== Security Scanner Tests =====================
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.initialize", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.cleanup", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner", autospec=True)
@@ -173,6 +177,7 @@ async def test_update_security_scanner_success(
 # ===================== Tool Management Tests =====================
 
 
+@pytest.mark.asyncio
 @patch(
     "pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._disable_tools_with_duplicate_names", autospec=True
 )
@@ -209,6 +214,7 @@ async def test_update_tool_registry_success(
     relay.tool_registry.update_registry.assert_called_once()
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.cleanup", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.list_tools", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.initialize", new_callable=AsyncMock)
@@ -252,6 +258,7 @@ async def test_collect_tools_from_servers_success(
     mock_prepare_tool.assert_any_call("benign_data_analyzer", data_analyzer_tools, True, [])
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.cleanup", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.list_tools", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.initialize", new_callable=AsyncMock)
@@ -269,6 +276,7 @@ async def test_collect_tools_from_servers_initialization_failure(mock_initialize
     mock_list_tools.assert_not_called()
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.cleanup", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.list_tools", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient.initialize", new_callable=AsyncMock)
@@ -348,6 +356,7 @@ def test_validate_tool_limits_exceeded():
     assert f"maximum allowed: {max_tools}" in str(exc_info.value)
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.should_block")
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.scan_tool", new_callable=AsyncMock)
 async def test_prepare_tool_benign_scan_result(mock_scan_tool, mock_should_block, relay):
@@ -384,6 +393,7 @@ async def test_prepare_tool_benign_scan_result(mock_scan_tool, mock_should_block
     assert tool_list[0].state == ToolState.ENABLED
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.should_block")
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.scan_tool", new_callable=AsyncMock)
 async def test_prepare_tool_malicious_scan_result(mock_scan_tool, mock_should_block, relay):
@@ -422,6 +432,7 @@ async def test_prepare_tool_malicious_scan_result(mock_scan_tool, mock_should_bl
     assert tool_list[0].state == ToolState.DISABLED_SECURITY_RISK
 
 
+@pytest.mark.asyncio
 async def test_prepare_tool_hidden_mode(relay):
     """Test tool preparation in hidden mode."""
     pan_inline_scan_tool = types.Tool(
@@ -435,6 +446,7 @@ async def test_prepare_tool_hidden_mode(relay):
     assert tool_list[0].state == ToolState.DISABLED_HIDDEN_MODE
 
 
+@pytest.mark.asyncio
 async def test_prepare_tool_existing_tool_reuse_state(relay):
     """Test tool preparation when tool already exists in registry with cached state."""
     existing_tool = InternalTool(
@@ -505,6 +517,7 @@ def test_disable_tools_with_duplicate_names(relay):
 # ===================== MCP Server Handling Tests =====================
 
 
+@pytest.mark.asyncio
 async def test_launch_mcp_server_success(relay):
     """Test successful MCP server creation."""
     server = await relay.launch_mcp_server()
@@ -513,6 +526,7 @@ async def test_launch_mcp_server_success(relay):
     assert isinstance(server, Server)
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.stdio_server", autospec=True)
 async def test_run_stdio_server_success(mock_stdio_server, relay):
     """Test successful stdio server startup."""
@@ -538,6 +552,7 @@ async def test_run_stdio_server_success(mock_stdio_server, relay):
     mock_app.create_initialization_options.assert_called_once()
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.stdio_server", autospec=True)
 async def test_run_stdio_server_initialization_failure(mock_stdio_server, relay):
     """Test stdio server startup with initialization failure."""
@@ -552,6 +567,7 @@ async def test_run_stdio_server_initialization_failure(mock_stdio_server, relay)
     mock_stdio_server.assert_called_once()
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.stdio_server", autospec=True)
 async def test_run_stdio_server_app_run_failure(mock_stdio_server, relay):
     """Test stdio server startup with app run failure."""
@@ -572,6 +588,7 @@ async def test_run_stdio_server_app_run_failure(mock_stdio_server, relay):
     mock_app.run.assert_called_once()
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.uvicorn.Server", autospec=True)
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.uvicorn.Config", autospec=True)
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.Starlette", autospec=True)
@@ -632,6 +649,7 @@ async def test_run_sse_server_success(
     mock_server_instance.serve.assert_called_once()
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.uvicorn.Server", autospec=True)
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.uvicorn.Config", autospec=True)
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.Starlette", autospec=True)
@@ -657,6 +675,7 @@ async def test_run_sse_server_uvicorn_failure(
     mock_server_instance.serve.assert_called_once()
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.Starlette", autospec=True)
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.SseServerTransport", autospec=True)
 async def test_run_sse_server_starlette_failure(mock_sse_transport, mock_starlette, relay):
@@ -674,6 +693,7 @@ async def test_run_sse_server_starlette_failure(mock_sse_transport, mock_starlet
     mock_starlette.assert_called_once()
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._update_tool_registry", new_callable=AsyncMock)
 async def test_handle_list_tools_up_to_date_registry(mock_update_tool_registry, relay):
     """Test tool listing with up-to-date registry."""
@@ -700,6 +720,7 @@ async def test_handle_list_tools_up_to_date_registry(mock_update_tool_registry, 
     mock_update_tool_registry.assert_not_called()
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._update_tool_registry", new_callable=AsyncMock)
 async def test_handle_list_tools_outdated_registry(mock_update_tool_registry, relay):
     """Test tool listing with outdated registry."""
@@ -725,6 +746,7 @@ async def test_handle_list_tools_outdated_registry(mock_update_tool_registry, re
 # ===================== Tool Execution Tests =====================
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._execute_on_server", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.should_block")
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.scan_response", new_callable=AsyncMock)
@@ -778,6 +800,7 @@ async def test_handle_tool_execution_success(
     assert not result.isError
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.should_block")
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.scan_request", new_callable=AsyncMock)
 async def test_handle_tool_execution_request_blocked(mock_scan_request, mock_should_block, relay):
@@ -819,6 +842,7 @@ async def test_handle_tool_execution_request_blocked(mock_scan_request, mock_sho
     assert "Unsafe Request" in str(exc_info.value)
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._execute_on_server", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.should_block")
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.scan_response", new_callable=AsyncMock)
@@ -887,6 +911,7 @@ async def test_handle_tool_execution_response_blocked(
     assert "Unsafe Response" in str(exc_info.value)
 
 
+@pytest.mark.asyncio
 async def test_handle_tool_execution_tool_not_found(relay):
     """Test tool execution with non-existent tool."""
     relay.security_scanner = Mock()
@@ -901,6 +926,7 @@ async def test_handle_tool_execution_tool_not_found(relay):
     assert isinstance(exc_info.value, AISecMcpRelayToolNotFoundError)
 
 
+@pytest.mark.asyncio
 async def test_handle_tool_execution_empty_tool_name(relay):
     """Test tool execution with empty tool name."""
     relay.security_scanner = Mock()
@@ -915,6 +941,7 @@ async def test_handle_tool_execution_empty_tool_name(relay):
     assert isinstance(exc_info.value, AISecMcpRelayToolNotFoundError)
 
 
+@pytest.mark.asyncio
 async def test_handle_tool_execution_empty_arguments(relay):
     """Test tool execution with empty arguments."""
     benign_scan_result = {
@@ -958,6 +985,7 @@ async def test_handle_tool_execution_empty_arguments(relay):
         mock_execute.assert_called_once_with("benign_text_processor", "summarize_text_content", {})
 
 
+@pytest.mark.asyncio
 @patch(
     "pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._handle_list_downstream_servers_info",
     new_callable=AsyncMock,
@@ -1003,6 +1031,7 @@ async def test_handle_tool_execution_special_relay_info_tool(
     mock_scan_request.assert_called_once_with(f"{TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO}: {{}}")
 
 
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._execute_on_server", new_callable=AsyncMock)
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.should_block")
 @patch("pan_aisecurity_mcp_relay.security_scanner.SecurityScanner.scan_response", new_callable=AsyncMock)
@@ -1062,6 +1091,7 @@ async def test_handle_tool_execution_server_returns_error(
 # ===================== Server Execution Tests =====================
 
 
+@pytest.mark.asyncio
 async def test_execute_on_server_success(relay):
     """Test successful server execution."""
     success_result = types.CallToolResult(
@@ -1078,6 +1108,7 @@ async def test_execute_on_server_success(relay):
     assert result == success_result
 
 
+@pytest.mark.asyncio
 async def test_execute_on_server_not_found(relay):
     """Test server execution with non-existent server."""
     with pytest.raises(AISecMcpRelayBaseException) as exc_info:
@@ -1086,6 +1117,7 @@ async def test_execute_on_server_not_found(relay):
     assert isinstance(exc_info.value, AISecMcpRelayServerNotFoundError)
 
 
+@pytest.mark.asyncio
 async def test_execute_on_server_execution_error(relay):
     """Test server execution with tool execution error."""
     mock_server = AsyncMock()
@@ -1101,6 +1133,7 @@ async def test_execute_on_server_execution_error(relay):
 # ===================== Special Tools Tests =====================
 
 
+@pytest.mark.asyncio
 async def test_handle_list_downstream_servers_info_success(relay):
     """Test handling of the special downstream servers info tool."""
     relay.tool_registry = Mock()
@@ -1117,6 +1150,7 @@ async def test_handle_list_downstream_servers_info_success(relay):
 # ===================== Resource and Performance Tests =====================
 
 
+@pytest.mark.asyncio
 async def test_memory_cleanup_after_initialization(valid_config):
     """Test memory cleanup after initialization."""
     initial_task_count = len(asyncio.all_tasks())
@@ -1136,6 +1170,7 @@ async def test_memory_cleanup_after_initialization(valid_config):
     assert final_task_count - initial_task_count <= 2
 
 
+@pytest.mark.asyncio
 async def test_concurrent_tool_executions(relay):
     """Test handling multiple concurrent tool executions."""
     benign_scan_result = {

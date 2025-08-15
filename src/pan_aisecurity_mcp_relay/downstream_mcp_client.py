@@ -28,8 +28,9 @@ from contextlib import AsyncExitStack
 from typing import Any, Optional
 
 import mcp.types as types
-from mcp import ClientSession, StdioServerParameters, stdio_client
+from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
+from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 from tenacity import retry, stop_after_attempt, wait_fixed
 
@@ -87,16 +88,22 @@ class DownstreamMcpClient:
             else:
                 raise AISecMcpRelayInvalidConfigurationError(f"invalid MCP server configuration: {self.name}")
 
-        if client_type == TransportType.STDIO:
-            client = await self.setup_stdio_client()
-        elif client_type == TransportType.STREAMABLE_HTTP or client_type == TransportType.SSE:
-            client = await self.setup_http_client(client_type)
-        else:
-            raise AISecMcpRelayInvalidConfigurationError(f"invalid MCP server configuration: {self.name}")
+        try:
+            if client_type == TransportType.STDIO:
+                client = await self.setup_stdio_client()
+            elif client_type == TransportType.STREAMABLE_HTTP or client_type == TransportType.SSE:
+                client = await self.setup_http_client(client_type)
+            else:
+                raise AISecMcpRelayInvalidConfigurationError(f"invalid MCP server configuration: {self.name}")
+        except Exception as e:
+            err_msg = f"Error setting up server {self.name}: {e}"
+            log.exception(err_msg)
+            raise AISecMcpRelayInvalidConfigurationError(err_msg) from e
 
         try:
             # Set up communication with the server
-            read, write = await self.exit_stack.enter_async_context(client)
+            transport = await self.exit_stack.enter_async_context(client)
+            read, write = transport
 
             # Create and initialize session
             self.session = await self.exit_stack.enter_async_context(ClientSession(read, write))
@@ -105,9 +112,8 @@ class DownstreamMcpClient:
             log.debug(f"Server {self.name} initialized successfully")
         except Exception as e:
             log.error(f"Error initializing server {self.name}: {e}", exc_info=True)
-            raise
-        finally:
             await self.cleanup()
+            raise
 
     async def setup_http_client(self, client_type: TransportType):
         if client_type == TransportType.STREAMABLE_HTTP:

@@ -27,6 +27,9 @@ import re
 from contextlib import AsyncExitStack
 from unittest.mock import AsyncMock, call, patch
 
+import httpx
+import mcp
+import mcp.shared.exceptions
 import mcp.types as types
 import pytest
 from mcp import ClientSession
@@ -65,7 +68,7 @@ def performance_server_config():
 @pytest.fixture
 def sse_server_config():
     """Create SSE server configuration for testing."""
-    return {"type": "sse", "url": "https://url_to_sse_server"}
+    return {"type": "sse", "url": "https://127.0.0.1:65534/sse"}
 
 
 @pytest.fixture
@@ -252,6 +255,7 @@ async def test_initialize_echo_server_success(mock_stdio_client, echo_server_con
 
         await client.initialize()
 
+    assert client.session is not None
     assert client.session == mock_session
     mock_session.initialize.assert_called_once()
 
@@ -277,6 +281,7 @@ async def test_initialize_sse_server_success(mock_sse_client, sse_server_config)
 
         await client.initialize()
 
+    assert client.session is not None
     assert client.session == mock_session
     mock_session.initialize.assert_called_once()
 
@@ -316,46 +321,40 @@ async def test_initialize_server_environment_variables(mock_logging, mock_stdio_
     mock_logging.debug.assert_any_call("Initializing downstream mcp server: performance-server...")
 
 
-@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.stdio_client", autospec=True)
+@pytest.mark.asyncio
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
 async def test_initialize_stdio_server_failure(mock_logging, mock_stdio_client, test_server_config):
     """Test server initialization failure handling."""
     # Simulate connection failure
-    mock_stdio_client.side_effect = Exception("Test server connection failed")
-
-    client = DownstreamMcpClient("test-server", test_server_config)
-
-    with patch.object(client, "cleanup") as mock_cleanup:
-        with pytest.raises(Exception, match="Test server connection failed"):
-            await client.initialize()
-
-        mock_cleanup.assert_called_once()
-
-    mock_logging.exception.assert_called_with(
-        "Error initializing server test-server: Test server connection failed", exc_info=True
+    server_name = "test-server"
+    err_msg = f"Error setting up server {server_name}: Connection closed"
+    mock_stdio_client.side_effect = mcp.shared.exceptions.McpError(
+        mcp.shared.exceptions.ErrorData(code=-3200, message="Connection closed", data=None)
     )
+
+    client = DownstreamMcpClient(server_name, test_server_config)
+
+    with pytest.raises(AISecMcpRelayInvalidConfigurationError, match=err_msg):
+        await client.initialize()
+
+    mock_logging.exception.assert_called_with(err_msg)
 
 
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.sse_client", autospec=True)
+@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.sse_client")
 @patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
 async def test_initialize_sse_server_failure(mock_logging, mock_sse_client, sse_server_config):
     """Test SSE server initialization failure handling."""
     # Simulate connection failure
-    mock_sse_client.side_effect = Exception("Test SSE connection failed")
+    mock_sse_client.side_effect = httpx.ConnectError("All connection attempts failed")
 
     client = DownstreamMcpClient("sse-server", sse_server_config)
 
-    with patch.object(client, "cleanup") as mock_cleanup:
-        with pytest.raises(Exception, match="Test SSE connection failed"):
-            await client.initialize()
+    with pytest.raises(AISecMcpRelayInvalidConfigurationError, match="Error setting up server sse-server"):
+        await client.initialize()
 
-        mock_cleanup.assert_called_once()
-
-    mock_logging.exception.assert_called_with(
-        "Error initializing server sse-server: Test SSE connection failed", exc_info=True
-    )
+    mock_logging.exception.assert_called_with("Error setting up server sse-server: All connection attempts failed")
 
 
 @pytest.mark.asyncio

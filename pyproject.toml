@@ -65,8 +65,6 @@ test = [
   "pytest-asyncio>=1.0.0",
   "pytest-cov>=6.0",
   "pytest-mock>=3.14.1",
-  "pytest-randomly>=3.16.0",
-  "pytest-rerunfailures>=15.1",
   "pytest-xdist[psutil]>=3.7.0",
   "pytest>=8.3.5",
 ]
@@ -120,12 +118,6 @@ sources = ["src"]
 [tool.hatch.version]
 source = "versioningit"
 
-# Use UV with Hatch for dependency management (instead of virtualenv/pip) in all environments
-[tool.hatch.envs.default]
-installer = "uv"
-# Use optional dependencies in test environments
-features = []
-
 #
 # Automatic Versioning using Git Tags
 # https://versioningit.readthedocs.io/en/stable/index.html
@@ -158,12 +150,30 @@ require-match = false
 append-line = "__version__ = \"{version}\""
 
 ##########################
+# Hatch - Matrix Testing #
+##########################
+# Use UV with Hatch for dependency management (instead of virtualenv/pip) in all environments
+[tool.hatch.envs.default]
+installer = "uv"
+# Use optional dependencies in test environments
+features = []
+
+[tool.hatch.envs.hatch-test]
+extra-dependencies = [
+  "pytest-asyncio",
+  "pytest-mock",
+]
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.13", "3.12", "3.11", "3.10"]
+
+##########################
 # PyTest - Code Coverage #
 ##########################
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-ra -q --tb=short --numprocesses=auto --import-mode=importlib --cov=pan_aisecurity_mcp_relay --cov=tests --cov-report=term-missing"
+addopts = "-ra -q --tb=short --import-mode=prepend -p asyncio -p anyio -p pytest_mock"
 testpaths = [
   "tests",
   "examples",

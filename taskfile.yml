@@ -193,12 +193,8 @@ tasks:
     # language=sh
     cmds:
       - >-
-        uv run --all-extras --frozen pytest
-        --cov
-        --cov-config=pyproject.toml
-        -ra
-        --tb=short
-        --numprocesses=auto
+        uv run --all-extras --frozen
+        pytest --cov --numprocesses=auto
         {{.CLI_ARGS}}
     preconditions:
       - command -v uv

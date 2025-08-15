@@ -79,9 +79,9 @@ from .security_scanner import SecurityScanner
 from .tool import InternalTool, ToolState
 from .tool_registry import ToolRegistry
 
-__path__ = Path(__file__)
+__posixpath__ = Path(__file__).resolve()
 
-log = logging.getLogger(__path__.stem)
+log = logging.getLogger(__name__)
 
 
 class PanSecurityRelay:
@@ -161,7 +161,7 @@ class PanSecurityRelay:
         """Initialize and configure the security scanner for downstream servers."""
         logging.info("MCP pan-aisecurity server init - Setting up security scanning configuration...")
 
-        mcp_server_path = __path__.parent / "mcp_server/pan_security_server.py"
+        mcp_server_path = __posixpath__.parent / "mcp_server/pan_security_server.py"
         server = DownstreamMcpClient(
             "pan-aisecurity",
             {
