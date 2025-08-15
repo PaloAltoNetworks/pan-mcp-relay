@@ -279,7 +279,7 @@ format:
 test:
   stage: test
   extends: .base-job
-  image: $PYTHON_BASE_IMAGE:latest-$PY_VERSION-fips
+  image: $PYTHON_BASE_IMAGE:latest-$PY_VERSION
   allow_failure: true
   cache:
     - <<: *uv-cache
