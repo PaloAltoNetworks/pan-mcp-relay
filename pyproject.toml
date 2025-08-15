@@ -6,7 +6,7 @@
 name = "pan-aisecurity-mcp-relay"
 dynamic = ["version"]
 description = "Palo Alto Networks AI Security MCP Relay"
-requires-python = ">= 3.10"
+requires-python = ">= 3.12"
 License-Expression = "LicenseRef-PolyForm-Internal-Use-License-1.0.0"
 License-File = ["LICENSE"]
 readme = "README.md"

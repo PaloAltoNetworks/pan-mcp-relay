@@ -16,7 +16,6 @@
 
 import json
 import logging
-from typing import Optional, Union
 
 import mcp.types as types
 from aisecurity.scan.asyncio.scanner import ScanResponse
@@ -49,7 +48,7 @@ class SecurityScanner:
         """
         self.pan_security_server = pan_security_server
 
-    async def _perform_scan(self, scan_type: str, params: dict[str, str]) -> Optional[ScanResponse]:
+    async def _perform_scan(self, scan_type: str, params: dict[str, str]) -> ScanResponse | None:
         """
         Execute a security scan with the specified parameters.
 
@@ -107,7 +106,7 @@ class SecurityScanner:
         finally:
             await self.pan_security_server.cleanup()
 
-    async def scan_request(self, input_text: str) -> Optional[ScanResponse]:
+    async def scan_request(self, input_text: str) -> ScanResponse | None:
         """
         Perform security scanning on an incoming request.
 
@@ -131,7 +130,7 @@ class SecurityScanner:
         """
         return await self._perform_scan("scan_request", {"prompt": input_text})
 
-    async def scan_response(self, input_text: str, response_text: str) -> Optional[ScanResponse]:
+    async def scan_response(self, input_text: str, response_text: str) -> ScanResponse | None:
         """
         Perform security scanning on a response in context of its request.
 
@@ -159,7 +158,7 @@ class SecurityScanner:
         """
         return await self._perform_scan("scan_response", {"prompt": input_text, "response": response_text})
 
-    async def scan_tool(self, tool_info: Union[types.Tool, str]) -> Optional[ScanResponse]:
+    async def scan_tool(self, tool_info: types.Tool | str) -> ScanResponse | None:
         """
         Perform security scanning on a tool before registration or execution.
 
@@ -187,7 +186,7 @@ class SecurityScanner:
         tool_str = str(tool_info.model_dump()) if isinstance(tool_info, types.Tool) else tool_info
         return await self._perform_scan("scan_tool", {"prompt": tool_str})
 
-    def should_block(self, scan_response: Optional[ScanResponse]) -> bool:
+    def should_block(self, scan_response: ScanResponse | None) -> bool:
         """
         Determine if content should be blocked based on scan response.
 

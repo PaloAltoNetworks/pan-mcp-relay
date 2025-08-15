@@ -29,7 +29,7 @@ from .constants import (
 from .pan_security_relay import PanSecurityRelay
 
 
-async def main() -> None:
+async def main() -> int | None:
     """Main entry point for the MCP relay server."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config-file", type=str, required=True, help="Path to config file")

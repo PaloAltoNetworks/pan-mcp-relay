@@ -3,8 +3,8 @@
 # Ruff Linting & Formatting #
 #############################
 
-# Assume Python 3.9
-target-version = "py39"
+# Assume Python 3.12
+target-version = "py312"
 
 # Exclude a variety of commonly ignored directories.
 exclude = [
@@ -46,7 +46,7 @@ indent-width = 4
 preview = true
 
 [per-file-target-version]
-"examples/**.py" = "py310"
+"examples/**.py" = "py312"
 "scripts/**.py" = "py313"
 
 ###############################

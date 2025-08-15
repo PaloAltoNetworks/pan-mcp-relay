@@ -27,6 +27,7 @@ import os
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import aisecurity
 import dotenv
@@ -50,7 +51,7 @@ from aisecurity.scan.models.content import Content
 from aisecurity.utils import safe_flatten
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
-from typing_extensions import Any, TypedDict
+from typing_extensions import TypedDict
 
 ai_profile: AiProfile
 scanner = Scanner()

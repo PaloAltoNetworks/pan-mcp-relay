@@ -25,7 +25,7 @@ import logging
 import os
 import string
 from contextlib import AsyncExitStack
-from typing import Any, Optional
+from typing import Any
 
 import mcp.types as types
 from mcp import ClientSession, StdioServerParameters
@@ -58,7 +58,7 @@ class DownstreamMcpClient:
         """
         self.name: str = name
         self.config: dict[str, Any] = config
-        self.session: Optional[ClientSession] = None
+        self.session: ClientSession | None = None
         self._cleanup_lock: asyncio.Lock = asyncio.Lock()
         self.exit_stack: AsyncExitStack = AsyncExitStack()
         log.info(f"Server {name} created with config: {config}")

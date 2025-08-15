@@ -43,7 +43,7 @@ import logging
 import sys
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import mcp.types as types
 import uvicorn
@@ -111,7 +111,7 @@ class PanSecurityRelay:
         self.security_scanner_config = security_scanner_config
         self.max_downstream_servers = max_downstream_servers
         self.max_downstream_tools = max_downstream_tools
-        self.security_scanner: Optional[SecurityScanner] = None
+        self.security_scanner: SecurityScanner | None = None
 
     async def initialize(self) -> None:
         """Initialize the relay server and register all tools."""

@@ -24,7 +24,7 @@ with expiration-based refresh logic and efficient lookup capabilities.
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from pan_aisecurity_mcp_relay.constants import (
     TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
@@ -143,7 +143,7 @@ class ToolRegistry:
         """
         return self._internal_tool_list
 
-    def get_tool_by_hash(self, sha256_hash: str) -> Optional[InternalTool]:
+    def get_tool_by_hash(self, sha256_hash: str) -> InternalTool | None:
         """
         Look up a specific tool using its SHA256 hash identifier.
 

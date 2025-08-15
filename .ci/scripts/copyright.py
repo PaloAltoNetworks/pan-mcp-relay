@@ -11,7 +11,6 @@ import os
 import subprocess
 from functools import cache
 from pathlib import Path
-from typing import Optional
 
 from rich.logging import RichHandler
 
@@ -120,7 +119,7 @@ def is_empty_file(f: Path) -> bool:
 
 
 @cache
-def has_copyright(f: Path, text: Optional[str] = None) -> bool:
+def has_copyright(f: Path, text: str | None = None) -> bool:
     if text is None:
         text = f.read_text()
     search_chunk = text[:HEAD_CHARS_LENGTH]
@@ -134,7 +133,7 @@ def has_copyright(f: Path, text: Optional[str] = None) -> bool:
 
 
 @cache
-def needs_copyright(f: Path, search_chunk: Optional[str] = None) -> bool:
+def needs_copyright(f: Path, search_chunk: str | None = None) -> bool:
     for prefix in skip_copyright_prefixes:
         try:
             if f.relative_to(git_root(), walk_up=True).is_relative_to(prefix):
