@@ -20,22 +20,27 @@ The server exposes the AIRS API functionality as several MCP tools:
 # ]#
 # ///
 
-import argparse
 import asyncio
+import functools
 import itertools
+import logging
 import os
 import sys
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
 import aisecurity
 import dotenv
+import rich
+import rich.logging
 from aisecurity.constants.base import (
     MAX_NUMBER_OF_BATCH_SCAN_OBJECTS,
     MAX_NUMBER_OF_REPORT_IDS,
     MAX_NUMBER_OF_SCAN_IDS,
 )
+from aisecurity.exceptions import AISecSDKException
 from aisecurity.generated_openapi_client import (
     AsyncScanObject,
     AsyncScanResponse,
@@ -53,8 +58,23 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from typing_extensions import TypedDict
 
+from pan_aisecurity_mcp_relay.constants import ENV_AI_PROFILE, ENV_API_ENDPOINT, ENV_API_KEY
+
+log = logging.getLogger("pan-mcp-relay.pan_security_server")
+
+
+def setup_logging():
+    """Initialize logging."""
+    stderr = rich.console.Console(stderr=True)
+    logging.basicConfig(
+        level=logging.NOTSET,
+        format="%(message)s)",
+        handlers=[rich.logging.RichHandler(rich_tracebacks=True, console=stderr)],
+    )
+
+
 ai_profile: AiProfile
-scanner = Scanner()
+scanner: Scanner
 
 
 @asynccontextmanager
@@ -81,15 +101,7 @@ class SimpleScanContent(TypedDict):
     response: str | None
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="PANW AI Security MCP Server")
-    parser.add_argument("--PANW_AI_SEC_API_KEY", help="PANW AI Security API Key")
-    parser.add_argument("--PANW_AI_SEC_API_ENDPOINT", help="PANW AI Security API Endpoint")
-    parser.add_argument("--PANW_AI_PROFILE_NAME", help="PANW AI Profile Name")
-    parser.add_argument("--PANW_AI_PROFILE_ID", help="PANW AI Profile ID")
-    return parser.parse_known_args()
-
-
+@functools.cache
 def pan_init():
     """Initialize the AI Runtime Security SDK (e.g. with your API Key).
 
@@ -97,31 +109,49 @@ def pan_init():
     to ensure the MCP Server Runtime Environment has a chance to set up environment
     variables _before_ this function is run.
     """
-    global ai_profile
+    global ai_profile, scanner
 
     # Load Environment variables from .env if available
     dotenv.load_dotenv()
-    # Make this function run only once
-    if getattr(pan_init, "__completed__", False):
-        return
 
-    args, _ = parse_args()
-    cli_vars = {k: v for k, v in vars(args).items() if v is not None}
+    api_key = os.getenv(ENV_API_KEY)
+    api_endpoint = os.getenv(ENV_API_ENDPOINT)
+    aiprofile = os.getenv(ENV_AI_PROFILE)
+    err_msgs = []
+    if not api_key:
+        err_msg = f"Missing Environment Variable with API Key ({ENV_API_KEY})"
+        err_msgs.append(err_msg)
+        log.error(err_msg)
+    if not api_endpoint:
+        err_msg = f"Missing Environment Variable with API Endpoint ({ENV_API_ENDPOINT})"
+        err_msgs.append(err_msg)
+        log.error(err_msg)
+    if not aiprofile:
+        err_msg = f"Missing Environment Variable with AI Profile Name or ID ({ENV_AI_PROFILE})"
+        err_msgs.append(err_msg)
+        log.error(err_msg)
+    if err_msgs:
+        raise ToolError(", ".join(err_msgs))
 
-    def get_var(name: str) -> str | None:
-        return cli_vars.get(name) or os.getenv(name)
-
-    if ai_profile_name := get_var("PANW_AI_PROFILE_NAME"):
-        ai_profile = AiProfile(profile_name=ai_profile_name)
-    elif ai_profile_id := get_var("PANW_AI_PROFILE_ID"):
+    ai_profile_name = ai_profile_id = None
+    try:
+        ai_profile_id = uuid.UUID(aiprofile)
         ai_profile = AiProfile(profile_id=ai_profile_id)
+    except (ValueError, TypeError):
+        ai_profile_name = aiprofile
+
+    if ai_profile_id:
+        ai_profile = AiProfile(profile_id=ai_profile_id)
+    elif ai_profile_name:
+        ai_profile = AiProfile(profile_name=ai_profile_name)
     else:
-        raise ToolError("Missing AI Profile Name (PANW_AI_PROFILE_NAME) or AI Profile ID (PANW_AI_PROFILE_ID)")
+        raise ToolError(f"Missing Environment Variable with AI Profile Name or ID ({ENV_AI_PROFILE})")
+
     aisecurity.init(
-        api_key=get_var("PANW_AI_SEC_API_KEY"),  # Optional - shows default fallback behavior
-        api_endpoint=get_var("PANW_AI_SEC_API_ENDPOINT"),  # Optional - shows default fallback behavior
+        api_key=api_key,
+        api_endpoint=api_endpoint,
     )
-    setattr(pan_init, "__completed__", True)
+    scanner = Scanner()
 
 
 @mcp.tool()
@@ -138,14 +168,17 @@ async def pan_inline_scan(prompt: str | None = None, response: str | None = None
     pan_init()
     if not prompt and not response:
         raise ToolError(f"Must provide at least one of prompt ({prompt}) and/or response ({response}).")
-    scan_response = await scanner.sync_scan(
-        ai_profile=ai_profile,
-        content=Content(
-            prompt=prompt,
-            response=response,
-        ),
-    )
-    return scan_response
+    try:
+        scan_response = await scanner.sync_scan(
+            ai_profile=ai_profile,
+            content=Content(
+                prompt=prompt,
+                response=response,
+            ),
+        )
+        return scan_response
+    except AISecSDKException as e:
+        raise ToolError(str(e))
 
 
 @mcp.tool()
@@ -236,28 +269,9 @@ async def pan_get_scan_reports(report_ids: list[str]) -> list[ThreatScanReportOb
     return safe_flatten(batch_results)
 
 
-def maybe_monkeypatch_itertools_batched():
-    # monkeypatch itertools on python < 3.12
-    # This is required for python versions before 3.12, since itertools.batched was
-    # added in python 3.12, and is required for the above functions to work.
-    if sys.version_info.minor < 12:
-
-        def batched(iterable, n, *, strict=False):
-            if n < 1:
-                raise ValueError("n must be at least one")
-            iterator = iter(iterable)
-            while batch := tuple(itertools.islice(iterator, n)):
-                if strict and len(batch) != n:
-                    raise ValueError("batched(): incomplete batch")
-                yield batch
-
-        setattr(itertools, "batched", batched)
-
-
 def entrypoint():
     """CLI script entrypoint"""
     pan_init()
-    maybe_monkeypatch_itertools_batched()
     asyncio.run(mcp.run_stdio_async())
 
 
