@@ -18,7 +18,7 @@
 import mcp.types as types
 
 
-class AISecMcpRelayBaseException(Exception):
+class McpRelayBaseError(Exception):
     """Base exception class for mcp-relay-related exceptions."""
 
     def __init__(self, message: str = "") -> None:
@@ -37,33 +37,52 @@ class AISecMcpRelayBaseException(Exception):
         return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=str(self))])
 
 
-class AISecMcpRelayInternalError(AISecMcpRelayBaseException):
+class McpRelayInternalError(McpRelayBaseError):
     """Exception for internal errors."""
 
 
-class AISecMcpRelayInvalidConfigurationError(AISecMcpRelayBaseException):
+# Configuration Related Exceptions
+
+
+class McpRelayConfigurationError(McpRelayBaseError):
     """Exception for invalid configuration errors."""
 
 
-class AISecMcpRelayToolExecutionError(AISecMcpRelayBaseException):
+class ApiKeyError(McpRelayConfigurationError):
+    """Exception for invalid API key errors."""
+
+
+class ApiEndpointError(McpRelayConfigurationError):
+    """Exception for invalid API endpoint errors."""
+
+
+class AiProfileError(McpRelayConfigurationError):
+    """Exception for invalid AI profile errors."""
+
+
+class McpRelayToolExecutionError(McpRelayBaseError):
     """Exception for tool execution errors."""
 
 
-class AISecMcpRelaySecurityBlockError(AISecMcpRelayBaseException):
+class McpRelayScanError(McpRelayBaseError):
+    """Exception for scan failure errors."""
+
+
+class McpRelaySecurityBlockError(McpRelayBaseError):
     """Exception for security block errors."""
 
 
-class AISecMcpRelayToolNotFoundError(AISecMcpRelayBaseException):
+class McpRelayToolNotFoundError(McpRelayBaseError):
     """Exception for tool not found errors."""
 
 
-class AISecMcpRelayServerNotFoundError(AISecMcpRelayBaseException):
+class McpRelayServerNotFoundError(McpRelayBaseError):
     """Exception for server not found errors."""
 
 
-class AISecMcpRelayValidationError(AISecMcpRelayBaseException):
+class McpRelayValidationError(McpRelayBaseError):
     """Exception for validation errors."""
 
 
-class AISecMcpRelayToolRegistryError(AISecMcpRelayBaseException):
+class McpRelayToolRegistryError(McpRelayBaseError):
     """Exception for tool registry errors."""
