@@ -27,10 +27,10 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from pan_aisecurity_mcp_relay.constants import (
-    TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
+    TOOL_REGISTRY_CACHE_TTL_DEFAULT,
     UNIX_EPOCH,
 )
-from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayToolRegistryError, AISecMcpRelayValidationError
+from pan_aisecurity_mcp_relay.exceptions import McpRelayToolRegistryError, McpRelayValidationError
 from pan_aisecurity_mcp_relay.tool import InternalTool, ToolState
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class ToolRegistry:
     like retrieving available tools, mapping tools by server, and tool lookup by hash.
     """
 
-    def __init__(self, tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT) -> None:
+    def __init__(self, tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_TTL_DEFAULT) -> None:
         """
         Initialize the ToolRegistry with empty collections and cache settings.
 
@@ -56,7 +56,7 @@ class ToolRegistry:
             AISecMcpRelayException: VALIDATION_ERROR: If cache expiry is invalid
         """
         if tool_registry_cache_expiry <= 0:
-            raise AISecMcpRelayValidationError("Tool registry cache expiry must be a positive integer")
+            raise McpRelayValidationError("Tool registry cache expiry must be a positive integer")
 
         self._internal_tool_list: list[InternalTool] = []
         self._available_tool_list: list[InternalTool] = []
@@ -84,10 +84,10 @@ class ToolRegistry:
                                     RegistryError: If registry update operation fails
         """
         if internal_tool_list is None:
-            raise AISecMcpRelayValidationError("Tool list cannot be None")
+            raise McpRelayValidationError("Tool list cannot be None")
 
         if not isinstance(internal_tool_list, list):
-            raise AISecMcpRelayValidationError("Tool list must be a list")
+            raise McpRelayValidationError("Tool list must be a list")
 
         try:
             self._internal_tool_list = internal_tool_list
@@ -102,7 +102,7 @@ class ToolRegistry:
                 len(self._available_tool_list),
             )
         except Exception as e:
-            raise AISecMcpRelayToolRegistryError(f"Failed to update tool registry {e}")
+            raise McpRelayToolRegistryError(f"Failed to update tool registry {e}")
 
     def _update_available_tools(self) -> None:
         """Update the available tools list with only enabled tools."""
@@ -160,7 +160,7 @@ class ToolRegistry:
             ValidationError: If sha256_hash is invalid
         """
         if not isinstance(sha256_hash, str):
-            raise AISecMcpRelayValidationError("SHA256 hash must be a string")
+            raise McpRelayValidationError("SHA256 hash must be a string")
 
         if not sha256_hash:
             return None
@@ -212,7 +212,7 @@ class ToolRegistry:
 
         except (AttributeError, TypeError) as e:
             logger.error("Failed to serialize tools to JSON: %s", e)
-            raise AISecMcpRelayToolRegistryError(f"Tool serialization failed {e}")
+            raise McpRelayToolRegistryError(f"Tool serialization failed {e}")
 
     def get_registry_stats(self) -> dict[str, Any]:
         """
