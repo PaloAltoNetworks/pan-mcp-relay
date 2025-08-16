@@ -14,15 +14,15 @@ from pan_aisecurity_mcp_relay.constants import (
     TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO,
 )
 from pan_aisecurity_mcp_relay.exceptions import (  # noqa
-    AISecMcpRelayBaseException,
-    AISecMcpRelayInternalError,
-    AISecMcpRelayInvalidConfigurationError,
-    AISecMcpRelaySecurityBlockError,
-    AISecMcpRelayServerNotFoundError,
-    AISecMcpRelayToolExecutionError,
-    AISecMcpRelayToolNotFoundError,
-    AISecMcpRelayToolRegistryError,
-    AISecMcpRelayValidationError,
+    McpRelayBaseError,
+    McpRelayConfigurationError,
+    McpRelayInternalError,
+    McpRelaySecurityBlockError,
+    McpRelayServerNotFoundError,
+    McpRelayToolExecutionError,
+    McpRelayToolNotFoundError,
+    McpRelayToolRegistryError,
+    McpRelayValidationError,
 )
 from pan_aisecurity_mcp_relay.pan_security_relay import PanSecurityRelay
 from pan_aisecurity_mcp_relay.tool import InternalTool, ToolState
@@ -31,7 +31,7 @@ from pan_aisecurity_mcp_relay.tool import InternalTool, ToolState
 @pytest.fixture
 async def relay():
     """Set up minimal test fixtures."""
-    relay = PanSecurityRelay("/test/config.json", security_scanner_config={})
+    relay = PanSecurityRelay("/test/config.json", security_scanner_env={})
     yield relay
 
     # Cleanup after each test
@@ -73,12 +73,12 @@ async def test_initialize_success(
 @patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._load_config", autospec=True)
 async def test_initialize_config_load_failure(mock_load_config, relay):
     """Test initialization failure when config loading fails."""
-    mock_load_config.side_effect = AISecMcpRelayInvalidConfigurationError("Configuration file not found")
+    mock_load_config.side_effect = McpRelayConfigurationError("Configuration file not found")
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         await relay.initialize()
 
-    assert isinstance(exc_info.value, AISecMcpRelayInvalidConfigurationError)
+    assert isinstance(exc_info.value, McpRelayConfigurationError)
     assert "Configuration file not found" in str(exc_info.value)
 
 
@@ -110,10 +110,10 @@ def test_load_config_file_not_found(mock_load_config, relay):
     """Test configuration loading when file is not found."""
     mock_load_config.side_effect = FileNotFoundError("No such file")
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         relay._load_config()
 
-    assert isinstance(exc_info.value, AISecMcpRelayInvalidConfigurationError)
+    assert isinstance(exc_info.value, McpRelayConfigurationError)
 
 
 @patch("pan_aisecurity_mcp_relay.configuration.Configuration.load_config", autospec=True)
@@ -121,7 +121,7 @@ def test_load_config_invalid_format(mock_load_config, relay):
     """Test configuration loading with invalid format."""
     mock_load_config.return_value = {"mcpServers": "invalid_format"}
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         relay._load_config()
 
     assert "Unexpected configuration format" in str(exc_info.value)
@@ -132,7 +132,7 @@ def test_load_config_no_servers(mock_load_config, relay):
     """Test configuration loading with no servers configured."""
     mock_load_config.return_value = {"mcpServers": {}}
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         relay._load_config()
 
     assert "No MCP servers configured" in str(exc_info.value)
@@ -144,12 +144,12 @@ def test_load_config_exceed_max_servers(mock_load_config):
     large_config = {"mcpServers": {f"benign_server_{i}": {"command": "python"} for i in range(10)}}
     mock_load_config.return_value = large_config
 
-    relay = PanSecurityRelay("/test/config.json", security_scanner_config={}, max_downstream_servers=2)
+    relay = PanSecurityRelay("/test/config.json", security_scanner_env={}, max_downstream_servers=2)
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         relay._load_config()
 
-    assert isinstance(exc_info.value, AISecMcpRelayInvalidConfigurationError)
+    assert isinstance(exc_info.value, McpRelayConfigurationError)
     assert "MCP servers configuration limit exceeded" in str(exc_info.value)
 
 
@@ -327,7 +327,7 @@ def test_validate_tool_limits_success():
         for i in range(max_tools - 1)
     ]
 
-    relay = PanSecurityRelay("/test/config.json", security_scanner_config={}, max_downstream_tools=max_tools)
+    relay = PanSecurityRelay("/test/config.json", security_scanner_env={}, max_downstream_tools=max_tools)
 
     relay._validate_tool_limits(benign_tools)
 
@@ -347,12 +347,12 @@ def test_validate_tool_limits_exceeded():
         for i in range(max_tools + 1)
     ]
 
-    relay = PanSecurityRelay("/test/config.json", security_scanner_config={}, max_downstream_tools=max_tools)
+    relay = PanSecurityRelay("/test/config.json", security_scanner_env={}, max_downstream_tools=max_tools)
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         relay._validate_tool_limits(benign_tools)
 
-    assert isinstance(exc_info.value, AISecMcpRelayInvalidConfigurationError)
+    assert isinstance(exc_info.value, McpRelayConfigurationError)
     assert f"maximum allowed: {max_tools}" in str(exc_info.value)
 
 
@@ -835,10 +835,10 @@ async def test_handle_tool_execution_request_blocked(mock_scan_request, mock_sho
     relay.security_scanner.scan_request = mock_scan_request
     relay.security_scanner.should_block = mock_should_block
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         await relay._handle_tool_execution("execute_system_command", {"command": "rm -rf /"})
 
-    assert isinstance(exc_info.value, AISecMcpRelaySecurityBlockError)
+    assert isinstance(exc_info.value, McpRelaySecurityBlockError)
     assert "Unsafe Request" in str(exc_info.value)
 
 
@@ -902,12 +902,12 @@ async def test_handle_tool_execution_response_blocked(
         "Malicious content detected in response"
     )
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         await relay._handle_tool_execution(
             "web_content_fetcher", {"url": "https://urlfiltering.paloaltonetworks.com/test-phishing"}
         )
 
-    assert isinstance(exc_info.value, AISecMcpRelaySecurityBlockError)
+    assert isinstance(exc_info.value, McpRelaySecurityBlockError)
     assert "Unsafe Response" in str(exc_info.value)
 
 
@@ -920,10 +920,10 @@ async def test_handle_tool_execution_tool_not_found(relay):
     relay.tool_registry = Mock()
     relay.tool_registry.get_available_tools.return_value = []
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         await relay._handle_tool_execution("nonexistent_tool", {})
 
-    assert isinstance(exc_info.value, AISecMcpRelayToolNotFoundError)
+    assert isinstance(exc_info.value, McpRelayToolNotFoundError)
 
 
 @pytest.mark.asyncio
@@ -935,10 +935,10 @@ async def test_handle_tool_execution_empty_tool_name(relay):
     relay.tool_registry = Mock()
     relay.tool_registry.get_available_tools.return_value = []
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         await relay._handle_tool_execution("", {})
 
-    assert isinstance(exc_info.value, AISecMcpRelayToolNotFoundError)
+    assert isinstance(exc_info.value, McpRelayToolNotFoundError)
 
 
 @pytest.mark.asyncio
@@ -1079,10 +1079,10 @@ async def test_handle_tool_execution_server_returns_error(
         "Tool execution failed on downstream server"
     )
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         await relay._handle_tool_execution("summarize_text_content", {"text": "Sample document content"})
 
-    assert isinstance(exc_info.value, AISecMcpRelayToolExecutionError)
+    assert isinstance(exc_info.value, McpRelayToolExecutionError)
     mock_execute_on_server.assert_called_once_with(
         "benign_text_processor", "summarize_text_content", {"text": "Sample document content"}
     )
@@ -1111,10 +1111,10 @@ async def test_execute_on_server_success(relay):
 @pytest.mark.asyncio
 async def test_execute_on_server_not_found(relay):
     """Test server execution with non-existent server."""
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         await relay._execute_on_server("nonexistent_server", "summarize_text_content", {})
 
-    assert isinstance(exc_info.value, AISecMcpRelayServerNotFoundError)
+    assert isinstance(exc_info.value, McpRelayServerNotFoundError)
 
 
 @pytest.mark.asyncio
@@ -1155,7 +1155,7 @@ async def test_memory_cleanup_after_initialization(valid_config):
     """Test memory cleanup after initialization."""
     initial_task_count = len(asyncio.all_tasks())
 
-    relay = PanSecurityRelay("/test/config.json", security_scanner_config={})
+    relay = PanSecurityRelay("/test/config.json", security_scanner_env={})
 
     with patch("pan_aisecurity_mcp_relay.pan_security_relay.PanSecurityRelay._load_config") as mock_load_config:
         mock_load_config.return_value = valid_config["mcpServers"]
