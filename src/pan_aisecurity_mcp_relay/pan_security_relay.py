@@ -53,27 +53,24 @@ from mcp.server.stdio import stdio_server
 from starlette.applications import Starlette
 from starlette.routing import Route
 
-from .configuration import Configuration
+from .configuration import SecurityScannerEnv
 from .constants import (
-    ENVIRONMENT_CONFIG_LABEL,
-    HIDDEN_MODE_ENABLED,
-    HIDDEN_MODE_LABEL,
-    MAX_DOWNSTREAM_SERVERS_DEFAULT,
-    MAX_DOWNSTREAM_TOOLS_DEFAULT,
+    MAX_MCP_SERVERS_DEFAULT,
+    MAX_MCP_TOOLS_DEFAULT,
     MCP_RELAY_NAME,
-    MCP_SERVER_CONFIG_LABEL,
     TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO,
-    TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
+    TOOL_REGISTRY_CACHE_TTL_DEFAULT,
 )
 from .downstream_mcp_client import DownstreamMcpClient
 from .exceptions import (
-    AISecMcpRelayBaseException,
-    AISecMcpRelayInternalError,
-    AISecMcpRelayInvalidConfigurationError,
-    AISecMcpRelaySecurityBlockError,
-    AISecMcpRelayServerNotFoundError,
-    AISecMcpRelayToolExecutionError,
-    AISecMcpRelayToolNotFoundError,
+    McpRelayBaseError,
+    McpRelayConfigurationError,
+    McpRelayInternalError,
+    McpRelayScanError,
+    McpRelaySecurityBlockError,
+    McpRelayServerNotFoundError,
+    McpRelayToolExecutionError,
+    McpRelayToolNotFoundError,
 )
 from .security_scanner import SecurityScanner
 from .tool import InternalTool, ToolState
@@ -81,7 +78,7 @@ from .tool_registry import ToolRegistry
 
 __posixpath__ = Path(__file__).resolve()
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("pan-mcp-relay.security-relay")
 
 
 class PanSecurityRelay:
@@ -89,77 +86,68 @@ class PanSecurityRelay:
 
     def __init__(
         self,
-        config_path: str,
-        security_scanner_config: dict[str, Any],
-        tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT,
-        max_downstream_servers: int = MAX_DOWNSTREAM_SERVERS_DEFAULT,
-        max_downstream_tools: int = MAX_DOWNSTREAM_TOOLS_DEFAULT,
+        security_scanner_env: SecurityScannerEnv,
+        tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_TTL_DEFAULT,
+        max_downstream_servers: int = MAX_MCP_SERVERS_DEFAULT,
+        max_downstream_tools: int = MAX_MCP_TOOLS_DEFAULT,
+        mcp_servers_config: dict[str, Any] = {},
     ) -> None:
         """
         Initialize the PanSecurityRelay.
 
         Args:
-            config_path: Path to the configuration file
-            security_scanner_config: Configuration dictionary for the security scanner
+            security_scanner_env: Security Scanner Environment Variables
             tool_registry_cache_expiry: Cache expiry time in seconds
             max_downstream_servers: Maximum number of downstream servers
             max_downstream_tools: Maximum number of tools
+            mcp_servers_config: MCP Server Configurations
         """
         self.servers: dict[str, DownstreamMcpClient] = {}  # Maps server_name to server
         self.tool_registry = ToolRegistry(tool_registry_cache_expiry)
-        self.config_path = config_path
-        self.security_scanner_config = security_scanner_config
+        self.security_scanner_env = security_scanner_env
         self.max_downstream_servers = max_downstream_servers
         self.max_downstream_tools = max_downstream_tools
         self.security_scanner: SecurityScanner | None = None
+        self.mcp_servers_config = mcp_servers_config
 
     async def initialize(self) -> None:
         """Initialize the relay server and register all tools."""
-        logging.info("Initializing pan security relay...")
+        log.info("Initializing pan security relay...")
         try:
             # Load configuration and validate server configurations
             self._load_config()
 
             # Store the pan_security server for security scanning
-            await self._update_security_scanner(self.security_scanner_config)
+            await self._update_security_scanner(self.security_scanner_env)
 
             # Configure downstream MCP servers from configuration
             await self._update_tool_registry()
 
-            logging.info("MCP relay server initialized successfully.")
-        except AISecMcpRelayBaseException as relay_error:
-            logging.error(f"MCP Relay initialization error: {relay_error}")
+            log.info("MCP relay server initialized successfully.")
+        except McpRelayBaseError as relay_error:
+            log.error(f"MCP Relay initialization error: {relay_error}")
             raise relay_error
         except Exception as other_error:
             log.exception(f"Failed to initialize MCP relay server, error: {other_error}")
             raise
 
     def _load_config(self) -> dict[str, Any]:
-        """Load and validate configuration file."""
-        try:
-            config = Configuration().load_config(self.config_path)
-            # Validate core configuration sections
-            servers_config = config[MCP_SERVER_CONFIG_LABEL]
-            if isinstance(servers_config, dict):
-                if servers_config is None or len(servers_config.items()) == 0:
-                    raise AISecMcpRelayInvalidConfigurationError("No MCP servers configured.")
-                if len(servers_config.items()) >= self.max_downstream_servers:
-                    raise AISecMcpRelayInvalidConfigurationError(
-                        f"MCP servers configuration limit exceeded, maximum allowed: {self.max_downstream_servers}"
-                    )
-                return servers_config
-            else:
-                raise AISecMcpRelayInvalidConfigurationError("Unexpected configuration format for servers.")
-        except AISecMcpRelayBaseException as validate_error:
-            logging.error(f"Configuration validation error: {validate_error}")
-            raise validate_error
-        except Exception as e:
-            logging.error(f"Configuration loading error: {e}")
-            raise AISecMcpRelayInvalidConfigurationError(f"Could not load configuration: {e}")
+        """Validate MCP Server Configuration Limits"""
+        mcp_servers = self.mcp_servers_config
+        if isinstance(mcp_servers, dict):
+            if len(mcp_servers.items()) == 0:
+                raise McpRelayConfigurationError("No MCP servers configured.")
+            if len(mcp_servers.items()) >= self.max_downstream_servers:
+                raise McpRelayConfigurationError(
+                    f"MCP servers configuration limit exceeded, maximum allowed: {self.max_downstream_servers}"
+                )
+            return mcp_servers
+        else:
+            raise McpRelayConfigurationError("Unexpected configuration format for servers.")
 
-    async def _update_security_scanner(self, security_scanner_config) -> None:
+    async def _update_security_scanner(self, security_scanner_config: SecurityScannerEnv) -> None:
         """Initialize and configure the security scanner for downstream servers."""
-        logging.info("MCP pan-aisecurity server init - Setting up security scanning configuration...")
+        log.info("MCP pan-aisecurity server init - Setting up security scanning configuration...")
 
         mcp_server_path = __posixpath__.parent / "mcp_server/pan_security_server.py"
         server = DownstreamMcpClient(
@@ -170,18 +158,20 @@ class PanSecurityRelay:
                 "env": security_scanner_config,
             },
         )
-        await server.initialize()
+        initialized = await server.initialize()
+        if not initialized:
+            raise McpRelayInternalError("Failed to initialize pan-aisecurity mcp server.")
         self.servers["pan-aisecurity"] = server
         self.security_scanner = SecurityScanner(server)
         await server.cleanup()
 
         if self.security_scanner is None:
-            raise AISecMcpRelayInvalidConfigurationError("Missing pan-aisecurity mcp server in configuration.")
-        logging.info("MCP pan-aisecurity server configured successfully.")
+            raise McpRelayConfigurationError("Missing pan-aisecurity mcp server in configuration.")
+        log.info("MCP pan-aisecurity server configured successfully.")
 
     async def _update_tool_registry(self) -> None:
         """Update the tool registry with tools from all configured servers."""
-        logging.info("Updating tool registry...")
+        log.info("Updating tool registry...")
         servers_config = self._load_config()
 
         # Collect individual server tool lists
@@ -201,25 +191,27 @@ class PanSecurityRelay:
         full_tool_list: list[InternalTool] = []
         for server_name, server_config in servers_config.items():
             server = DownstreamMcpClient(server_name, server_config)
-            await server.initialize()
+            initialized = await server.initialize()
+            if not initialized:
+                raise McpRelayInternalError(f"Failed to initialize server: {server_name}")
             self.servers[server_name] = server
 
             # Register all tools from this server
             server_tools = await server.list_tools()
-            hidden_mode_enabled = (
-                server_config.get(ENVIRONMENT_CONFIG_LABEL) is not None
-                and server_config.get(ENVIRONMENT_CONFIG_LABEL).get(HIDDEN_MODE_LABEL) == HIDDEN_MODE_ENABLED
-            )
-            await self._prepare_tool(server_name, server_tools, hidden_mode_enabled, full_tool_list)
-            await server.cleanup()
+            hidden_mode_enabled = server_config.get("env", {}).get("hidden_mode") == "enabled"
+            try:
+                await self._prepare_tool(server_name, server_tools, hidden_mode_enabled, full_tool_list)
+            except McpRelayScanError:
+                log.error(f"Security Scan Failed for server: {server_name}")
+                raise
+            finally:
+                await server.cleanup()
         return full_tool_list
 
     def _validate_tool_limits(self, tools: list[InternalTool]) -> None:
         """Additional validation of tool limits and constraints."""
         if len(tools) > self.max_downstream_tools:
-            raise AISecMcpRelayInvalidConfigurationError(
-                f"Tools limit exceeded, maximum allowed: {self.max_downstream_tools}"
-            )
+            raise McpRelayConfigurationError(f"Tools limit exceeded, maximum allowed: {self.max_downstream_tools}")
 
     async def _prepare_tool(
         self,
@@ -246,8 +238,9 @@ class PanSecurityRelay:
                 exist_tool = self.tool_registry.get_tool_by_hash(internal_tool.sha256_hash)
                 if exist_tool is None:
                     # Security scan
-                    logging.info(f"Scan tool info: {server_tool.model_dump()!s}")
-                    if self.security_scanner.should_block(await self.security_scanner.scan_tool(server_tool)):
+                    log.info(f"Scan tool info: {server_tool.model_dump()!s}")
+                    tool_scan_result = await self.security_scanner.scan_tool(server_tool)
+                    if self.security_scanner.should_block(tool_scan_result):
                         internal_tool.state = ToolState.DISABLED_SECURITY_RISK
                     else:
                         internal_tool.state = ToolState.ENABLED
@@ -261,7 +254,7 @@ class PanSecurityRelay:
         for tool in tools:
             if tool.state == ToolState.ENABLED:
                 if tool.name in name_to_tool_dict:
-                    logging.info(f"Tool '{tool.name}' already in dict, skipping or updating...")
+                    log.info(f"Tool '{tool.name}' already in dict, skipping or updating...")
                     name_to_tool_dict[tool.name].state = ToolState.DISABLED_DUPLICATE
                     tool.state = ToolState.DISABLED_DUPLICATE
                 else:
@@ -270,7 +263,7 @@ class PanSecurityRelay:
             f"{tool.server_name}:{tool.name}" for tool in tools if tool.state == ToolState.DISABLED_DUPLICATE
         ]
         if len(duplicate_tool_names) > 0:
-            logging.warning(f"Duplicate tool names: {duplicate_tool_names}")
+            log.warning(f"Duplicate tool names: {duplicate_tool_names}")
 
     async def launch_mcp_server(self) -> Server:
         """Create and configure the MCP server with handlers."""
@@ -278,32 +271,32 @@ class PanSecurityRelay:
 
         @app.list_tools()
         async def list_tools() -> list[types.Tool]:
-            logging.info(f"-------------- {MCP_RELAY_NAME}: list_tools --------------")
+            log.info(f"-------------- {MCP_RELAY_NAME}: list_tools --------------")
             try:
                 return await self._handle_list_tools()
-            except AISecMcpRelayBaseException as relay_error:
-                logging.error(f"MCP Relay list tool error: {relay_error}")
+            except McpRelayBaseError as relay_error:
+                log.error(f"MCP Relay list tool error: {relay_error}")
                 raise relay_error
             except Exception as e:
-                logging.error(f"Error listing tools: {e}")
-                raise AISecMcpRelayInternalError(f"Failed to list tools: {e}")
+                log.error(f"Error listing tools: {e}")
+                raise McpRelayInternalError(f"Failed to list tools: {e}")
 
         @app.call_tool()
         async def call_tool(
             name: str, arguments: dict
         ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-            logging.info(f"-------------- {MCP_RELAY_NAME}: {name} --------------")
+            log.info(f"-------------- {MCP_RELAY_NAME}: {name} --------------")
             try:
                 result = await self._handle_tool_execution(name, arguments)
                 if result.isError:
-                    raise AISecMcpRelayToolExecutionError(str(result.content))
+                    raise McpRelayToolExecutionError(str(result.content))
                 return result.content
-            except AISecMcpRelayBaseException as relay_error:
-                logging.error(f"MCP Relay call tool error: {relay_error}")
+            except McpRelayBaseError as relay_error:
+                log.error(f"MCP Relay call tool error: {relay_error}")
                 raise relay_error
             except Exception as e:
-                logging.error(f"Error call tool {name}: {e}")
-                raise AISecMcpRelayInternalError(f"Failed to call tool {name}: {e}")
+                log.error(f"Error call tool {name}: {e}")
+                raise McpRelayInternalError(f"Failed to call tool {name}: {e}")
 
         return app
 
@@ -315,9 +308,9 @@ class PanSecurityRelay:
 
         # Process each tool
         for tool in self.tool_registry.get_available_tools():
-            logging.debug(f"Processing tool: {tool.name}")
+            log.debug(f"Processing tool: {tool.name}")
             available_tool_list.append(tool.to_mcp_tool())
-            logging.debug(f"Tool {tool.name}: State={tool.state}, Total tools={len(available_tool_list)}")
+            log.debug(f"Tool {tool.name}: State={tool.state}, Total tools={len(available_tool_list)}")
 
         # Add the relay info tool
         available_tool_list.append(
@@ -337,7 +330,7 @@ class PanSecurityRelay:
         # Scan the request for security issues
         if self.security_scanner:
             if self.security_scanner.should_block(await self.security_scanner.scan_request(input_text)):
-                raise AISecMcpRelaySecurityBlockError("Unsafe Request: Security scan blocked this request")
+                raise McpRelaySecurityBlockError("Unsafe Request: Security scan blocked this request")
 
         # Handle special case for relay info tool
         if name == TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO:
@@ -352,7 +345,7 @@ class PanSecurityRelay:
                 break
 
         if not target_tool:
-            raise AISecMcpRelayToolNotFoundError(f"Unknown tool: {name}")
+            raise McpRelayToolNotFoundError(f"Unknown tool: {name}")
 
         # Execute the tool on the downstream server
         result = await self._execute_on_server(target_tool.server_name, name, arguments)
@@ -360,19 +353,19 @@ class PanSecurityRelay:
         result_content = self.security_scanner.pan_security_server.extract_text_content(result.content)
 
         if self.security_scanner:
-            logging.info(f"scanning: {result_content}")
+            log.info(f"scanning: {result_content}")
             if self.security_scanner.should_block(
                 await self.security_scanner.scan_response(input_text, str(result_content))
             ):
-                raise AISecMcpRelaySecurityBlockError("Unsafe Response: Security scan blocked this response")
+                raise McpRelaySecurityBlockError("Unsafe Response: Security scan blocked this response")
 
         if result.isError:
-            raise AISecMcpRelayToolExecutionError(str(result.content))
+            raise McpRelayToolExecutionError(str(result.content))
 
         return result
 
     async def _handle_list_downstream_servers_info(self) -> types.CallToolResult:
-        logging.info(f"Current tool registry status: {self.tool_registry.get_registry_stats()}")
+        log.info(f"Current tool registry status: {self.tool_registry.get_registry_stats()}")
         return types.CallToolResult(
             content=[types.TextContent(type="text", text=self.tool_registry.get_server_tool_map_json())],
             isError=False,
@@ -381,13 +374,15 @@ class PanSecurityRelay:
     async def _execute_on_server(self, server_name: str, tool_name: str, arguments: dict) -> types.CallToolResult:
         """Execute a tool on a specific downstream server."""
         if server_name not in self.servers:
-            raise AISecMcpRelayServerNotFoundError(f"Server not found: {server_name}")
+            raise McpRelayServerNotFoundError(f"Server not found: {server_name}")
 
         server = self.servers[server_name]
-        await server.initialize()
+        initialized = await server.initialize()
+        if not initialized:
+            raise McpRelayInternalError(f"Server not initialized: {server_name}")
 
         try:
-            logging.info(f"Executing: {server_name} - {tool_name} - {arguments}")
+            log.info(f"Executing: {server_name} - {tool_name} - {arguments}")
             result = await server.execute_tool(tool_name, arguments)
             return result
         finally:
@@ -395,7 +390,7 @@ class PanSecurityRelay:
 
     async def run_stdio_server(self, app: Server) -> None:
         """Run the server with stdio transport."""
-        logging.info("Starting server with stdio transport.")
+        log.info("Starting server with stdio transport.")
 
         async def arun():
             async with stdio_server() as streams:
@@ -405,7 +400,7 @@ class PanSecurityRelay:
 
     async def run_sse_server(self, app: Server, host: str, port: int) -> None:
         """Run the server with SSE transport."""
-        logging.info(f"Starting server with SSE transport on {host}:{port}")
+        log.info(f"Starting server with SSE transport on {host}:{port}")
 
         sse_transport = SseServerTransport("/messages")
         # Use the wrapper classes for the endpoints
