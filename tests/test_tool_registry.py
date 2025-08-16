@@ -27,11 +27,11 @@ from unittest.mock import patch
 
 import pytest
 
-from pan_aisecurity_mcp_relay.constants import TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT, UNIX_EPOCH
+from pan_aisecurity_mcp_relay.constants import TOOL_REGISTRY_CACHE_TTL_DEFAULT, UNIX_EPOCH
 from pan_aisecurity_mcp_relay.exceptions import (
-    AISecMcpRelayBaseException,
-    AISecMcpRelayToolRegistryError,
-    AISecMcpRelayValidationError,
+    McpRelayBaseError,
+    McpRelayToolRegistryError,
+    McpRelayValidationError,
 )
 from pan_aisecurity_mcp_relay.tool import InternalTool, ToolState
 from pan_aisecurity_mcp_relay.tool_registry import ToolRegistry
@@ -134,7 +134,7 @@ def test_tool_registry_initialization_default_expiry():
     assert registry._available_tool_list == []
     assert registry._hash_to_tool_map == {}
     assert registry._last_updated_at == UNIX_EPOCH
-    assert registry._expiry_in_seconds == TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT
+    assert registry._expiry_in_seconds == TOOL_REGISTRY_CACHE_TTL_DEFAULT
 
 
 def test_tool_registry_initialization_custom_expiry():
@@ -147,16 +147,16 @@ def test_tool_registry_initialization_custom_expiry():
 
 def test_tool_registry_initialization_invalid_expiry():
     """Test ToolRegistry initialization with invalid cache expiry."""
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         ToolRegistry(tool_registry_cache_expiry=0)
 
-    assert isinstance(exc_info.value, AISecMcpRelayValidationError)
+    assert isinstance(exc_info.value, McpRelayValidationError)
     assert "positive integer" in str(exc_info.value)
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         ToolRegistry(tool_registry_cache_expiry=-100)
 
-    assert isinstance(exc_info.value, AISecMcpRelayValidationError)
+    assert isinstance(exc_info.value, McpRelayValidationError)
 
 
 @patch("pan_aisecurity_mcp_relay.tool_registry.logger")
@@ -188,10 +188,10 @@ def test_update_registry_none_tool_list():
     """Test updating registry with None tool list."""
     registry = ToolRegistry()
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         registry.update_registry(None)
 
-    assert isinstance(exc_info.value, AISecMcpRelayValidationError)
+    assert isinstance(exc_info.value, McpRelayValidationError)
     assert "cannot be None" in str(exc_info.value)
 
 
@@ -199,10 +199,10 @@ def test_update_registry_invalid_tool_list_type():
     """Test updating registry with invalid tool list type."""
     registry = ToolRegistry()
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         registry.update_registry("not_a_list")
 
-    assert isinstance(exc_info.value, AISecMcpRelayValidationError)
+    assert isinstance(exc_info.value, McpRelayValidationError)
     assert "must be a list" in str(exc_info.value)
 
 
@@ -212,10 +212,10 @@ def test_update_registry_exception_handling(sample_tool_list):
 
     # Mock an exception during update
     with patch.object(registry, "_update_available_tools", side_effect=Exception("Test error")):
-        with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+        with pytest.raises(McpRelayBaseError) as exc_info:
             registry.update_registry(sample_tool_list)
 
-        assert isinstance(exc_info.value, AISecMcpRelayToolRegistryError)
+        assert isinstance(exc_info.value, McpRelayToolRegistryError)
         assert "Failed to update tool registry" in str(exc_info.value)
 
 
@@ -397,10 +397,10 @@ def test_get_tool_by_hash_invalid_type():
     """Test retrieving tool by hash with invalid type."""
     registry = ToolRegistry()
 
-    with pytest.raises(AISecMcpRelayBaseException) as exc_info:
+    with pytest.raises(McpRelayBaseError) as exc_info:
         registry.get_tool_by_hash(123)
 
-    assert isinstance(exc_info.value, AISecMcpRelayValidationError)
+    assert isinstance(exc_info.value, McpRelayValidationError)
     assert "must be a string" in str(exc_info.value)
 
 
@@ -469,10 +469,10 @@ def test_get_server_tool_map_json_serialization_error(sample_tool_list):
     registry.update_registry(sample_tool_list)
 
     with patch.object(InternalTool, "model_dump", side_effect=AttributeError("Test error")):
-        with pytest.raises(AISecMcpRelayToolRegistryError) as exc_info:
+        with pytest.raises(McpRelayToolRegistryError) as exc_info:
             registry.get_server_tool_map_json()
 
-        assert isinstance(exc_info.value, AISecMcpRelayToolRegistryError)
+        assert isinstance(exc_info.value, McpRelayToolRegistryError)
         assert "Tool serialization failed" in str(exc_info.value)
 
 
