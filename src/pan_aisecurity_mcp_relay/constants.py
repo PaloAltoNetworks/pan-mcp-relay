@@ -21,9 +21,53 @@ This module defines all constants used throughout the Pan AI Security MCP Relay 
 Constants are organized into logical groups for better maintainability and clarity.
 """
 
+import re
 from datetime import datetime
 from enum import StrEnum
 from typing import Final
+
+API_DOMAIN = "api.aisecurity.paloaltonetworks.com"
+API_ENDPOINT_RE = r"^https://service(?:-[a-z]{2}|\.[a-z]{2,3})?\." + re.escape(API_DOMAIN) + r"/?$"
+DEFAULT_API_ENDPOINT = f"https://service.{API_DOMAIN}"
+
+# Environment Variables
+
+API_PREFIX = "PRISMA_AIRS"
+RELAY_PREFIX = "MCP_RELAY"
+
+ENV_API_KEY = f"{API_PREFIX}_API_KEY"
+"""Prisma AIRS API authentication key"""
+
+ENV_API_ENDPOINT = f"{API_PREFIX}_API_ENDPOINT"
+"""Prisma AIRS API endpoint URL (optional, uses default if not provided)"""
+
+ENV_AI_PROFILE = f"{API_PREFIX}_AI_PROFILE"
+""" Name or ID of the AI Runtime Security profile to use for scanning"""
+
+ENV_CONFIG_FILE = f"{RELAY_PREFIX}_CONFIG_FILE"
+"""Path to configuration file"""
+
+ENV_HOST = f"{RELAY_PREFIX}_HOST"
+ENV_PORT = f"{RELAY_PREFIX}_PORT"
+ENV_DOTENV = f"{RELAY_PREFIX}_DOTENV"
+ENV_SHOW_CONFIG = f"{RELAY_PREFIX}_SHOW_CONFIG"
+ENV_TRANSPORT = f"{RELAY_PREFIX}_TRANSPORT"
+ENV_TOOL_CACHE_TTL = f"{RELAY_PREFIX}_TOOL_CACHE_TTL"
+ENV_MAX_SERVERS = f"{RELAY_PREFIX}_MAX_SERVERS"
+ENV_MAX_TOOLS = f"{RELAY_PREFIX}_MAX_TOOLS"
+
+f"""
+List of environment variable keys used for Security Scanner configuration.
+
+Environment Variables:
+    {ENV_API_KEY}: {ENV_API_KEY.__doc__}
+    {ENV_API_ENDPOINT}: {ENV_API_ENDPOINT.__doc__}
+    {ENV_AI_PROFILE}: {ENV_AI_PROFILE.__doc__}
+
+Note:
+    Configuration precedence: CLI Flags > Environment > .env file.
+"""
+
 
 # =============================================================================
 # SERVER IDENTIFICATION
@@ -46,43 +90,33 @@ class TransportType(StrEnum):
     Enumeration of supported transport types for MCP communication.
 
     Attributes:
-        STDIO: Standard input/output transport using subprocess pipes
-        SSE: Server-Sent Events transport using HTTP streaming
+        stdio: Standard input/output transport using subprocess pipes
+        sse: Server-Sent Events transport using HTTP streaming
+        streamable_http: HTTP transport using the Streamable HTTP protocol
     """
 
-    STDIO = "stdio"
-    SSE = "sse"
-    STREAMABLE_HTTP = "streamable_http"
+    stdio = "stdio"
+    sse = "sse"
+    streamable_http = "streamable_http"
 
+    def __repr__(self) -> str:
+        return str(self.value)
 
-# =============================================================================
-# CONFIGURATION LABELS
-# =============================================================================
-
-ENVIRONMENT_CONFIG_LABEL: Final[str] = "env"
-"""Label for environment configuration section in config files."""
-
-MCP_SERVER_CONFIG_LABEL: Final[str] = "mcpServers"
-"""Label for MCP servers configuration section in config files."""
-
-HIDDEN_MODE_LABEL: Final[str] = "hidden_mode"
-"""Configuration label for hidden mode setting."""
-
-HIDDEN_MODE_ENABLED: Final[str] = "enabled"
-"""Value indicating hidden mode is enabled."""
+    def __str__(self) -> str:
+        return str(self.value)
 
 
 # =============================================================================
 # DEFAULT VALUES AND LIMITS
 # =============================================================================
 
-TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT: Final[int] = 300
+TOOL_REGISTRY_CACHE_TTL_DEFAULT: Final[int] = 300
 """Default cache expiry time for tool registry in seconds (5 minutes)."""
 
-MAX_DOWNSTREAM_SERVERS_DEFAULT: Final[int] = 32
+MAX_MCP_SERVERS_DEFAULT: Final[int] = 32
 """Maximum number of downstream servers that can be configured."""
 
-MAX_DOWNSTREAM_TOOLS_DEFAULT: Final[int] = 64
+MAX_MCP_TOOLS_DEFAULT: Final[int] = 64
 """Maximum total number of tools across all servers."""
 
 
@@ -108,26 +142,6 @@ TOOL_NAME_PAN_AISECURITY_INLINE_SCAN: Final[str] = "pan_inline_scan"
 # =============================================================================
 # SECURITY SCAN CONSTANTS
 # =============================================================================
-
-SECURITY_ENV_KEYS = [
-    "PANW_AI_SEC_API_KEY",
-    "PANW_AI_SEC_API_ENDPOINT",
-    "PANW_AI_PROFILE_NAME",
-    "PANW_AI_PROFILE_ID",
-]
-"""
-List of environment variable keys used for Security Scanner configuration.
-
-Environment Variables:
-    PANW_AI_SEC_API_KEY: Palo Alto Networks AI Runtime Security API authentication key
-    PANW_AI_SEC_API_ENDPOINT: AI Runtime Security API endpoint URL (optional, uses default if not provided)
-    PANW_AI_PROFILE_NAME: Name of the AI Runtime Security profile to use for scanning
-    PANW_AI_PROFILE_ID: ID of the AI Runtime Security profile (alternative to profile name)
-
-Note:
-    Either PANW_AI_PROFILE_NAME or PANW_AI_PROFILE_ID must be provided.
-    Configuration precedence: command line args > environment variables > .env file.
-"""
 
 EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH: Final[int] = 1
 """Expected number of content items in security scan results."""
