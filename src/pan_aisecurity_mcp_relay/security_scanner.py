@@ -19,6 +19,7 @@ import logging
 
 import mcp.types as types
 from aisecurity.scan.asyncio.scanner import ScanResponse
+from requests import JSONDecodeError
 
 from pan_aisecurity_mcp_relay.constants import (
     EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH,
@@ -27,6 +28,9 @@ from pan_aisecurity_mcp_relay.constants import (
     TOOL_NAME_PAN_AISECURITY_INLINE_SCAN,
 )
 from pan_aisecurity_mcp_relay.downstream_mcp_client import DownstreamMcpClient
+from pan_aisecurity_mcp_relay.exceptions import McpRelayScanError
+
+log = logging.getLogger("pan-mcp-relay.security-scanner")
 
 
 class SecurityScanner:
@@ -68,27 +72,37 @@ class SecurityScanner:
             Exception: If there are issues with server communication or response parsing
         """
         logging.info(f"-------------- security_scanner: {scan_type} --------------")
-        await self.pan_security_server.initialize()
+        initialized = await self.pan_security_server.initialize()
+        if not initialized:
+            return None
 
         try:
             scan_result = await self.pan_security_server.execute_tool(TOOL_NAME_PAN_AISECURITY_INLINE_SCAN, params)
             if scan_result.isError:
-                logging.error(
-                    f"Security scan failed: {self.pan_security_server.extract_text_content(scan_result.content)}"
-                )
+                text = self.pan_security_server.extract_text_content(scan_result.content)
+                if isinstance(text, str):
+                    try:
+                        text = json.loads(text)
+                        if isinstance(text, dict) and "text" in text:
+                            text = text["text"]
+                    except JSONDecodeError:
+                        pass
+                    text = text.replace(r"\n", "\n")
+                log.error(f"Security scan failed: {text}")
+                raise McpRelayScanError("Security Scan Failed")
                 return None
 
             if not isinstance(scan_result.content, list):
-                logging.error(f"Security scan result content should be a list, but: {type(scan_result.content)}")
+                log.error(f"Security scan result content should be a list, received: {type(scan_result.content)}")
                 return None
 
             if len(scan_result.content) != EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH:
-                logging.error(f"Expected 1 item in scan result content, got: {len(scan_result.content)}")
+                log.error(f"Expected 1 item in scan result content, got: {len(scan_result.content)}")
                 return None
 
             scan_result_item = scan_result.content[0]
             if not isinstance(scan_result_item, types.TextContent):
-                logging.error(f"Expected TextContent in scan result, got {type(scan_result_item)}")
+                log.error(f"Expected TextContent in scan result, got {type(scan_result_item)}")
                 return None
 
             scan_text = scan_result_item.text
