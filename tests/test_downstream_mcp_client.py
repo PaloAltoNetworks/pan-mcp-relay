@@ -36,7 +36,7 @@ from mcp import ClientSession
 from tenacity import RetryError
 
 from pan_aisecurity_mcp_relay.downstream_mcp_client import DownstreamMcpClient
-from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayInvalidConfigurationError
+from pan_aisecurity_mcp_relay.exceptions import McpRelayConfigurationError
 
 
 @pytest.fixture
@@ -293,7 +293,7 @@ async def test_initialize_sse_server_missing_url():
     client = DownstreamMcpClient("sse-server", sse_config_no_url)
 
     with pytest.raises(
-        AISecMcpRelayInvalidConfigurationError,
+        McpRelayConfigurationError,
         match=re.escape(r"invalid MCP server configuration: sse-server (missing url)"),
     ):
         await client.initialize()
@@ -335,7 +335,7 @@ async def test_initialize_stdio_server_failure(mock_logging, mock_stdio_client, 
 
     client = DownstreamMcpClient(server_name, test_server_config)
 
-    with pytest.raises(AISecMcpRelayInvalidConfigurationError, match=err_msg):
+    with pytest.raises(McpRelayConfigurationError, match=err_msg):
         await client.initialize()
 
     mock_logging.exception.assert_called_with(err_msg)
@@ -351,7 +351,7 @@ async def test_initialize_sse_server_failure(mock_logging, mock_sse_client, sse_
 
     client = DownstreamMcpClient("sse-server", sse_server_config)
 
-    with pytest.raises(AISecMcpRelayInvalidConfigurationError, match="Error setting up server sse-server"):
+    with pytest.raises(McpRelayConfigurationError, match="Error setting up server sse-server"):
         await client.initialize()
 
     mock_logging.exception.assert_called_with("Error setting up server sse-server: All connection attempts failed")
