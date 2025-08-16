@@ -1,0 +1,54 @@
+# Copyright (c) 2025, Palo Alto Networks
+#
+# Licensed under the Polyform Internal Use License 1.0.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# You may obtain a copy of the License at:
+#
+# https://polyformproject.org/licenses/internal-use/1.0.0
+# (or)
+# https://github.com/polyformproject/polyform-licenses/blob/76a278c4/PolyForm-Internal-Use-1.0.0.md
+#
+# As far as the law allows, the software comes as is, without any warranty
+# or condition, and the licensor will not be liable to you for any damages
+# arising out of these terms or the use or nature of the software, under
+# any kind of legal claim.
+
+import os
+from pathlib import Path
+
+
+def expand_path[T](p: T) -> Path | T:
+    """Normnalize, Expands environment variables and converts a path string to Path object."""
+    if isinstance(p, str):
+        p = p.strip()
+    if not p:
+        return p
+    p = expand_vars(p)
+    p = Path(p)
+    p = p.expanduser()
+    p = p.resolve()
+    return p
+
+
+def expand_vars(value: str) -> str:
+    """Expand shell variables of form $var and ${var}."""
+    return os.path.expandvars(value)
+
+
+def getenv(key: str, masked: bool = False) -> str:
+    value = os.getenv(key, "")
+    if value and masked:
+        return "*****"
+    return value
+
+
+def deep_merge[K, V](original: dict[K, V], *updaters: dict[K, V]) -> dict[K, V]:
+    original = original.copy()
+    for update in updaters:
+        for k, v in update.items():
+            if k in original and isinstance(original[k], dict) and isinstance(v, dict):
+                original[k] = deep_merge(original[k], v)
+            else:
+                original[k] = v
+    return original
