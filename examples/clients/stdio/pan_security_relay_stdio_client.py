@@ -11,12 +11,6 @@ import mcp.types as types
 from mcp import StdioServerParameters, stdio_client
 from mcp.client.session import ClientSession
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="[Pan Security Client] %(levelname)s %(message)s",
-    datefmt="%H:%M:%S",
-)
-
 
 class InteractiveCommand(StrEnum):
     """
@@ -197,4 +191,9 @@ async def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[Pan Security Client] %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
+    )
     asyncio.run(main())
