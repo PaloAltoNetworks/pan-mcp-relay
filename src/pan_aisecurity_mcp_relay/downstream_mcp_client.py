@@ -32,10 +32,11 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
+from mcp.shared.exceptions import McpError
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from pan_aisecurity_mcp_relay.constants import TransportType
-from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayBaseException, AISecMcpRelayInvalidConfigurationError
+from pan_aisecurity_mcp_relay.exceptions import McpRelayBaseError, McpRelayConfigurationError
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class DownstreamMcpClient:
     downstream MCP server.
     """
 
-    def __init__(self, name: str, config: dict[str, Any]) -> None:
+    def __init__(self, name: str, config: dict[str, str | list[str] | dict[str, str]]) -> None:
         """
         Initialize the MCP client.
 
@@ -57,13 +58,13 @@ class DownstreamMcpClient:
             config: Server configuration dictionary
         """
         self.name: str = name
-        self.config: dict[str, Any] = config
+        self.config: dict[str, str | list[str] | dict[str, str]] = config
         self.session: ClientSession | None = None
         self._cleanup_lock: asyncio.Lock = asyncio.Lock()
         self.exit_stack: AsyncExitStack = AsyncExitStack()
-        log.info(f"Server {name} created with config: {config}")
+        log.info(f"Server {name} created")
 
-    async def initialize(self) -> None:
+    async def initialize(self) -> bool:
         """
         Initialize the server connection.
 
@@ -75,30 +76,29 @@ class DownstreamMcpClient:
             Exception: If initialization fails
         """
         log.debug(f"Initializing downstream mcp server: {self.name}...")
-        # TODO: Add Streamable HTTP Support
 
         client_type = self.config.get("type")
         command = self.config.get("command")
         url = self.config.get("url")
         if not client_type:
             if command:
-                client_type = TransportType.STDIO
+                client_type = TransportType.stdio
             elif url:
-                client_type = TransportType.STREAMABLE_HTTP
+                client_type = TransportType.streamable_http
             else:
-                raise AISecMcpRelayInvalidConfigurationError(f"invalid MCP server configuration: {self.name}")
+                raise McpRelayConfigurationError(f"invalid MCP server configuration: {self.name}")
 
         try:
-            if client_type == TransportType.STDIO:
+            if client_type == TransportType.stdio:
                 client = await self.setup_stdio_client()
-            elif client_type == TransportType.STREAMABLE_HTTP or client_type == TransportType.SSE:
+            elif client_type == TransportType.streamable_http or client_type == TransportType.sse:
                 client = await self.setup_http_client(client_type)
             else:
-                raise AISecMcpRelayInvalidConfigurationError(f"invalid MCP server configuration: {self.name}")
+                raise McpRelayConfigurationError(f"invalid MCP server configuration: {self.name}")
         except Exception as e:
             err_msg = f"Error setting up server {self.name}: {e}"
             log.exception(err_msg)
-            raise AISecMcpRelayInvalidConfigurationError(err_msg) from e
+            raise McpRelayConfigurationError(err_msg) from e
 
         try:
             # Set up communication with the server
@@ -108,30 +108,34 @@ class DownstreamMcpClient:
             # Create and initialize session
             self.session = await self.exit_stack.enter_async_context(ClientSession(read, write))
             await self.session.initialize()
-
-            log.debug(f"Server {self.name} initialized successfully")
-        except Exception as e:
-            log.error(f"Error initializing server {self.name}: {e}", exc_info=True)
+        except McpError as e:
+            log.error(f"Failed to initialize Downstream MCP Server: {e}")
             await self.cleanup()
-            raise
+            return False
+        except Exception as e:
+            log.error(f"Error initializing server {self.name}: {e}")
+            await self.cleanup()
+            return False
+        log.debug(f"Server {self.name} initialized successfully")
+        return True
 
     async def setup_http_client(self, client_type: TransportType):
-        if client_type == TransportType.STREAMABLE_HTTP:
+        if client_type == TransportType.streamable_http:
             client_constructor = streamablehttp_client
-        elif client_type == TransportType.SSE:
+        elif client_type == TransportType.sse:
             client_constructor = sse_client
         else:
-            raise AISecMcpRelayBaseException(f"Invalid client HTTP type: {client_type}")
+            raise McpRelayBaseError(f"Invalid client HTTP type: {client_type}")
         url = self.config.get("url")
         headers = self.config.get("headers", {})
         if not url:
             err_msg = f"invalid MCP server configuration: {self.name} (missing url)"
             log.error(err_msg)
-            raise AISecMcpRelayInvalidConfigurationError(err_msg)
+            raise McpRelayConfigurationError(err_msg)
         if not isinstance(headers, dict):
             err_msg = f"invalid MCP server configuration: {self.name} (headers is not a map)"
             log.error(err_msg)
-            raise AISecMcpRelayInvalidConfigurationError(err_msg)
+            raise McpRelayConfigurationError(err_msg)
         try:
             timeout = float(self.config.get("timeout", 30))
         except ValueError:
@@ -153,9 +157,9 @@ class DownstreamMcpClient:
             elif terminate_on_close.lower() == "false":
                 terminate_on_close = False
             else:
-                raise AISecMcpRelayBaseException(f"Invalid terminate_on_close value: {terminate_on_close}")
+                raise McpRelayBaseError(f"Invalid terminate_on_close value: {terminate_on_close}")
         else:
-            raise AISecMcpRelayBaseException(f"Invalid terminate_on_close value: {terminate_on_close}")
+            raise McpRelayBaseError(f"Invalid terminate_on_close value: {terminate_on_close}")
 
         # Parse HTTP Header Values using Environment variables
         env = os.environ.copy()
@@ -168,7 +172,7 @@ class DownstreamMcpClient:
             timeout=timeout,
             sse_read_timeout=sse_read_timeout,
         )
-        if client_type == TransportType.STREAMABLE_HTTP:
+        if client_type == TransportType.streamable_http:
             kwargs.update(dict(terminate_on_close=terminate_on_close))
 
         client = client_constructor(**kwargs)
@@ -183,19 +187,20 @@ class DownstreamMcpClient:
         if not command:
             err_msg = f"invalid MCP server configuration: {self.name} (missing command)"
             log.error(err_msg)
-            raise AISecMcpRelayInvalidConfigurationError(err_msg)
+            raise McpRelayConfigurationError(err_msg)
         args = self.config.get("args")
         config_env = self.config.get("env")
         if config_env:
             if not isinstance(config_env, dict):
                 err_msg = f"invalid MCP server configuration: {self.name} (env is not a map)"
                 log.error(err_msg)
-                raise AISecMcpRelayInvalidConfigurationError(err_msg)
+                raise McpRelayConfigurationError(err_msg)
             env = {
                 **env,
                 **config_env,
             }  # merge env + config_env, giving priority to config_env
         cwd = self.config.get("cwd")
+        log.info(f"Creating stdio client: '{command} {' '.join(args)}'")
         server_params = StdioServerParameters(command=command, args=args, env=env, cwd=cwd)
         client = stdio_client(server_params)
         return client
@@ -271,6 +276,8 @@ class DownstreamMcpClient:
         """
         # Handle list of content items
         if isinstance(content, list):
+            if len(content) == 1:
+                return self.extract_text_content(content[0])
             return [self.extract_text_content(item) for item in content]
 
         # Handle specific MCP content types
