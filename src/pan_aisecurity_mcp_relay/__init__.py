@@ -14,6 +14,6 @@
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
 
-from .configuration import Configuration as Configuration
-from .main import main as main
+from .configuration import Config as Config
+from .main import entrypoint as entrypoint
 from .mcp_server import pan_security_server as pan_security_server
