@@ -25,6 +25,7 @@ dependencies = [
   "mcp[cli,rich,ws]>=1.12.1",
   "pan-aisecurity>=0.4.0.5.post2",
   "pydantic>=2.11.7",
+  "pydantic-settings[yaml]>=2.10.1",
   "python-dotenv>=1.1.1",
   "rich>=14.0",
   "tenacity>=9.1.2",
@@ -36,7 +37,6 @@ dev = [
   "truststore>=0.10.1",
   "packaging>=25.0",
   "versioningit>=3.1",
-  "python-dotenv>=1.1",
   "unittest2pytest>=0.5",
 ]
 ci = [
