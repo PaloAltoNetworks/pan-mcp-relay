@@ -73,10 +73,7 @@ Note:
 # SERVER IDENTIFICATION
 # =============================================================================
 
-SECURITY_SERVER_NAME: Final[str] = "pan-aisecurity"
-"""Name identifier for the Pan AI Security server component."""
-
-MCP_RELAY_NAME: Final[str] = "pan-aisecurity-relay"
+MCP_RELAY_NAME: Final[str] = "pan-mcp-relay"
 """Name identifier for the MCP relay server component."""
 
 
@@ -151,3 +148,4 @@ SECURITY_SCAN_RESPONSE_ACTION_BLOCK: Final[str] = "block"
 
 SECURITY_SCAN_RESPONSE_ACTION_ALLOW: Final[str] = "allow"
 """Security scan response indicating content is safe to proceed."""
+SYNC_SCAN_PATH = "/v1/scan/sync/request"
