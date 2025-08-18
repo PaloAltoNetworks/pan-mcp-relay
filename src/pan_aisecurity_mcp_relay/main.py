@@ -28,10 +28,9 @@ from click.core import ParameterSource
 from pydantic import ValidationError
 from rich import print
 
-from pan_aisecurity_mcp_relay.configuration import Config
-from pan_aisecurity_mcp_relay.exceptions import McpRelayBaseError
-from pan_aisecurity_mcp_relay.utils import deep_merge, expand_path, expand_vars, getenv
-
+from . import utils
+from ._version import __version__
+from .configuration import Config
 from .constants import (
     ENV_AI_PROFILE,
     ENV_API_ENDPOINT,
@@ -51,9 +50,11 @@ from .constants import (
     TOOL_REGISTRY_CACHE_TTL_DEFAULT,
     TransportType,
 )
+from .exceptions import McpRelayBaseError
 from .pan_security_relay import PanSecurityRelay
+from .utils import deep_merge, expand_path, expand_vars, getenv
 
-log = logging.getLogger("pan-mcp-relay.main")
+log = utils.get_logger(__name__)
 
 
 def setup_logging():
@@ -62,7 +63,7 @@ def setup_logging():
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(message)s",
-        handlers=[rich.logging.RichHandler(rich_tracebacks=False, console=stderr, markup=True)],
+        handlers=[rich.logging.RichHandler(rich_tracebacks=False, console=stderr)],
         force=True,
     )
 
@@ -100,6 +101,7 @@ context_settings = {
     "config_file",
     "-c",
     "--config-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
     envvar=ENV_CONFIG_FILE,
     help=f"Path to configuration file (yaml, json) [{ENV_CONFIG_FILE}={getenv(ENV_CONFIG_FILE)}]",
 )
@@ -142,6 +144,26 @@ context_settings = {
     help=f"Maximum number of MCP tools to allow [{ENV_MAX_TOOLS}={getenv(ENV_MAX_TOOLS)}]",
 )
 @click.option(
+    "dotenv",
+    "--env",
+    is_flag=False,
+    flag_value=".env",
+    envvar=ENV_DOTENV,
+    help=(
+        f"Use ./.env file, or specify colon separated path to .env file(s)"
+        f"or directories containing .env files. [{ENV_DOTENV}={getenv(ENV_DOTENV)}]"
+    ),
+)
+@click.option("use_system_ca", "--system-ca", is_flag=True, help="Use System CA instead of Mozilla CA Bundle")
+@click.option(
+    "custom_ca_file",
+    "--capath",
+    type=click.types.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to Custom Trusted CA bundle",
+)
+@click.option("log_level", "--verbose", "-v", is_flag=True, flag_value=logging.DEBUG)
+@click.option("log_level", "--quiet", "-q", is_flag=True, flag_value=logging.WARNING)
+@click.option(
     "show_config",
     "--show-config",
     "--dump-config",
@@ -149,16 +171,15 @@ context_settings = {
     is_flag=True,
     help=f"Show configuration and exit [{ENV_SHOW_CONFIG}={getenv(ENV_SHOW_CONFIG)}]",
 )
-@click.option(
-    "dotenv",
-    "--env",
-    envvar=ENV_DOTENV,
-    help=f"Colon separated search path for, or path to .env file(s) [{ENV_DOTENV}={getenv(ENV_DOTENV)}]",
-)
+@click.version_option(__version__, *("--version", "-V"), message="%(version)s")
 @click.pass_context
 def cli(ctx, **kwargs):
+    log.info(f"ctx=({type(ctx)}) {ctx}")
     """Command line interface for the MCP relay server."""
     dotenv_search = kwargs.get("dotenv") or ".env"
+
+    if log_level := kwargs.get("log_level"):
+        logging.getLogger().setLevel(log_level)
 
     try:
         load_dotenvs(dotenv_search)
@@ -239,9 +260,10 @@ async def start_mcp_relay_server(config: Config):
         max_downstream_tools=relay_config.max_mcp_tools,
         mcp_servers_config=mcp_servers_config,
     )
-    await relay_server.initialize()
+
     # Create and run the MCP server
-    app = await relay_server.launch_mcp_server()
+    app = await relay_server.mcp_server()
+
     match relay_config.transport:
         case TransportType.stdio:
             await relay_server.run_stdio_server(app)
