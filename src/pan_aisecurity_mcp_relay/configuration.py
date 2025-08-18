@@ -153,12 +153,12 @@ class McpRelayConfig(BaseModel):
 
 
 class BaseMcpServer(BaseModel):
-    pass
+    type: TransportType
 
 
 class StdioMcpServer(BaseMcpServer):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
-    type: Literal["stdio"] | None = "stdio"
+    type: Literal[TransportType.stdio] | None = TransportType.stdio
     command: str
     args: list[str] | None = Field(default_factory=list)
     cwd: Path | None = None
@@ -167,19 +167,22 @@ class StdioMcpServer(BaseMcpServer):
 
 class SseMcpServer(BaseMcpServer):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
-    type: Literal["sse"] | None = "sse"
+    type: Literal[TransportType.sse] | None = TransportType.sse
     url: str
-    headers: dict[str, str] | None = None
+    headers: dict[str, str] = Field(default_factory=dict)
 
 
-class StreamableHttpMcpServer(BaseMcpServer):
+class HttpMcpServer(BaseMcpServer):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
-    type: Literal["http"] | None = "http"
+    type: Literal[TransportType.http] | None = TransportType.http
     url: str
-    headers: dict[str, str] | None = Field(default_factory=dict)
+    headers: dict[str, str] = Field(default_factory=dict)
+    timeout: float = Field(default=30.0, ge=0, lt=300)
+    sse_read_timeout: float = Field(default=30.0, ge=0, lt=300)
+    terminate_on_close: bool = False
 
 
-type McpServerType = StdioMcpServer | SseMcpServer | StreamableHttpMcpServer
+type McpServerType = StdioMcpServer | SseMcpServer | HttpMcpServer
 
 
 class Config(BaseModel):
@@ -188,8 +191,11 @@ class Config(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, extra="ignore", validate_by_alias=True, validate_by_name=True)
 
     mcp_relay: McpRelayConfig | None = Field(description="MCP Relay Configuration", alias="mcpRelay")
-    mcp_servers: dict[str, StdioMcpServer | SseMcpServer | StreamableHttpMcpServer] | None = Field(
-        default_factory=dict, description="MCP Servers Configuration", alias="mcpServers"
+    mcp_servers: dict[str, StdioMcpServer | SseMcpServer | HttpMcpServer] | None = Field(
+        default_factory=dict,
+        description="MCP Servers Configuration",
+        alias="mcpServers",
+        min_length=1,
     )
 
     def model_post_init(self, context: Any, /) -> None:
