@@ -22,11 +22,16 @@ Defines tool classes and states for managing tools across different servers.
 
 import hashlib
 import json
+import string
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any
 
 import mcp.types as types
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, StringConstraints
+
+from . import utils
+
+log = utils.get_logger(__name__)
 
 
 class ToolState(StrEnum):
@@ -49,7 +54,7 @@ class BaseTool(types.Tool):
     server_name: str = Field(..., description="The server where this tool is deployed")
     state: ToolState = Field(default=ToolState.ENABLED, description="The state of the tool")
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     def get_argument_descriptions(self) -> list[str]:
         """
@@ -63,7 +68,7 @@ class BaseTool(types.Tool):
             required_params = self.inputSchema.get("required", [])
             for param_name, param_info in self.inputSchema["properties"].items():
                 desc = param_info.get("description", "No description")
-                line = f"- {param_name}: {desc}"
+                line = f"  - {param_name}: {desc}"
                 if param_name in required_params:
                     line += " (required)"
                 args_desc.append(line)
@@ -78,10 +83,15 @@ class BaseTool(types.Tool):
         """
         return types.Tool(
             name=self.name,
+            title=self.title,
             description=self.description,
             inputSchema=self.inputSchema,
             annotations=self.annotations,
+            _meta=self.meta,
         )
+
+
+sha256_re = f"^[{string.hexdigits}]" + "{64}$"
 
 
 class InternalTool(BaseTool):
@@ -91,7 +101,9 @@ class InternalTool(BaseTool):
     Extends BaseTool with SHA256 hash for tool identification and caching.
     """
 
-    sha256_hash: str = Field(default="", description="Hash of tool identity fields")
+    sha256_hash: Annotated[
+        str | None, StringConstraints(to_lower=True, min_length=64, max_length=64, pattern=sha256_re)
+    ] = None
 
     def model_post_init(self, __context: Any) -> None:
         """Compute hash after initialization."""
@@ -146,10 +158,13 @@ class RelayTool(BaseTool):
         """
         args_desc = self.get_argument_descriptions()
 
-        return f"""
-Tool: {self.name}
-Server: {self.server_name}
-Description: {self.description}
-Arguments:
-{chr(10).join(args_desc)}
-"""
+        output_fields = {
+            "Tool": self.name,
+            "Server": self.server_name,
+            "Description": self.description,
+            "Arguments": f"\n{'\n'.join(args_desc)}",
+        }
+
+        text = "\n".join((f"{k}: {v}" for k, v in output_fields.items()))
+
+        return text
