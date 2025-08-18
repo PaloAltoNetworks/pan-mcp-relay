@@ -27,9 +27,9 @@ from . import tool_registry as tool_registry
 from . import utils as utils
 from ._version import __version__ as __version__
 from .configuration import Config as Config
+from .configuration import HttpMcpServer as HttpMcpServer
 from .configuration import McpRelayConfig as McpRelayConfig
 from .configuration import SseMcpServer as SseMcpServer
 from .configuration import StdioMcpServer as StdioMcpServer
-from .configuration import StreamableHttpMcpServer as StreamableHttpMcpServer
 from .main import entrypoint as entrypoint
 from .mcp_server import pan_security_server as pan_security_server
