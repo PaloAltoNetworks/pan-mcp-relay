@@ -27,7 +27,7 @@ from enum import StrEnum
 from typing import Annotated, Any
 
 import mcp.types as types
-from pydantic import ConfigDict, Field, StringConstraints
+from pydantic import ConfigDict, Field, StringConstraints, computed_field
 
 from . import utils
 
@@ -54,7 +54,7 @@ class BaseTool(types.Tool):
     server_name: str = Field(..., description="The server where this tool is deployed")
     state: ToolState = Field(default=ToolState.ENABLED, description="The state of the tool")
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     def get_argument_descriptions(self) -> list[str]:
         """
@@ -81,14 +81,13 @@ class BaseTool(types.Tool):
         Returns:
             Standard MCP Tool object.
         """
-        return types.Tool(
-            name=self.name,
-            title=self.title,
-            description=self.description,
-            inputSchema=self.inputSchema,
-            annotations=self.annotations,
-            _meta=self.meta,
-        )
+        return types.Tool(**self.model_dump(exclude={"server_name", "state"}))
+
+    @computed_field
+    @property
+    def server_tool_name(self) -> str:
+        """Fully Qualified name of the Tool, prefixed by 'server_name:'"""
+        return f"{self.server_name}:{self.name}"
 
 
 sha256_re = f"^[{string.hexdigits}]" + "{64}$"
