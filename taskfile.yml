@@ -434,3 +434,10 @@ tasks:
       - uv run pan-mcp-relay
     preconditions:
       - command -v uv
+
+  copyright:
+    desc: "Ensure copyright notice is inserted in all source code files"
+    cmds:
+      - uv run --script .ci/scripts/copyright.py
+    preconditions:
+      - command -v uv
