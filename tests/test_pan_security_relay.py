@@ -168,9 +168,9 @@ async def test_update_security_scanner_success(
     mock_cleanup.return_value = None
     mock_security_scanner.return_value = AsyncMock()
 
-    await relay._update_security_scanner(valid_config["mcpServers"])
+    await relay._initialize_security_scanner(valid_config["mcpServers"])
 
-    assert relay.security_scanner is not None
+    assert relay.scanner is not None
     assert "pan-aisecurity" in relay.servers
 
 
@@ -375,9 +375,9 @@ async def test_prepare_tool_benign_scan_result(mock_scan_tool, mock_should_block
 
     relay.tool_registry = Mock()
     relay.tool_registry.get_tool_by_hash.return_value = None
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_tool = mock_scan_tool
-    relay.security_scanner.should_block = mock_should_block
+    relay.scanner = Mock()
+    relay.scanner.scan_tool = mock_scan_tool
+    relay.scanner.should_block = mock_should_block
 
     mock_scan_tool.return_value = benign_scan_result
     mock_should_block.return_value = False
@@ -412,9 +412,9 @@ async def test_prepare_tool_malicious_scan_result(mock_scan_tool, mock_should_bl
 
     relay.tool_registry = Mock()
     relay.tool_registry.get_tool_by_hash.return_value = None
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_tool = mock_scan_tool
-    relay.security_scanner.should_block = mock_should_block
+    relay.scanner = Mock()
+    relay.scanner.scan_tool = mock_scan_tool
+    relay.scanner.should_block = mock_should_block
 
     mock_scan_tool.return_value = malicious_scan_result
     mock_should_block.return_value = True
@@ -520,7 +520,7 @@ def test_disable_tools_with_duplicate_names(relay):
 @pytest.mark.asyncio
 async def test_launch_mcp_server_success(relay):
     """Test successful MCP server creation."""
-    server = await relay.launch_mcp_server()
+    server = await relay.mcp_server()
 
     assert server is not None
     assert isinstance(server, Server)
@@ -785,12 +785,12 @@ async def test_handle_tool_execution_success(
             state=ToolState.ENABLED,
         )
     ]
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_request = mock_scan_request
-    relay.security_scanner.scan_response = mock_scan_response
-    relay.security_scanner.should_block = mock_should_block
-    relay.security_scanner.pan_security_server = Mock()
-    relay.security_scanner.pan_security_server.extract_text_content.return_value = "Text successfully summarized."
+    relay.scanner = Mock()
+    relay.scanner.scan_request = mock_scan_request
+    relay.scanner.scan_response = mock_scan_response
+    relay.scanner.should_block = mock_should_block
+    relay.scanner.pan_security_server = Mock()
+    relay.scanner.pan_security_server.extract_text_content.return_value = "Text successfully summarized."
 
     result = await relay._handle_tool_execution(
         "summarize_text_content", {"text": "Sample document content to summarize"}
@@ -831,9 +831,9 @@ async def test_handle_tool_execution_request_blocked(mock_scan_request, mock_sho
             state=ToolState.ENABLED,
         )
     ]
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_request = mock_scan_request
-    relay.security_scanner.should_block = mock_should_block
+    relay.scanner = Mock()
+    relay.scanner.scan_request = mock_scan_request
+    relay.scanner.should_block = mock_should_block
 
     with pytest.raises(McpRelayBaseError) as exc_info:
         await relay._handle_tool_execution("execute_system_command", {"command": "rm -rf /"})
@@ -893,14 +893,12 @@ async def test_handle_tool_execution_response_blocked(
             state=ToolState.ENABLED,
         )
     ]
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_request = mock_scan_request
-    relay.security_scanner.scan_response = mock_scan_response
-    relay.security_scanner.should_block = mock_should_block
-    relay.security_scanner.pan_security_server = Mock()
-    relay.security_scanner.pan_security_server.extract_text_content.return_value = (
-        "Malicious content detected in response"
-    )
+    relay.scanner = Mock()
+    relay.scanner.scan_request = mock_scan_request
+    relay.scanner.scan_response = mock_scan_response
+    relay.scanner.should_block = mock_should_block
+    relay.scanner.pan_security_server = Mock()
+    relay.scanner.pan_security_server.extract_text_content.return_value = "Malicious content detected in response"
 
     with pytest.raises(McpRelayBaseError) as exc_info:
         await relay._handle_tool_execution(
@@ -914,9 +912,9 @@ async def test_handle_tool_execution_response_blocked(
 @pytest.mark.asyncio
 async def test_handle_tool_execution_tool_not_found(relay):
     """Test tool execution with non-existent tool."""
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_request = AsyncMock(return_value={"category": "benign"})
-    relay.security_scanner.should_block.return_value = False
+    relay.scanner = Mock()
+    relay.scanner.scan_request = AsyncMock(return_value={"category": "benign"})
+    relay.scanner.should_block.return_value = False
     relay.tool_registry = Mock()
     relay.tool_registry.get_available_tools.return_value = []
 
@@ -929,9 +927,9 @@ async def test_handle_tool_execution_tool_not_found(relay):
 @pytest.mark.asyncio
 async def test_handle_tool_execution_empty_tool_name(relay):
     """Test tool execution with empty tool name."""
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_request = AsyncMock(return_value={"category": "benign"})
-    relay.security_scanner.should_block.return_value = False
+    relay.scanner = Mock()
+    relay.scanner.scan_request = AsyncMock(return_value={"category": "benign"})
+    relay.scanner.should_block.return_value = False
     relay.tool_registry = Mock()
     relay.tool_registry.get_available_tools.return_value = []
 
@@ -967,12 +965,12 @@ async def test_handle_tool_execution_empty_arguments(relay):
             state=ToolState.ENABLED,
         )
     ]
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_request = AsyncMock(return_value=benign_scan_result)
-    relay.security_scanner.scan_response = AsyncMock(return_value=benign_scan_result)
-    relay.security_scanner.should_block.return_value = False
-    relay.security_scanner.pan_security_server = Mock()
-    relay.security_scanner.pan_security_server.extract_text_content.return_value = "Success"
+    relay.scanner = Mock()
+    relay.scanner.scan_request = AsyncMock(return_value=benign_scan_result)
+    relay.scanner.scan_response = AsyncMock(return_value=benign_scan_result)
+    relay.scanner.should_block.return_value = False
+    relay.scanner.pan_security_server = Mock()
+    relay.scanner.pan_security_server.extract_text_content.return_value = "Success"
 
     with patch.object(relay, "_execute_on_server", new_callable=AsyncMock) as mock_execute:
         mock_execute.return_value = types.CallToolResult(
@@ -1019,9 +1017,9 @@ async def test_handle_tool_execution_special_relay_info_tool(
     mock_should_block.return_value = False
     mock_handle_relay_info.return_value = expected_result
 
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_request = mock_scan_request
-    relay.security_scanner.should_block = mock_should_block
+    relay.scanner = Mock()
+    relay.scanner.scan_request = mock_scan_request
+    relay.scanner.should_block = mock_should_block
 
     result = await relay._handle_tool_execution(TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO, {})
 
@@ -1070,14 +1068,12 @@ async def test_handle_tool_execution_server_returns_error(
             state=ToolState.ENABLED,
         )
     ]
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_request = mock_scan_request
-    relay.security_scanner.scan_response = mock_scan_response
-    relay.security_scanner.should_block = mock_should_block
-    relay.security_scanner.pan_security_server = Mock()
-    relay.security_scanner.pan_security_server.extract_text_content.return_value = (
-        "Tool execution failed on downstream server"
-    )
+    relay.scanner = Mock()
+    relay.scanner.scan_request = mock_scan_request
+    relay.scanner.scan_response = mock_scan_response
+    relay.scanner.should_block = mock_should_block
+    relay.scanner.pan_security_server = Mock()
+    relay.scanner.pan_security_server.extract_text_content.return_value = "Tool execution failed on downstream server"
 
     with pytest.raises(McpRelayBaseError) as exc_info:
         await relay._handle_tool_execution("summarize_text_content", {"text": "Sample document content"})
@@ -1196,12 +1192,12 @@ async def test_concurrent_tool_executions(relay):
             state=ToolState.ENABLED,
         )
     ]
-    relay.security_scanner = Mock()
-    relay.security_scanner.scan_request = AsyncMock(return_value=benign_scan_result)
-    relay.security_scanner.scan_response = AsyncMock(return_value=benign_scan_result)
-    relay.security_scanner.should_block.return_value = False
-    relay.security_scanner.pan_security_server = Mock()
-    relay.security_scanner.pan_security_server.extract_text_content.return_value = "Text processing completed"
+    relay.scanner = Mock()
+    relay.scanner.scan_request = AsyncMock(return_value=benign_scan_result)
+    relay.scanner.scan_response = AsyncMock(return_value=benign_scan_result)
+    relay.scanner.should_block.return_value = False
+    relay.scanner.pan_security_server = Mock()
+    relay.scanner.pan_security_server.extract_text_content.return_value = "Text processing completed"
 
     with patch.object(relay, "_execute_on_server", new_callable=AsyncMock) as mock_execute:
         mock_execute.return_value = types.CallToolResult(
