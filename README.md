@@ -2,30 +2,27 @@
 
 By Palo Alto Networks
 
-`pan-mcp-relay` is a security-enhanced [Model Context Protocol](https://modelcontextprotocol.io)
-(MCP) relay server that acts as an intermediary between clients and downstream
-MCP servers, providing security scanning and centralized orchestration capabilities.
-
 <!--TOC-->
 
 - [Prisma AIRS MCP Security Relay](#prisma-airs-mcp-security-relay)
 - [Overview](#overview)
+  - [Prerequisites](#prerequisites)
+  - [Requirements for Prisma AIRS API Usage](#requirements-for-prisma-airs-api-usage)
 - [Installation and Setup](#installation-and-setup)
+  - [Install via pypi.org](#install-via-pypiorg)
+  - [Install the bleeding edge development version](#install-the-bleeding-edge-development-version)
 - [Configuration](#configuration)
+  - [MCP Relay Server Configuration](#mcp-relay-server-configuration)
+    - [Configuration Precedence](#configuration-precedence)
+    - [Configuration File Format](#configuration-file-format)
   - [Environment Variables](#environment-variables)
-  - [Relay Server Configuration](#relay-server-configuration)
-  - [MCP Server Configuration](#mcp-server-configuration)
+  - [MCP Client Configuration](#mcp-client-configuration)
   - [Transport Options](#transport-options)
 - [Usage](#usage)
   - [pan-mcp-relay CLI Usage](#pan-mcp-relay-cli-usage)
   - [Running the Relay Server](#running-the-relay-server)
     - [stdio transport (default)](#stdio-transport-default)
-    - [stdio transport with security configuration](#stdio-transport-with-security-configuration)
     - [SSE transport](#sse-transport)
-    - [Command Line Arguments](#command-line-arguments)
-- [Examples](#examples)
-  - [Stdio Client Example](#stdio-client-example)
-  - [SSE Client Example Configuration](#sse-client-example-configuration)
 - [Legal](#legal)
 
 <!--TOC-->
@@ -36,13 +33,42 @@ MCP servers, providing security scanning and centralized orchestration capabilit
 
 </a>
 
-The MCP Security Relay provides a security-enhanced intermediary layer for Model Context Protocol communications
+`pan-mcp-relay` is a security-enhanced [Model Context Protocol](https://modelcontextprotocol.io)
+(MCP) Relay (_Proxy_) Server providing real-time AI threat protection for MCP Clients, built with the [Prisma AIRS API].
 
-- **Security scanning** of tool requests and responses using integrated AI security services
-- **Tool registry management** with deduplication, caching, and state management
-- **Multiserver orchestration** supporting multiple downstream MCP servers
-- **Hidden mode support** for bypassing security scans on trusted servers
-- **Automatic tool discovery** and registration from configured downstream servers
+`pan-mcp-relay` will help protect MCP Clients such as IDE's, LLM Chat Clients and AI Agents from harmful MCP Server Tools by automatically scanning and blocking
+various threats, including prompt injections, malicious URLs, insecure outputs, AI agentic threats, sensitive data loss and more.
+
+The MCP Relay scans all MCP Server tool descriptions, tool call parameters, and tool call responses.
+
+For licensing, onboarding, activation, and to obtain an API authentication key and profile name, refer to the
+[Prisma AIRS AI Runtime API Intecept] administration documentation.
+
+## Prerequisites
+
+1. Create and associate a [deployment profile](https://docs.paloaltonetworks.com/ai-runtime-security/activation-and-onboarding/ai-runtime-security-api-intercept-overview/ai-deployment-profile-airs-api-intercept) for Prisma AIRS AI Runtime API intercept in your Customer Support Portal.
+2. [Onboard Prisma AIRS AI Runtime API intercept](https://docs.paloaltonetworks.com/ai-runtime-security/activation-and-onboarding/ai-runtime-security-api-intercept-overview/onboard-api-runtime-security-api-intercept-in-scm) in Strata Cloud Manager.
+3. [Manage applications, API keys, security profiles, and custom topics](https://docs.paloaltonetworks.com/ai-runtime-security/administration/prevent-network-security-threats/airs-apirs-manage-api-keys-profile-apps) in Strata Cloud Manager.
+
+## Requirements for Prisma AIRS API Usage
+
+1. **API Key Token**: This token is generated during the onboarding process in Strata Cloud Manager (see the onboarding prerequisite step above).
+Include the API key token in all API requests using the `x-pan-token` header.
+2. **AI Security Profile Name**: This is the API security profile you created during the onboarding process in Strata Cloud Manager (see the prerequisite step on creating an API security profile above).
+Specify this profile name or the profile ID in the API request payload in the `ai_profile` field.
+
+> [!NOTE]
+> You can manage API keys and AI security profiles in Strata Cloud Manager.
+>
+> 1. Log in to [Strata Cloud Manager](http://stratacloudmanager.paloaltonetworks.com/).
+> 2. Navigate to **Insights > Prisma AIRS > Prisma AIRS AI Runtime: API Intercept**.
+> 3. In the top right corner, click:
+>
+> - **Manage > API Keys** to copy, regenerate, or rotate the API key token.
+> - **Manage > Security Profiles** to fetch details or update AI security profiles.
+> - **Manage > Custom Topics** create or update custom topics for custom topic guardrails threat detections.
+>
+> For complete details, refer to adminstration guide for the section on how to [manage applications, API Keys, security profiles, and custom topics](https://docs.paloaltonetworks.com/ai-runtime-security/administration/prevent-network-security-threats/airs-apirs-manage-api-keys-profile-apps).
 
 <a id="installation" href="#installation">
 
@@ -50,25 +76,39 @@ The MCP Security Relay provides a security-enhanced intermediary layer for Model
 
 </a>
 
-This project uses [uv](https://docs.astral.sh/uv/getting-started/installation/).
+We highly recommend using [uv](https://docs.astral.sh/uv/getting-started/installation/) over `pip` or `pipx`. Try it!
 
-1. Install or Update [uv https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
-  1. Update uv if already installed: `uv self update`
-2. Clone this repository.
-2. Install the project dependencies using `uv sync`
-3. Create the MCP Relay Configuration File
-4. Run the MCP Relay Server
+Update uv if already installed: `uv self update`
+
+## Install via pypi.org
+
+Install and run `pan-mcp-relay`, showing the CLI help:
 
 ```sh
-git clone https://github.com/paloaltonetworks/aisecurity-mcp-relay.git
+uvx pan-mcp-relay --help
 
-cd aisecurity-mcp-relay
+# or
 
-uv sync
-
-# .local/ directory is git-ignored, you may use it for your custom configuration
-cp examples/config/config-example.json .local/config.json
+uv tool install pan-mcp-relay
+pan-mcp-relay --help
 ```
+
+## Install the bleeding edge development version
+
+```sh
+uv tool install https://github.com/PaloAltoNetworks/aisecurity-mcp-relay.git
+pan-mcp-relay --help
+```
+
+Create an [`mcp-relay.yaml`](#configuration) configuration file containing:
+1. Prisma AIRS API Configuration
+   * Prisma AIRS API Key
+   * Prisma AIRS AI Profile
+   * Prisma AIRS API Endpoint (Optional)
+2. MCP Servers
+   * Supports stdio, SSE and HTTP MCP Servers.
+3. Run the MCP Relay Server
+
 
 <a id="configuration" href="#configuration">
 
@@ -76,29 +116,140 @@ cp examples/config/config-example.json .local/config.json
 
 </a>
 
+<a id="relay-configuration" href="#relay-configuration">
+
+## MCP Relay Server Configuration
+
+</a>
+
+
+### Configuration Precedence
+
+1. CLI Flags
+2. Environment Variables
+3. .env file variables
+4. Configuration File
+
+`pan-mcp-relay` supports loading a configuration file via `--config-file` flag, `MCP_RELAY_CONFIG_FILE` environment variable, or detecting a configuration file on a set of pre-determined locations:
+
+- `--config-file` (`-c`) CLI flag
+- `MCP_RELAY_CONFIG_FILE` environment variable
+- `./mcp-relay.yaml`
+- `~/.mcp-relay.yaml`
+- `~/.config/pan-mcp-relay/mcp-relay.yaml`
+- `./mcp-relay.json`
+- `~/.mcp-relay.json`
+- `~/.config/pan-mcp-relay/mcp-relay.json`
+
+### Configuration File Format
+
+An example MCP Relay Server configuration is available in the repository in `examples/config/mcp-relay.yaml`
+
+Copy or create a new `mcp-relay.yaml` file. The only _required_ section is `mcpServers: {}`.
+
+```yaml
+# mcpRelay section is optional.
+# API Key, AI Profile and API Endpoint can be specified via CLI flags or environment variables.
+mcpRelay:
+  # Prisma AIRS API Key (required), environment variables supported
+  apiKey: |
+    ${PRISMA_AIRS_API_KEY}
+  # Prisma AIRS AI Profile Name or ID (required), environment variables supported
+  aiProfile: |
+    your-ai-profile-name-or-id
+  # Endpoint Optional, default shown
+  # endpoint: |
+  #  https://service.api.aisecurity.paloaltonetworks.com
+
+# mcpServers section is required, with at least one MCP Server.
+mcpServers:
+  # Example / demo MCP Servers
+  homebrew:
+    command: brew
+    args:
+      - mcp-server
+    # Optional working directory, supports environment variables
+    cwd: "${HOMEBREW_PREFIX}"
+    # optional environment variables, inherited from the parent shell
+    env:
+      HOMEBREW_NO_ENV_HINTS: 1
+  fetch:
+    command: uvx
+    args:
+      - mcp-server-fetch
+
+  # filesystem:
+  #   command: npx
+  #   args:
+  #     - -y
+  #     - '@modelcontextprotocol/server-filesystem'
+  #     - /var/tmp/change/this/path
+  #     # Command line arguments support environment variables
+  #     - "${XDG_PICTURES_DIR}"
+```
+
 <a id="environment-variables" href="#environment-variables">
 
 ## Environment Variables
 
 </a>
 
-Create a `.env` file in the git repo root with the following variables:
+In addition to CLI flags and the configuration file, `pan-mcp-relay` supports reading configuration through the following environment variables:
 
 ```sh
-# Required for Palo Alto Networks AI Security scanning
-PANW_AI_PROFILE_NAME=YOUR_AI_PROFILE_NAME
-PANW_AI_SEC_API_KEY=YOUR_API_KEY
-PANW_AI_SEC_API_ENDPOINT=YOUR_API_ENDPOINT
+# Required for Prisma AIRS API
+PRISMA_AIRS_API_KEY=YOUR_API_KEY
+# Required for Prisma AIRS API
+PRISMA_AIRS_AI_PROFILE=YOUR_AI_PROFILE_NAME
+
+# Optional, default is https://service.api.aisecurity.paloaltonetworks.com
+PRISMA_AIRS_API_ENDPOINT=YOUR_API_ENDPOINT
+# See https://pan.dev/prisma-airs/scan/api/#scan-api-endpoints for additional regional API endpoints
+
+# Defaults shown for all other Environment Variables
+MCP_RELAY_CONFIG_FILE=~/.config/pan-mcp-relay/mcp-relay.yaml
+MCP_RELAY_TRANSPORT=stdio
+# Host For SSE Transport Mode
+MCP_RELAY_HOST=127.0.0.1
+# Port for SSE Transport Mode
+MCP_RELAY_TOOL_CACHE_TTL=86400
+MCP_RELAY_MAX_SERVERS=32
+MCP_RELAY_MAX_TOOLS=64
+# Path to optional .env file
+MCP_RELAY_DOTENV=
+# Supports $PATH-style colon-separated list and environment variables. Directory entries will search for a file named `.env`
+# MCP_RELAY_DOTENV=$HOME/.env:~/.config/pan-mcp-relay:$PWD
 ```
 
+<a id="client-configuration" href="#client-configuration">
 
-<a id="server-configuration" href="#server-configuration">
-
-## Relay Server Configuration
+## MCP Client Configuration
 
 </a>
 
-Create a new config file `mcp-relay.json` to use with your IDE, Chat Client, or MCP System.
+Create a new config file `mcp-relay.json` to use with your MCP Client (IDE, Chat Client, or Agent).
+
+```json
+{
+  "mcpServers": {
+    "pan-mcp-relay": {
+      "command": "uvx",
+      "args": [
+        "pan-mcp-relay"
+      ]
+    }
+  }
+}
+```
+
+> [!CAUTION]
+>
+> `pan-mcp-relay` should be the only MCP Server listed in your MCP Client configuration file.
+>
+> Any other MCP Servers listed here will **NOT** be visible to the security capabilities of the MCP Relay.
+
+Optionally, specify additional environment variables or CLI flags:
+
 
 ```json
 {
@@ -107,54 +258,18 @@ Create a new config file `mcp-relay.json` to use with your IDE, Chat Client, or 
       "command": "uvx",
       "args": [
         "pan-mcp-relay",
-        "--config",
-        "pan-mcp-relay-config.json"
+        "--config-file",
+        "~/.config/pan-mcp-relay/mcp-relay.yaml"
       ],
       "env": {
-        "PRISMA_AIRS_API_KEY": "YOUR_PRISMA_AIRS_API_KEY"
-      },
-      "cwd": "$HOME/optional/working/directory"
+        "PRISMA_AIRS_AI_PROFILE": "your-ai-profile",
+        "MCP_RELAY_LOG_LEVEL": "WARNING"
+      }
     }
   }
 }
 ```
 
-<a id="server-configuration" href="#server-configuration">
-
-## MCP Server Configuration
-
-</a>
-
-
-Copy or create a new `mcp-servers.json` file. Configure downstream MCP servers in `mcp-servers.json`:
-
-```json
-{
-  "mcpServers": {
-    "example-server": {
-      "command": "node",
-      "args": ["path/to/server/index.js"]
-    },
-    "another-server": {
-      "command": "python",
-      "args": ["path/to/another/server.py"]
-    },
-      "other-server-SSE-mode": {
-      "type": "sse",
-      "url": "url_of_other_SSE_server"
-    }
-  }
-}
-```
-
-**Note:**
-
-* MCP Relay only supports local MCP servers currently.
-
-<!--
-TODO: Add Environment and CWD support to MCP Server Config
-TODO: Support Remote MCP Servers
--->
 
 <a id="transport-options" href="#transport-options">
 
@@ -164,8 +279,11 @@ TODO: Support Remote MCP Servers
 
 The relay supports two transport mechanisms:
 
-- **STDIO Transport**: For local process communication (default)
-- **SSE Transport**: For HTTP-based communication using Server-Sent Events
+- **`stdio` Transport**: For local process communication (default)
+- **`SSE` Transport**: For HTTP-based communication using Server-Sent Events
+
+> [!NOTE]
+> Running the MCP Server in Streamable HTTP is coming soon.
 
 <a id="usage" href="#usage">
 
@@ -179,35 +297,38 @@ The relay supports two transport mechanisms:
 
 </a>
 
-```sh
-usage: pan-mcp-relay [-h] --config-file CONFIG_FILE [--transport {stdio,sse}] [--host HOST] [--port PORT]
-                     [--tool-registry-cache-expiry-in-seconds TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS]
-                     [--max-mcp-servers MAX_MCP_SERVERS] [--max-mcp-tools MAX_MCP_TOOLS]
-                     [--PANW_AI_SEC_API_KEY PANW_AI_SEC_API_KEY] [--PANW_AI_SEC_API_ENDPOINT PANW_AI_SEC_API_ENDPOINT]
-                     [--PANW_AI_PROFILE_NAME PANW_AI_PROFILE_NAME] [--PANW_AI_PROFILE_ID PANW_AI_PROFILE_ID]
+```terminaloutput
+uv run pan-mcp-relay --help
+Usage: pan-mcp-relay [OPTIONS] COMMAND [ARGS]...
 
-options:
-  -h, --help            show this help message and exit
-  --config-file CONFIG_FILE
-                        Path to config file
-  --transport {stdio,sse}
-                        Transport protocol to use
-  --host HOST           Host for SSE server
-  --port PORT           Port for SSE server
-  --tool-registry-cache-expiry-in-seconds TOOL_REGISTRY_CACHE_EXPIRY_IN_SECONDS
-                        Downsteam mcp tool registry cache expiry
-  --max-mcp-servers MAX_MCP_SERVERS
-                        Max number of downstream servers
-  --max-mcp-tools MAX_MCP_TOOLS
-                        Max number of MCP tools
-  --PANW_AI_SEC_API_KEY PANW_AI_SEC_API_KEY
-                        PANW AI Security API Key
-  --PANW_AI_SEC_API_ENDPOINT PANW_AI_SEC_API_ENDPOINT
-                        PANW AI Security API Endpoint
-  --PANW_AI_PROFILE_NAME PANW_AI_PROFILE_NAME
-                        PANW AI Profile Name
-  --PANW_AI_PROFILE_ID PANW_AI_PROFILE_ID
-                        PANW AI Profile ID
+  Run the MCP Relay Server.
+
+Options:
+  -k, --api-key TEXT              Prisma AIRS API Key [PRISMA_AIRS_API_KEY=]
+  -e, --api-endpoint TEXT         Prisma AIRS API Endpoint [PRISMA_AIRS_API_ENDPOINT=]
+  -p, --ai-profile TEXT           Prisma AIRS AI Profile Name or ID [PRISMA_AIRS_AI_PROFILE=]
+  -c, --config-file FILE          Path to configuration file (yaml, json) [MCP_RELAY_CONFIG_FILE=]
+  -t, --transport [stdio|sse]     Transport protocol to use [MCP_RELAY_TRANSPORT=]  [default: stdio]
+  -h, --host TEXT                 Host for HTTP/SSE server [MCP_RELAY_HOST=]  [default: 127.0.0.1]
+  -p, --port INTEGER              Port for HTTP/SSE server [MCP_RELAY_PORT=]  [default: 8000]
+  -t, --tool-registry-cache-ttl INTEGER
+                                  Tool registry cache TTL (in seconds) [MCP_RELAY_TOOL_CACHE_TTL=]  [default: 86400]
+  -m, --max-mcp-servers INTEGER   Maximum number of downstream MCP servers to allow [MCP_RELAY_MAX_SERVERS=]  [default: 32]
+  -n, --max-mcp-tools INTEGER     Maximum number of MCP tools to allow [MCP_RELAY_MAX_TOOLS=]  [default: 64]
+  --env TEXT                      Use ./.env file, or specify colon separated path to .env file(s)or directories containing .env files. [MCP_RELAY_DOTENV=]
+  --system-ca                     Use System CA instead of Mozilla CA Bundle
+  --capath FILE                   Path to Custom Trusted CA bundle
+  -d, --debug                     Extremely verbose logging output (DEBUG)
+  -v, --verbose                   Verbose logging output (INFO, DEFAULT)
+  -q, --quiet                     Minimal logging output (WARNING)
+  --show-config, --dump-config    Show configuration and exit [MCP_RELAY_SHOW_CONFIG=]
+  -V, --version                   Show the version and exit.
+  --help                          Show this message and exit.
+
+Commands:
+  json-schema  Print Configuration File JSON Schema, optionally to a file.
+  run          Run the MCP Relay Server.
+  show-config  Print MCP Relay Configuration and exit.
 ```
 
 <a id="running-the-relay-server" href="#running-the-relay-server">
@@ -223,32 +344,16 @@ options:
 </a>
 
 ```sh
-# Run with STDIO transport (default)
-uv run pan-mcp-relay \
-  --config-file=config.json
+# Run with stdio transport with automatic configuration detection (default)
+uvx pan-mcp-relay
+
+# Specify a configuration file
+uvx pan-mcp-relay --config-file ~/.config/pan-mcp-relay/mcp-relay.yaml
+
+# Specify a path to a custom .env file
+uvx pan-mcp-relay --env /var/run/secrets/.env
 ```
-<a id="stdio-transport-security" href="#stdio-transport-security">
 
-### stdio transport with security configuration
-
-</a>
-
-```sh
-# Run with STDIO transport and security scanning enabled
-uv run pan-mcp-relay \
-  --config-file=config.json \
-  --PANW_AI_PROFILE_NAME=default-profile-name \
-  --PANW_AI_SEC_API_KEY=your-api-key \
-  --PANW_AI_SEC_API_ENDPOINT=https://service.api.aisecurity.paloaltonetworks.com \
-  --PANW_AI_PROFILE_ID=default-profile-id
-
-# Alternative: Using environment variables (recommended for sensitive information)
-export PANW_AI_SEC_API_KEY=your-api-key
-export PANW_AI_SEC_API_ENDPOINT=https://service.api.aisecurity.paloaltonetworks.com
-export PANW_AI_PROFILE_NAME=default-profile-name
-export PANW_AI_PROFILE_ID=default-profile-id
-uv run pan-mcp-relay --config-file=config.json
-```
 <a id="sse-transport" href="#sse-transport">
 
 ### SSE transport
@@ -263,95 +368,6 @@ uv run pan-mcp-relay \
   --host=127.0.0.1 \
   --port=8000
 ```
-
-### Command Line Arguments
-
-| Argument | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `--config-file` | ✅ | - | Path to the JSON configuration file containing MCP server definitions |
-| `--transport` | ❌ | `stdio` | Transport protocol to use. Options: `stdio` (local process communication) or `sse` (HTTP Server-Sent Events) |
-| `--host` | ❌ | `127.0.0.1` | Host address for SSE transport server (only used when `--transport=sse`) |
-| `--port` | ❌ | `8000` | Port number for SSE transport server (only used when `--transport=sse`) |
-| `--tool-registry-cache-expiry-in-seconds` | ❌ | `300` | Cache expiry time in seconds for the downstream MCP tool registry. Tools are re-scanned when cache expires |
-| `--max-mcp-servers` | ❌ | `32` | Maximum number of downstream MCP servers that can be configured. Prevents resource exhaustion |
-| `--max-mcp-tools` | ❌ | `64` | Maximum total number of MCP tools across all downstream servers. Enforces tool registry limits |
-| `--PANW_AI_SEC_API_KEY` | ❌ | - | Palo Alto Networks AI Security API authentication key. Can also be set via environment variable |
-| `--PANW_AI_SEC_API_ENDPOINT` | ❌ | - | AI Security API endpoint URL. Uses default endpoint if not provided. Can also be set via environment variable |
-| `--PANW_AI_PROFILE_NAME` | ❌* | - | Name of the AI security profile to use for scanning. Either this or `--PANW_AI_PROFILE_ID` is required |
-| `--PANW_AI_PROFILE_ID` | ❌* | - | ID of the AI security profile to use for scanning. Either this or `--PANW_AI_PROFILE_NAME` is required |
-
-**Note:** Arguments marked with * indicate that at least one of the profile options (name or ID) must be provided either via command line or environment variables.
-
-**Configuration Priority:** Command line arguments take precedence over environment variables, which take precedence over `.env` file values.
-
-<a id="examples" href="#examples">
-
-# Examples
-
-</a>
-
-<a id="stdio-client-example" href="#stdio-client-example">
-
-## Stdio Client Example
-
-</a>
-
-This example demonstrates how to run the interactive client to communicate with the relay server using `stdio`.
-
-**1. Run the Interactive Client:**
-
-Run the `pan_security_relay_stdio_client.py` script. This script connects to the running relay and provides an interactive command prompt.
-
-```sh
-python examples/clients/stdio/pan_security_relay_stdio_client.py \
-  --relay-module=pan_aisecurity_mcp_relay.main \
-  --config-file=config.json
-```
-
-**2. Interact with the Client:**
-
-Once the client starts, you can use the following commands to interact with the downstream MCP servers through the relay:
-
-*   **`list`**: Displays all available tools from the downstream servers.
-*   **`call <tool_name> [json_arguments]`**: Executes a specific tool with the provided arguments. For example, `call list_downstream_servers_info`.
-*   **`servers`**: Shows a list of all configured downstream servers and their tools.
-*   **`quit`**: Exits the interactive client.
-
-Using these commands, you can test and debug the MCP relay and its connected downstream servers.
-
-<a id="sse-client-configuration" href="#sse-client-configuration">
-
-## SSE Client Example Configuration
-
-</a>
-
-To connect a client to the relay server when it's running in SSE mode, you need to first start the relay server with the transport set to `sse`.
-
-**1. Start the Relay Server in SSE Mode:**
-
-```sh
-uv run pan-mcp-relay \
-  --config-file=config/config-example.json \
-  --transport=sse \
-  --host=127.0.0.1 \
-  --port=8000
-```
-
-**2. Configure Your Client:**
-
-Then, in your client's configuration (for example, in a `config.json` or a similar file), add the following to connect to the SSE endpoint of the relay:
-```json
-{
-  "mcpServers": {
-    "pan_security_relay_SSE": {
-      "type": "sse",
-      "url": "http://127.0.0.1:8000/sse"
-    }
-  }
-}
-```
-
-This configuration tells your client how to find and communicate with the MCP Security Relay using the SSE protocol.
 
 <a id="legal" href="#legal">
 
@@ -376,4 +392,9 @@ As far as the law allows, the software comes as is, without any warranty
 or condition, and the licensor will not be liable to you for any damages
 arising out of these terms or the use or nature of the software, under
 any kind of legal claim.
+
 <!---Protected_by_PANW_Code_Armor_2024 - Y3ByfC9haWZ3L29wZW5zb3VyY2UvYWlzZWN1cml0eS1tY3AtcmVsYXl8MjE5NDV8bWFpbg== --->
+
+
+[Prisma AIRS API]: https://pan.dev/prisma-airs/scan/api/
+[Prisma AIRS AI Runtime API Intecept]: https://docs.paloaltonetworks.com/ai-runtime-security/activation-and-onboarding/ai-runtime-security-api-intercept-overview
