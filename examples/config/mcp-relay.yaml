@@ -1,14 +1,26 @@
 # Palo Alto Networks Prisma AIRS MCP Relay Example Configuration File
+#
+# Configuration File Loading Precedence:
+# --config-file CLI flag
+# MCP_RELAY_CONFIG_FILE environment variable
+# ${PWD}/mcp-relay.yaml
+# ~/.mcp-relay.yaml
+# ~/.config/pan-mcp-relay/mcp-relay.yaml
+# ${PWD}/mcp-relay.json
+# ~/.mcp-relay.json
+# ~/.config/pan-mcp-relay/mcp-relay.json
+#
 mcpRelay:
   # Prisma AIRS API Key (required), environment variables supported
   apiKey: |
     ${PRISMA_AIRS_API_KEY}
-  # Endpoint Optional, default shown
-  # endpoint: |
-  #  https://service.api.aisecurity.paloaltonetworks.com
   # AI Profile Name or ID (required), environment variables supported
   aiProfile: |
     your-ai-profile-name-or-id
+  # Endpoint Optional, default shown
+  # endpoint: |
+  #  https://service.api.aisecurity.paloaltonetworks.com
+
 # Example / demo MCP Servers
 mcpServers:
   homebrew:
