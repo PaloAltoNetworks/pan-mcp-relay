@@ -19,7 +19,6 @@ from . import constants as constants
 from . import downstream_mcp_client as downstream_mcp_client
 from . import exceptions as exceptions
 from . import main as main
-from . import mcp_server as mcp_server
 from . import pan_security_relay as pan_security_relay
 from . import security_scanner as security_scanner
 from . import tool as tool
@@ -32,4 +31,3 @@ from .configuration import McpRelayConfig as McpRelayConfig
 from .configuration import SseMcpServer as SseMcpServer
 from .configuration import StdioMcpServer as StdioMcpServer
 from .main import entrypoint as entrypoint
-from .mcp_server import pan_security_server as pan_security_server
