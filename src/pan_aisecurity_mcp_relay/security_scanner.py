@@ -16,22 +16,28 @@
 import datetime
 import functools
 import getpass
+import hashlib
+import json
 import os
 import ssl
+import sys
 import uuid
 from enum import StrEnum
 from json.decoder import JSONDecodeError
+from typing import Any
 
 import httpx
+import yaml
 from aisecurity.scan.asyncio.scanner import ScanResponse
-from pydantic import SecretStr, ValidationError, validate_call
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, validate_call
 
 from . import utils
+from ._version import __version__
 from .configuration import McpRelayConfig
 from .constants import (
+    MCP_RELAY_NAME,
     SYNC_SCAN_PATH,
 )
-from .downstream_mcp_client import DownstreamMcpClient
 from .exceptions import McpRelayScanError, McpRelaySecurityBlockError
 
 log = utils.get_logger(__name__)
@@ -52,28 +58,34 @@ class APIAuth(httpx.Auth):
         yield request
 
 
-class ScanRequestType(StrEnum):
+class ScanSource(StrEnum):
+    call_tool = "call_tool"
+    prepare_tool = "prepare_tool"
+
+
+class ScanType(StrEnum):
     scan_request = "scan_request"
     scan_response = "scan_response"
     scan_tool = "scan_tool"
 
 
-class SecurityScanner:
-    client: httpx.AsyncClient
+class SecurityScanner(BaseModel):
     config: McpRelayConfig
-    user: str
+    client: httpx.AsyncClient | None = Field(default=None, init=False)
+    user: str | None = Field(default=None, init=False)
 
-    @validate_call
-    def __init__(self, pan_security_server: DownstreamMcpClient, config: McpRelayConfig = None) -> None:
-        self.pan_security_server = pan_security_server
-        self.config = config
-        if config.use_system_ca:
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    __hash__ = object.__hash__
+
+    def model_post_init(self, context: Any, /) -> None:
+        if self.config.use_system_ca:
             import truststore
 
             log.info("Using system truststore")
             ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        elif config.custom_ca_file:
-            log.info(f"Using custom CA file: {config.custom_ca_file}")
+        elif self.config.custom_ca_file:
+            log.info(f"Using custom CA file: {self.config.custom_ca_file}")
             ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
         else:
             import certifi
@@ -88,7 +100,7 @@ class SecurityScanner:
         ctx.minimum_version = ssl.TLSVersion.TLSv1_3
         ctx.verify_mode = ssl.CERT_REQUIRED
         ctx.check_hostname = True
-        auth = APIAuth(api_key=config.api_key.get_secret_value())
+        auth = APIAuth(api_key=self.config.api_key.get_secret_value())
         log.debug("Creating httpx client")
         limits = httpx.Limits(keepalive_expiry=300)
         transport = httpx.AsyncHTTPTransport(verify=ctx, retries=3)
@@ -96,11 +108,12 @@ class SecurityScanner:
             verify=ctx,
             http2=True,
             auth=auth,
-            base_url=config.api_endpoint,
+            base_url=self.config.api_endpoint,
             timeout=30,
             max_redirects=0,
             limits=limits,
             transport=transport,
+            headers={"User-Agent": user_agent()},
         )
 
         self.user = getpass.getuser()
@@ -120,7 +133,8 @@ class SecurityScanner:
             except (ValueError, TypeError):
                 ai_profile_name = self.config.ai_profile
                 ai_profile = dict(profile_name=ai_profile_name)
-        log.info(f"Using AI Profile: {ai_profile}")
+        ai_profile_text = yaml.safe_dump(ai_profile)
+        log.info(f"Using AI Profile: {ai_profile_text}")
         return ai_profile
 
     @functools.cache
@@ -133,8 +147,8 @@ class SecurityScanner:
     @validate_call
     async def scan(
         self,
-        source: str,
-        scan_type: ScanRequestType,
+        source: ScanSource,
+        scan_type: ScanType,
         prompt: str,
         response: str | None,
     ) -> ScanResponse | None:
@@ -152,10 +166,14 @@ class SecurityScanner:
         if response:
             scan_content["response"] = response
 
+        body = dict(tr_id=tr_id, ai_profile=ai_profile, metadata=metadata, contents=[scan_content])
+        body_json = json.dumps(body)
+        body_checksum = hashlib.sha256(body_json.encode("utf-8")).hexdigest()[:8]
+        log.debug(f"{scan_label}: POST {self.client.base_url}+{SYNC_SCAN_PATH} (checksum: {body_checksum})")
         try:
             scan_result: httpx.Response = await self.client.post(
                 SYNC_SCAN_PATH,
-                json=dict(tr_id=tr_id, ai_profile=ai_profile, metadata=metadata, contents=[scan_content]),
+                json=body,
             )
             scan_result.raise_for_status()
             scan_response_data = scan_result.json()
@@ -174,7 +192,7 @@ class SecurityScanner:
 
         log.debug(scan_response.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True))
 
-        log_msg = f"{scan_type} from {source} action={action}"
+        log_msg = f"{scan_label}: action={action} (checksum: {body_checksum})"
 
         if action == "allow":
             log.info(
@@ -194,3 +212,10 @@ class SecurityScanner:
             )
 
         return scan_response
+
+
+@functools.cache
+def user_agent() -> str:
+    py_version = ".".join([str(v) for v in sys.version_info[0:3]])
+
+    return f"{MCP_RELAY_NAME}/{__version__} ({sys.platform}, {py_version})"
