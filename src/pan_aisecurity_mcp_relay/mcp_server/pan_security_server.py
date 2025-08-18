@@ -58,9 +58,10 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from typing_extensions import TypedDict
 
+from pan_aisecurity_mcp_relay import utils
 from pan_aisecurity_mcp_relay.constants import ENV_AI_PROFILE, ENV_API_ENDPOINT, ENV_API_KEY
 
-log = logging.getLogger("pan-mcp-relay.pan_security_server")
+log = utils.get_logger(__name__)
 
 
 def setup_logging():
