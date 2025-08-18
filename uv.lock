@@ -828,6 +828,7 @@ wheels = [
 name = "pan-aisecurity-mcp-relay"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx", extra = ["http2"] },
     { name = "mcp", extra = ["cli", "rich", "ws"] },
     { name = "pan-aisecurity" },
     { name = "pydantic" },
@@ -835,6 +836,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "rich" },
     { name = "tenacity" },
+    { name = "truststore" },
 ]
 
 [package.optional-dependencies]
@@ -872,6 +874,7 @@ requires-dist = [
     { name = "backports-strenum", marker = "python_full_version < '3.11'", specifier = ">=1.3.1,<2.0" },
     { name = "coverage", extras = ["toml"], marker = "extra == 'test'" },
     { name = "coverage-enable-subprocess", marker = "extra == 'test'", specifier = ">=1.0" },
+    { name = "httpx", extras = ["http2"], specifier = ">=0.28.1" },
     { name = "mcp", extras = ["cli", "rich", "ws"], specifier = ">=1.12.1" },
     { name = "mypy", marker = "extra == 'test'", specifier = ">=1.5" },
     { name = "pan-aisecurity", specifier = ">=0.4.0.5.post2" },
@@ -887,6 +890,7 @@ requires-dist = [
     { name = "readme-renderer", extras = ["md"], marker = "extra == 'docs'", specifier = ">=44.0" },
     { name = "rich", specifier = ">=14.0" },
     { name = "tenacity", specifier = ">=9.1.2" },
+    { name = "truststore", specifier = ">=0.10.4" },
 ]
 provides-extras = ["docs", "test"]
 
