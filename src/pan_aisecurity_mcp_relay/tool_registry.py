@@ -22,18 +22,25 @@ with expiration-based refresh logic and efficient lookup capabilities.
 """
 
 import json
-import logging
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
-from pan_aisecurity_mcp_relay.constants import (
+from pydantic import validate_call
+
+from . import utils
+from .constants import (
     TOOL_REGISTRY_CACHE_TTL_DEFAULT,
     UNIX_EPOCH,
 )
-from pan_aisecurity_mcp_relay.exceptions import McpRelayToolRegistryError, McpRelayValidationError
-from pan_aisecurity_mcp_relay.tool import InternalTool, ToolState
+from .exceptions import (
+    McpRelayInternalError,
+    McpRelayToolRegistryError,
+    McpRelayValidationError,
+)
+from .tool import InternalTool, ToolState
 
-logger = logging.getLogger(__name__)
+log = utils.get_logger(__name__)
 
 
 class ToolRegistry:
@@ -44,6 +51,7 @@ class ToolRegistry:
     like retrieving available tools, mapping tools by server, and tool lookup by hash.
     """
 
+    @validate_call
     def __init__(self, tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_TTL_DEFAULT) -> None:
         """
         Initialize the ToolRegistry with empty collections and cache settings.
@@ -51,25 +59,20 @@ class ToolRegistry:
         Args:
             tool_registry_cache_expiry: Cache expiration time in seconds
                                       (default: TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT seconds)
-
-        Raises:
-            AISecMcpRelayException: VALIDATION_ERROR: If cache expiry is invalid
         """
-        if tool_registry_cache_expiry <= 0:
-            raise McpRelayValidationError("Tool registry cache expiry must be a positive integer")
-
-        self._internal_tool_list: list[InternalTool] = []
-        self._available_tool_list: list[InternalTool] = []
+        self._internal_tool_list: dict[str, InternalTool] = {}
+        self._available_tool_list: dict[str, InternalTool] = {}
         self._hash_to_tool_map: dict[str, InternalTool] = {}
         self._last_updated_at: datetime = UNIX_EPOCH
         self._expiry_in_seconds: int = tool_registry_cache_expiry
 
-        logger.info(
+        log.info(
             "Tool registry initialized with cache expiry %d seconds.",
             self._expiry_in_seconds,
         )
 
-    def update_registry(self, internal_tool_list: list[InternalTool]) -> None:
+    @validate_call
+    def update_registry(self, internal_tool_list: dict[str, InternalTool]) -> None:
         """
         Update the registry with a new list of tools and refresh all internal collections.
 
@@ -80,14 +83,14 @@ class ToolRegistry:
             internal_tool_list: New list of InternalTool objects to register
 
         Raises:
-            AISecMcpRelayException: VALIDATION_ERROR: If internal_tool_list is None or invalid
-                                    RegistryError: If registry update operation fails
+            McpRelayInternalError: If internal_tool_list is None or invalid
+            McpRelayToolRegistryError: If registry update operation fails
         """
         if internal_tool_list is None:
-            raise McpRelayValidationError("Tool list cannot be None")
+            raise McpRelayInternalError("Tool list cannot be None")
 
-        if not isinstance(internal_tool_list, list):
-            raise McpRelayValidationError("Tool list must be a list")
+        if not isinstance(internal_tool_list, dict):
+            raise McpRelayInternalError("Tool list must be a list")
 
         try:
             self._internal_tool_list = internal_tool_list
@@ -95,7 +98,7 @@ class ToolRegistry:
             self._update_hash_mapping()
             self._last_updated_at = datetime.now()
 
-            logger.info(
+            log.info(
                 "Tool registry updated at %s with %d tools (%d available).",
                 self._last_updated_at,
                 len(self._internal_tool_list),
@@ -106,12 +109,14 @@ class ToolRegistry:
 
     def _update_available_tools(self) -> None:
         """Update the available tools list with only enabled tools."""
-        self._available_tool_list = [tool for tool in self._internal_tool_list if tool.state == ToolState.ENABLED]
+        self._available_tool_list = {
+            name: tool for name, tool in self._internal_tool_list.items() if tool.state == ToolState.ENABLED
+        }
 
     def _update_hash_mapping(self) -> None:
         """Update the hash-to-tool mapping for quick lookups."""
         self._hash_to_tool_map.clear()
-        for tool in self._internal_tool_list:
+        for tool in self._internal_tool_list.values():
             if tool.sha256_hash:  # Ensure hash exists
                 self._hash_to_tool_map[tool.sha256_hash] = tool
 
@@ -123,9 +128,12 @@ class ToolRegistry:
             bool: True if the registry is outdated (past expiry time), False otherwise
         """
         time_elapsed = datetime.now() - self._last_updated_at
-        return time_elapsed > timedelta(seconds=self._expiry_in_seconds)
+        is_oudated = time_elapsed > timedelta(seconds=self._expiry_in_seconds)
+        if is_oudated:
+            log.debug("tool registry cache expired ({time_elapsed})")
+        return is_oudated
 
-    def get_available_tools(self) -> list[InternalTool]:
+    def get_available_tools(self) -> dict[str, InternalTool]:
         """
         Retrieve all tools that are currently in the ENABLED state.
 
@@ -134,7 +142,7 @@ class ToolRegistry:
         """
         return self._available_tool_list
 
-    def get_all_tools(self) -> list[InternalTool]:
+    def get_all_tools(self) -> dict[str, InternalTool]:
         """
         Retrieve the complete list of all registered tools regardless of state.
 
@@ -167,7 +175,7 @@ class ToolRegistry:
 
         return self._hash_to_tool_map.get(sha256_hash)
 
-    def get_server_tool_map(self) -> dict[str, list[InternalTool]]:
+    def get_server_tool_map(self) -> dict[str, dict[str, InternalTool]]:
         """
         Group all tools by their server name for organized access.
 
@@ -178,14 +186,11 @@ class ToolRegistry:
             dict[str, list[InternalTool]]: Dictionary mapping server names to their tool lists
         """
         # TODO: Use defaultdict
-        server_tool_map: dict[str, list[InternalTool]] = {}
+        server_tool_map: dict[str, dict[str, InternalTool]] = defaultdict(dict)
 
-        for tool in self._internal_tool_list:
+        for tool_name, tool in self._internal_tool_list.items():
             server_name = tool.server_name
-            # TODO: Use defaultdict
-            if server_name not in server_tool_map:
-                server_tool_map[server_name] = []
-            server_tool_map[server_name].append(tool)
+            server_tool_map[server_name][tool_name] = tool
 
         return server_tool_map
 
@@ -205,13 +210,13 @@ class ToolRegistry:
         try:
             server_tool_map = self.get_server_tool_map()
             serializable = {
-                server_name: [tool.model_dump() for tool in tool_list]
+                server_name: [tool.model_dump() for tool in tool_list.values()]
                 for server_name, tool_list in server_tool_map.items()
             }
             return json.dumps(serializable, indent=2, ensure_ascii=False)
 
         except (AttributeError, TypeError) as e:
-            logger.error("Failed to serialize tools to JSON: %s", e)
+            log.error("Failed to serialize tools to JSON: %s", e)
             raise McpRelayToolRegistryError(f"Tool serialization failed {e}")
 
     def get_registry_stats(self) -> dict[str, Any]:
@@ -241,7 +246,7 @@ class ToolRegistry:
         self._hash_to_tool_map.clear()
         self._last_updated_at = UNIX_EPOCH
 
-        logger.info("Tool registry cleared.")
+        log.info("Tool registry cleared.")
 
     def __len__(self) -> int:
         """Return the total number of tools in the registry."""
