@@ -21,7 +21,6 @@ Manages connections and communication with downstream MCP servers.
 """
 
 import asyncio
-import logging
 import os
 import string
 from contextlib import AsyncExitStack
@@ -33,15 +32,18 @@ from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.shared.exceptions import McpError
+from pydantic import BaseModel, ConfigDict, Field
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from pan_aisecurity_mcp_relay.constants import TransportType
-from pan_aisecurity_mcp_relay.exceptions import McpRelayBaseError, McpRelayConfigurationError
+from . import utils
+from .configuration import SseMcpServer, StdioMcpServer, StreamableHttpMcpServer
+from .constants import TransportType
+from .exceptions import McpRelayBaseError, McpRelayConfigurationError
 
-log = logging.getLogger(__name__)
+log = utils.get_logger(__name__)
 
 
-class DownstreamMcpClient:
+class DownstreamMcpClient(BaseModel):
     """
     Manages MCP server connections and tool execution.
 
@@ -49,20 +51,16 @@ class DownstreamMcpClient:
     downstream MCP server.
     """
 
-    def __init__(self, name: str, config: dict[str, str | list[str] | dict[str, str]]) -> None:
-        """
-        Initialize the MCP client.
+    name: str
+    config: StdioMcpServer | SseMcpServer | StreamableHttpMcpServer
+    session: ClientSession
+    cleanup_lock: asyncio.Lock = Field(default_factory=asyncio.Lock)
+    exit_stack: AsyncExitStack = Field(default_factory=AsyncExitStack)
 
-        Args:
-            name: Server identifier
-            config: Server configuration dictionary
-        """
-        self.name: str = name
-        self.config: dict[str, str | list[str] | dict[str, str]] = config
-        self.session: ClientSession | None = None
-        self._cleanup_lock: asyncio.Lock = asyncio.Lock()
-        self.exit_stack: AsyncExitStack = AsyncExitStack()
-        log.info(f"Server {name} created")
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def model_post_init(self, context: Any, /) -> None:
+        log.info(f"Server {self.name} created")
 
     async def initialize(self) -> bool:
         """
@@ -311,7 +309,7 @@ class DownstreamMcpClient:
 
         Closes connections and cleans up the session.
         """
-        async with self._cleanup_lock:
+        async with self.cleanup_lock:
             try:
                 await self.exit_stack.aclose()
                 self.session = None
