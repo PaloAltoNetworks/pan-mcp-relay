@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 from contextlib import AsyncExitStack
 from enum import StrEnum
@@ -10,6 +11,8 @@ from typing import Any
 import mcp.types as types
 from mcp import StdioServerParameters, stdio_client
 from mcp.client.session import ClientSession
+
+log = logging.getLogger(__name__)
 
 
 class InteractiveCommand(StrEnum):
@@ -64,9 +67,8 @@ class PanSecurityRelayStdioClient:
     downstream server information retrieval via the Model Context Protocol (MCP).
     """
 
-    def __init__(self, relay_module: str, config_file_path: str):
+    def __init__(self, config_file_path: str):
         """Initialize the client with relay module path and config file."""
-        self.relay_module = relay_module
         self.config_file_path = config_file_path
         self.session: ClientSession | None = None
         self._cleanup_lock = asyncio.Lock()
@@ -76,24 +78,26 @@ class PanSecurityRelayStdioClient:
     async def connect(self):
         """Establish connection to the relay subprocess via stdio transport."""
         try:
+            env = os.environ.copy()
             read, write = await self.exit_stack.enter_async_context(
                 stdio_client(
                     StdioServerParameters(
-                        command="python",
+                        command="uvx",
                         args=[
-                            "-m",
-                            self.relay_module,
+                            "run",
+                            "pan-mcp-relay",
                             f"--config-file={self.config_file_path}",
                         ],
+                        env=env,
                     )
                 )
             )
             self.session = await self.exit_stack.enter_async_context(ClientSession(read, write))
             await self.session.initialize()
-            logging.info("MCP session initialized successfully")
+            log.info("MCP session initialized successfully")
         except Exception as e:
             await self.cleanup()
-            logging.error(f"Failed to connect: {e}")
+            log.error(f"Failed to connect: {e}")
             raise
 
     async def cleanup(self):
@@ -175,16 +179,15 @@ async def interactive_mode(client: PanSecurityRelayStdioClient):
 async def main():
     """Main entry point for the command-line interface."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--relay-module", type=str, required=True)
     parser.add_argument("--config-file", type=str, required=True)
     args = parser.parse_args()
 
-    client = PanSecurityRelayStdioClient(args.relay_module, args.config_file)
+    client = PanSecurityRelayStdioClient(args.config_file)
     try:
         await client.connect()
         await interactive_mode(client)
     except Exception as e:
-        logging.error(f"Client error: {e}")
+        log.error(f"Client error: {e}")
         sys.exit(1)
     finally:
         await client.cleanup()
@@ -192,8 +195,8 @@ async def main():
 
 if __name__ == "__main__":
     logging.basicConfig(
-        level=logging.INFO,
-        format="[Pan Security Client] %(levelname)s %(message)s",
+        level=logging.DEBUG,
+        format="[MCP Relay Client] %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
     )
     asyncio.run(main())
