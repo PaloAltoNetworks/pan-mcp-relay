@@ -13,9 +13,11 @@
 # or condition, and the licensor will not be liable to you for any damages
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
-
+import logging
 import os
 from pathlib import Path
+
+from .constants import MCP_RELAY_NAME
 
 
 def expand_path[T](p: T) -> Path | T:
@@ -52,3 +54,12 @@ def deep_merge[K, V](original: dict[K, V], *updaters: dict[K, V]) -> dict[K, V]:
             else:
                 original[k] = v
     return original
+
+
+def get_logger(name: str) -> logging.Logger:
+    prefix = MCP_RELAY_NAME
+    if name == "__main__" or name == __package__:
+        return logging.getLogger(prefix)
+    name = name.replace(__package__, MCP_RELAY_NAME)
+    name = name.replace("_", "-")
+    return logging.getLogger(name)
