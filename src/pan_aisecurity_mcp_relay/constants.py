@@ -55,6 +55,7 @@ ENV_TRANSPORT = f"{RELAY_PREFIX}_TRANSPORT"
 ENV_TOOL_CACHE_TTL = f"{RELAY_PREFIX}_TOOL_CACHE_TTL"
 ENV_MAX_SERVERS = f"{RELAY_PREFIX}_MAX_SERVERS"
 ENV_MAX_TOOLS = f"{RELAY_PREFIX}_MAX_TOOLS"
+ENV_LOG_LEVEL = f"{RELAY_PREFIX}_LOG_LEVEL"
 
 f"""
 List of environment variable keys used for Security Scanner configuration.
@@ -89,12 +90,12 @@ class TransportType(StrEnum):
     Attributes:
         stdio: Standard input/output transport using subprocess pipes
         sse: Server-Sent Events transport using HTTP streaming
-        streamable_http: HTTP transport using the Streamable HTTP protocol
+        http: HTTP transport using the Streamable HTTP protocol
     """
 
     stdio = "stdio"
     sse = "sse"
-    streamable_http = "streamable_http"
+    http = "http"
 
     def __repr__(self) -> str:
         return str(self.value)
@@ -107,8 +108,8 @@ class TransportType(StrEnum):
 # DEFAULT VALUES AND LIMITS
 # =============================================================================
 
-TOOL_REGISTRY_CACHE_TTL_DEFAULT: Final[int] = 300
-"""Default cache expiry time for tool registry in seconds (5 minutes)."""
+TOOL_REGISTRY_CACHE_TTL_DEFAULT: Final[int] = 60 * 60 * 24
+"""Default cache expiry time for tool registry in seconds (24 hours)."""
 
 MAX_MCP_SERVERS_DEFAULT: Final[int] = 32
 """Maximum number of downstream servers that can be configured."""
