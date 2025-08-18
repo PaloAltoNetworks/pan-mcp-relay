@@ -26,9 +26,10 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
-from pydantic import validate_call
+from pydantic import BaseModel, Field, validate_call
 
 from . import utils
+from .configuration import McpRelayConfig
 from .constants import (
     TOOL_REGISTRY_CACHE_TTL_DEFAULT,
     UNIX_EPOCH,
@@ -36,14 +37,13 @@ from .constants import (
 from .exceptions import (
     McpRelayInternalError,
     McpRelayToolRegistryError,
-    McpRelayValidationError,
 )
 from .tool import InternalTool, ToolState
 
 log = utils.get_logger(__name__)
 
 
-class ToolRegistry:
+class ToolRegistry(BaseModel):
     """A registry for managing and caching internal tools with expiration-based refresh logic.
 
     The ToolRegistry maintains collections of tools, provides filtering capabilities,
@@ -51,24 +51,19 @@ class ToolRegistry:
     like retrieving available tools, mapping tools by server, and tool lookup by hash.
     """
 
-    @validate_call
-    def __init__(self, tool_registry_cache_expiry: int = TOOL_REGISTRY_CACHE_TTL_DEFAULT) -> None:
-        """
-        Initialize the ToolRegistry with empty collections and cache settings.
+    config: McpRelayConfig = None
+    refresh_interval: int = Field(default=TOOL_REGISTRY_CACHE_TTL_DEFAULT, init=False)
+    internal_tools: dict[str, InternalTool] = Field(default_factory=dict, init=False)
+    available_tools: dict[str, InternalTool] = Field(default_factory=dict, init=False)
+    tools_by_checksum: dict[str, InternalTool] = Field(default_factory=dict, init=False)
+    last_update: datetime = Field(default=UNIX_EPOCH, init=False)
 
-        Args:
-            tool_registry_cache_expiry: Cache expiration time in seconds
-                                      (default: TOOL_REGISTRY_CACHE_EXPIRY_DEFAULT seconds)
-        """
-        self._internal_tool_list: dict[str, InternalTool] = {}
-        self._available_tool_list: dict[str, InternalTool] = {}
-        self._hash_to_tool_map: dict[str, InternalTool] = {}
-        self._last_updated_at: datetime = UNIX_EPOCH
-        self._expiry_in_seconds: int = tool_registry_cache_expiry
-
+    def model_post_init(self, context: Any, /) -> None:
+        """Post initialization hook for tool registry model."""
+        self.refresh_interval = self.config.tool_registry_cache_ttl
         log.info(
-            "Tool registry initialized with cache expiry %d seconds.",
-            self._expiry_in_seconds,
+            "Tool registry initialized with refresh period of %d seconds.",
+            self.refresh_interval,
         )
 
     @validate_call
@@ -89,36 +84,33 @@ class ToolRegistry:
         if internal_tool_list is None:
             raise McpRelayInternalError("Tool list cannot be None")
 
-        if not isinstance(internal_tool_list, dict):
-            raise McpRelayInternalError("Tool list must be a list")
-
         try:
-            self._internal_tool_list = internal_tool_list
-            self._update_available_tools()
-            self._update_hash_mapping()
-            self._last_updated_at = datetime.now()
+            self.internal_tools = internal_tool_list
+            self.update_available_tools()
+            self.update_hash_mapping()
+            self.last_update = datetime.now()
 
             log.info(
                 "Tool registry updated at %s with %d tools (%d available).",
-                self._last_updated_at,
-                len(self._internal_tool_list),
-                len(self._available_tool_list),
+                self.last_update,
+                len(self.internal_tools),
+                len(self.available_tools),
             )
         except Exception as e:
-            raise McpRelayToolRegistryError(f"Failed to update tool registry {e}")
+            raise McpRelayToolRegistryError("Failed to update tool registry") from e
 
-    def _update_available_tools(self) -> None:
+    def update_available_tools(self) -> None:
         """Update the available tools list with only enabled tools."""
-        self._available_tool_list = {
-            name: tool for name, tool in self._internal_tool_list.items() if tool.state == ToolState.ENABLED
+        self.available_tools = {
+            name: tool for name, tool in self.internal_tools.items() if tool.state == ToolState.ENABLED
         }
 
-    def _update_hash_mapping(self) -> None:
+    def update_hash_mapping(self) -> None:
         """Update the hash-to-tool mapping for quick lookups."""
-        self._hash_to_tool_map.clear()
-        for tool in self._internal_tool_list.values():
+        self.tools_by_checksum.clear()
+        for tool in self.internal_tools.values():
             if tool.sha256_hash:  # Ensure hash exists
-                self._hash_to_tool_map[tool.sha256_hash] = tool
+                self.tools_by_checksum[tool.sha256_hash] = tool
 
     def is_registry_outdated(self) -> bool:
         """
@@ -127,8 +119,8 @@ class ToolRegistry:
         Returns:
             bool: True if the registry is outdated (past expiry time), False otherwise
         """
-        time_elapsed = datetime.now() - self._last_updated_at
-        is_oudated = time_elapsed > timedelta(seconds=self._expiry_in_seconds)
+        time_elapsed = datetime.now() - self.last_update
+        is_oudated = time_elapsed > timedelta(seconds=self.refresh_interval)
         if is_oudated:
             log.debug("tool registry cache expired ({time_elapsed})")
         return is_oudated
@@ -140,7 +132,7 @@ class ToolRegistry:
         Returns:
             list[InternalTool]: List of enabled tools available for use
         """
-        return self._available_tool_list
+        return self.available_tools
 
     def get_all_tools(self) -> dict[str, InternalTool]:
         """
@@ -149,8 +141,9 @@ class ToolRegistry:
         Returns:
             list[InternalTool]: Complete list of all tools in the registry
         """
-        return self._internal_tool_list
+        return self.internal_tools
 
+    @validate_call
     def get_tool_by_hash(self, sha256_hash: str) -> InternalTool | None:
         """
         Look up a specific tool using its SHA256 hash identifier.
@@ -163,17 +156,8 @@ class ToolRegistry:
 
         Returns:
             Optional[InternalTool]: The tool object if found, None if hash doesn't exist
-
-        Raises:
-            ValidationError: If sha256_hash is invalid
         """
-        if not isinstance(sha256_hash, str):
-            raise McpRelayValidationError("SHA256 hash must be a string")
-
-        if not sha256_hash:
-            return None
-
-        return self._hash_to_tool_map.get(sha256_hash)
+        return self.tools_by_checksum.get(sha256_hash)
 
     def get_server_tool_map(self) -> dict[str, dict[str, InternalTool]]:
         """
@@ -185,10 +169,9 @@ class ToolRegistry:
         Returns:
             dict[str, list[InternalTool]]: Dictionary mapping server names to their tool lists
         """
-        # TODO: Use defaultdict
         server_tool_map: dict[str, dict[str, InternalTool]] = defaultdict(dict)
 
-        for tool_name, tool in self._internal_tool_list.items():
+        for tool_name, tool in self.internal_tools.items():
             server_name = tool.server_name
             server_tool_map[server_name][tool_name] = tool
 
@@ -226,40 +209,40 @@ class ToolRegistry:
         Returns:
             dict[str, any]: Dictionary containing registry statistics
         """
-        server_count = len(set(tool.server_name for tool in self._internal_tool_list))
+        server_count = len(set(tool.server_name for tool in self.internal_tools.values()))
 
         return {
-            "total_tools": len(self._internal_tool_list),
-            "available_tools": len(self._available_tool_list),
+            "total_tools": len(self.internal_tools),
+            "available_tools": len(self.available_tools),
             "server_count": server_count,
-            "last_updated": self._last_updated_at.isoformat(),
+            "last_updated": self.last_update.isoformat(),
             "is_outdated": self.is_registry_outdated(),
-            "cache_expiry_seconds": self._expiry_in_seconds,
+            "cache_expiry_seconds": self.refresh_interval,
         }
 
     def clear_registry(self) -> None:
         """
         Clear all tools from the registry and reset timestamps.
         """
-        self._internal_tool_list.clear()
-        self._available_tool_list.clear()
-        self._hash_to_tool_map.clear()
-        self._last_updated_at = UNIX_EPOCH
+        self.internal_tools.clear()
+        self.available_tools.clear()
+        self.tools_by_checksum.clear()
+        self.last_update = UNIX_EPOCH
 
         log.info("Tool registry cleared.")
 
     def __len__(self) -> int:
         """Return the total number of tools in the registry."""
-        return len(self._internal_tool_list)
+        return len(self.internal_tools)
 
     def __contains__(self, sha256_hash: str) -> bool:
         """Check if a tool with the given hash exists in the registry."""
-        return sha256_hash in self._hash_to_tool_map
+        return sha256_hash in self.tools_by_checksum
 
     def __repr__(self) -> str:
         """Return string representation of the registry."""
         return (
-            f"ToolRegistry(total_tools={len(self._internal_tool_list)}, "
-            f"available_tools={len(self._available_tool_list)}, "
-            f"last_updated={self._last_updated_at})"
+            f"ToolRegistry(total_tools={len(self.internal_tools)}, "
+            f"available_tools={len(self.available_tools)}, "
+            f"last_updated={self.last_update})"
         )
