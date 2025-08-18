@@ -36,7 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from . import utils
-from .configuration import SseMcpServer, StdioMcpServer, StreamableHttpMcpServer
+from .configuration import HttpMcpServer, SseMcpServer, StdioMcpServer
 from .constants import TransportType
 from .exceptions import McpRelayBaseError, McpRelayConfigurationError
 
@@ -52,10 +52,10 @@ class DownstreamMcpClient(BaseModel):
     """
 
     name: str
-    config: StdioMcpServer | SseMcpServer | StreamableHttpMcpServer
-    session: ClientSession
-    cleanup_lock: asyncio.Lock = Field(default_factory=asyncio.Lock)
-    exit_stack: AsyncExitStack = Field(default_factory=AsyncExitStack)
+    config: StdioMcpServer | SseMcpServer | HttpMcpServer
+    session: ClientSession | None = Field(default=None, init=False)
+    cleanup_lock: asyncio.Lock = Field(default_factory=asyncio.Lock, init=False)
+    exit_stack: AsyncExitStack = Field(default_factory=AsyncExitStack, init=False)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -75,24 +75,15 @@ class DownstreamMcpClient(BaseModel):
         """
         log.debug(f"Initializing downstream mcp server: {self.name}...")
 
-        client_type = self.config.get("type")
-        command = self.config.get("command")
-        url = self.config.get("url")
-        if not client_type:
-            if command:
-                client_type = TransportType.stdio
-            elif url:
-                client_type = TransportType.streamable_http
-            else:
-                raise McpRelayConfigurationError(f"invalid MCP server configuration: {self.name}")
-
         try:
-            if client_type == TransportType.stdio:
-                client = await self.setup_stdio_client()
-            elif client_type == TransportType.streamable_http or client_type == TransportType.sse:
-                client = await self.setup_http_client(client_type)
-            else:
-                raise McpRelayConfigurationError(f"invalid MCP server configuration: {self.name}")
+            match self.config:
+                case StdioMcpServer():
+                    client = self.setup_stdio_client()
+                case SseMcpServer():
+                    client = self.setup_http_client(TransportType.sse)
+                case HttpMcpServer():
+                    client = self.setup_http_client(TransportType.http)
+                    pass
         except Exception as e:
             err_msg = f"Error setting up server {self.name}: {e}"
             log.exception(err_msg)
@@ -117,47 +108,19 @@ class DownstreamMcpClient(BaseModel):
         log.debug(f"Server {self.name} initialized successfully")
         return True
 
-    async def setup_http_client(self, client_type: TransportType):
-        if client_type == TransportType.streamable_http:
+    def setup_http_client(self, client_type: TransportType):
+        if client_type == TransportType.http:
             client_constructor = streamablehttp_client
         elif client_type == TransportType.sse:
             client_constructor = sse_client
         else:
             raise McpRelayBaseError(f"Invalid client HTTP type: {client_type}")
-        url = self.config.get("url")
-        headers = self.config.get("headers", {})
+        url = self.config.url
+        headers = self.config.headers
         if not url:
             err_msg = f"invalid MCP server configuration: {self.name} (missing url)"
             log.error(err_msg)
             raise McpRelayConfigurationError(err_msg)
-        if not isinstance(headers, dict):
-            err_msg = f"invalid MCP server configuration: {self.name} (headers is not a map)"
-            log.error(err_msg)
-            raise McpRelayConfigurationError(err_msg)
-        try:
-            timeout = float(self.config.get("timeout", 30))
-        except ValueError:
-            log.exception("Unable to convert timeout to float. Using default value of 30 seconds.")
-            timeout = 30.0
-
-        try:
-            sse_read_timeout = float(self.config.get("sse_read_timeout", 60 * 5))
-        except ValueError:
-            log.exception("Unable to convert sse_read_timeout to float. Using default value of 5 minutes.")
-            sse_read_timeout = 60 * 5.0
-
-        terminate_on_close = self.config.get("terminate_on_close", True)
-        if isinstance(terminate_on_close, bool):
-            pass
-        elif isinstance(terminate_on_close, str):
-            if terminate_on_close.lower() == "true":
-                terminate_on_close = True
-            elif terminate_on_close.lower() == "false":
-                terminate_on_close = False
-            else:
-                raise McpRelayBaseError(f"Invalid terminate_on_close value: {terminate_on_close}")
-        else:
-            raise McpRelayBaseError(f"Invalid terminate_on_close value: {terminate_on_close}")
 
         # Parse HTTP Header Values using Environment variables
         env = os.environ.copy()
@@ -165,45 +128,47 @@ class DownstreamMcpClient(BaseModel):
             headers[k] = string.Template(v).safe_substitute(env)
 
         kwargs = dict(
-            url=url,
+            url=self.config.url,
             headers=headers,
-            timeout=timeout,
-            sse_read_timeout=sse_read_timeout,
+            timeout=self.config.timeout,
+            sse_read_timeout=self.config.sse_read_timeout,
         )
-        if client_type == TransportType.streamable_http:
-            kwargs.update(dict(terminate_on_close=terminate_on_close))
+        if client_type == TransportType.http:
+            kwargs.update(dict(terminate_on_close=self.config.terminate_on_close))
 
         client = client_constructor(**kwargs)
         return client
 
-    async def setup_stdio_client(self):
+    def setup_stdio_client(self):
         # Prepare environment variables
-        env = os.environ.copy()
-        if self.config.get("env"):
+        env: dict[str, str] = os.environ.copy()
+        if self.config.env:
             env.update(self.config["env"])
-        command = self.config.get("command")
+        command = self.config.command
         if not command:
             err_msg = f"invalid MCP server configuration: {self.name} (missing command)"
             log.error(err_msg)
             raise McpRelayConfigurationError(err_msg)
-        args = self.config.get("args")
-        config_env = self.config.get("env")
-        if config_env:
-            if not isinstance(config_env, dict):
-                err_msg = f"invalid MCP server configuration: {self.name} (env is not a map)"
-                log.error(err_msg)
-                raise McpRelayConfigurationError(err_msg)
-            env = {
-                **env,
-                **config_env,
-            }  # merge env + config_env, giving priority to config_env
-        cwd = self.config.get("cwd")
+        config_env = self.config.env or {}
+        # merge env + config_env, giving priority to config_env
+        for k, v in config_env.items():
+            if v is None:
+                continue
+            v = v.strip()
+            if v:
+                env[k] = string.Template(v).safe_substitute(os.environ)
+        args = self.config.args
+        for i, arg in enumerate(args):
+            args[i] = string.Template(arg).safe_substitute(env)
+        cwd = self.config.cwd
+        if cwd:
+            cwd = string.Template(str(cwd)).safe_substitute(env)
         log.info(f"Creating stdio client: '{command} {' '.join(args)}'")
         server_params = StdioServerParameters(command=command, args=args, env=env, cwd=cwd)
         client = stdio_client(server_params)
         return client
 
-    async def list_tools(self) -> list[types.Tool]:
+    async def list_tools(self) -> dict[str, types.Tool]:
         """
         List available tools from the server.
 
@@ -215,19 +180,10 @@ class DownstreamMcpClient(BaseModel):
         """
         self._check_initialized()
 
-        tools_response = await self.session.list_tools()
-        tools = []
-
-        for item in tools_response:
-            if isinstance(item, tuple) and item[0] == "tools":
-                for tool in item[1]:
-                    tools.append(
-                        types.Tool(
-                            name=tool.name,
-                            description=tool.description,
-                            inputSchema=tool.inputSchema,
-                        )
-                    )
+        tool_list: types.ListToolsResult = await self.session.list_tools()
+        tools = {}
+        for tool in tool_list.tools:
+            tools[tool.name] = tool
 
         return tools
 
@@ -262,37 +218,6 @@ class DownstreamMcpClient(BaseModel):
             log.error(f"Error executing {tool_name}: {e}", exc_info=True)
             raise e
 
-    def extract_text_content(self, content: Any) -> Any:
-        """
-        Extract text from various MCP content types.
-
-        Args:
-            content: The content to extract text from
-
-        Returns:
-            Extracted text content or JSON representation
-        """
-        # Handle list of content items
-        if isinstance(content, list):
-            if len(content) == 1:
-                return self.extract_text_content(content[0])
-            return [self.extract_text_content(item) for item in content]
-
-        # Handle specific MCP content types
-        if isinstance(content, (types.EmbeddedResource, types.ImageContent, types.TextContent)):
-            return content.model_dump_json()
-
-        # Handle objects with text attribute
-        if hasattr(content, "text"):
-            return content.text
-
-        # Handle objects with input_value attribute
-        if hasattr(content, "input_value"):
-            return content.input_value
-
-        # Return as-is for other types
-        return content
-
     def _check_initialized(self) -> None:
         """
         Check if the server is initialized.
@@ -311,7 +236,8 @@ class DownstreamMcpClient(BaseModel):
         """
         async with self.cleanup_lock:
             try:
+                log.debug(f"Cleanup {self.name}")
                 await self.exit_stack.aclose()
                 self.session = None
-            except:  # noqa
+            except Exception:
                 log.exception(f"Error during cleanup of server {self.name}")
