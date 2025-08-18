@@ -14,14 +14,23 @@
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
 import logging
-from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
-from pydantic import AliasChoices, AliasGenerator, AliasPath, BaseModel, ConfigDict, Field, SecretStr
+from pydantic import (
+    AliasChoices,
+    AliasGenerator,
+    AliasPath,
+    BaseModel,
+    ConfigDict,
+    Field,
+    IPvAnyAddress,
+    SecretStr,
+)
 from pydantic.alias_generators import to_camel, to_pascal
+from pydantic.types import PathType
 
-from pan_aisecurity_mcp_relay.constants import (
+from .constants import (
     API_ENDPOINT_RE,
     DEFAULT_API_ENDPOINT,
     ENV_AI_PROFILE,
@@ -32,17 +41,10 @@ from pan_aisecurity_mcp_relay.constants import (
     TOOL_REGISTRY_CACHE_TTL_DEFAULT,
     TransportType,
 )
-from pan_aisecurity_mcp_relay.utils import expand_vars
+from .exceptions import McpRelayConfigurationError
+from .utils import expand_vars, get_logger
 
-log = logging.getLogger("pan-mcp-relay.config")
-
-
-class MaskedValue(str):
-    def __repr__(self):
-        s = super().__repr__()
-        if len(s) <= 7:
-            return "*" * len(s)
-        return "".join(["*" for c in s[:-7]]) + s[-7:-1]
+log = get_logger(__name__)
 
 
 class SecurityScannerEnv(TypedDict):
@@ -107,7 +109,7 @@ class McpRelayConfig(BaseModel):
         validation_alias=make_validation_aliases("config_file", "config_path"),
     )
     transport: TransportType = Field(default=TransportType.stdio, description="Transport protocol to use")
-    host: IPv4Address | IPv6Address = Field(default="127.0.0.1", description="Host for HTTP/SSE server")
+    host: IPvAnyAddress = Field(default="127.0.0.1", description="Host for HTTP/SSE server")
     port: int = Field(default=8000, description="Port for HTTP/SSE server", gt=0, lt=65535)
     tool_registry_cache_ttl: int = Field(
         default=TOOL_REGISTRY_CACHE_TTL_DEFAULT,
@@ -119,8 +121,13 @@ class McpRelayConfig(BaseModel):
     )
     max_mcp_tools: int = Field(default=MAX_MCP_TOOLS_DEFAULT, description="Maximum number of MCP tools to allow", gt=0)
 
-    dotenv: str | Path | None = Field(default=".env", description="Path to .env file")
+    dotenv: Path | None = Field(default=".env", description="Path to .env file")
     show_config: bool = Field(default=False, description="Show configuration and exit")
+    log_level: int | None = Field(default=logging.DEBUG, description="Logging level")
+    use_system_ca: bool = Field(default=False, description="Use system CA")
+    custom_ca_file: Annotated[Path, PathType("file")] | None = Field(
+        default=None, description="Path to custom trusted root CA file"
+    )
 
     def model_post_init(self, context: Any):
         log.debug(f"Expanding environment variables on {self!r}")
@@ -184,3 +191,9 @@ class Config(BaseModel):
     mcp_servers: dict[str, StdioMcpServer | SseMcpServer | StreamableHttpMcpServer] | None = Field(
         default_factory=dict, description="MCP Servers Configuration", alias="mcpServers"
     )
+
+    def model_post_init(self, context: Any, /) -> None:
+        if len(self.mcp_servers) > self.mcp_relay.max_mcp_servers:
+            raise McpRelayConfigurationError(
+                f"Too many MCP servers ({len(self.mcp_servers)} > {self.mcp_relay.max_mcp_servers})"
+            )
