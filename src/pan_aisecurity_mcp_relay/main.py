@@ -15,10 +15,13 @@
 # any kind of legal claim.
 
 import asyncio
+import json
 import logging
+import os
 import shutil
 import sys
 from pathlib import Path
+from typing import Literal
 
 import click
 import dotenv
@@ -38,6 +41,7 @@ from .constants import (
     ENV_CONFIG_FILE,
     ENV_DOTENV,
     ENV_HOST,
+    ENV_LOG_LEVEL,
     ENV_MAX_SERVERS,
     ENV_MAX_TOOLS,
     ENV_PORT,
@@ -50,7 +54,7 @@ from .constants import (
     TOOL_REGISTRY_CACHE_TTL_DEFAULT,
     TransportType,
 )
-from .exceptions import McpRelayBaseError
+from .exceptions import McpRelayBaseError, McpRelayConfigurationError, McpRelayInternalError
 from .pan_security_relay import PanSecurityRelay
 from .utils import deep_merge, expand_path, expand_vars, getenv
 
@@ -60,12 +64,51 @@ log = utils.get_logger(__name__)
 def setup_logging():
     """Initialize logging."""
     stderr = rich.console.Console(stderr=True)
+    default_level = get_loglevel()
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=default_level,
         format="%(message)s",
-        handlers=[rich.logging.RichHandler(rich_tracebacks=False, console=stderr)],
+        handlers=[
+            rich.logging.RichHandler(
+                log_time_format="%X",
+                rich_tracebacks=True,
+                console=stderr,
+                enable_link_path=True,
+            )
+        ],
         force=True,
     )
+
+
+def set_loglevels(log_level: int, **kwargs) -> None:
+    """Configure Log Levels for libraries"""
+    # level_to_name = getattr(logging, "_nameToLevel")  # int -> str
+    log_level = get_loglevel(**kwargs)
+    logging.getLogger().setLevel(log_level)
+    if log_level >= logging.INFO:  # WARNING, ERROR, CRITICAL
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+    if log_level < logging.INFO:  # DEBUG, NOTSET
+        logging.getLogger("httpcore").setLevel(logging.INFO)
+        logging.getLogger("httpx").setLevel(logging.INFO)
+
+
+def get_loglevel(**kwargs):
+    kwarg_level = kwargs.get("level", None)
+    if isinstance(kwarg_level, str):
+        kwarg_level = kwarg_level.upper()
+    env_level = os.getenv(ENV_LOG_LEVEL, None)
+    if isinstance(env_level, str):
+        env_level = env_level.upper()
+    log_level = kwarg_level or env_level or logging.INFO
+    name_to_level = getattr(logging, "_nameToLevel")  # str -> int
+    if isinstance(log_level, str):
+        if log_level in name_to_level:
+            log_level = name_to_level[log_level]
+        else:
+            log.warning(f"Unknown logging level: {log_level}, using INFO instead.")
+            log_level = logging.INFO
+    return log_level
 
 
 context_settings = {
@@ -75,7 +118,19 @@ context_settings = {
 }
 
 
-@click.command(context_settings=context_settings)
+def entrypoint():
+    """Entrypoint for the MCP relay server."""
+    setup_logging()
+    try:
+        cli()
+    except TypeError as te:
+        log.exception(f"event=cli_error error={te}")
+        raise
+    except McpRelayBaseError:
+        return 1
+
+
+@click.group(context_settings=context_settings, invoke_without_command=True)
 @click.option(
     "api_key",
     "-k",
@@ -161,8 +216,18 @@ context_settings = {
     type=click.types.Path(exists=True, dir_okay=False, path_type=Path),
     help="Path to Custom Trusted CA bundle",
 )
-@click.option("log_level", "--verbose", "-v", is_flag=True, flag_value=logging.DEBUG)
-@click.option("log_level", "--quiet", "-q", is_flag=True, flag_value=logging.WARNING)
+@click.option(
+    "log_level",
+    "--debug",
+    "-d",
+    is_flag=True,
+    flag_value="debug",
+    help="Extremely verbose logging output (DEBUG)",
+)
+@click.option(
+    "log_level", "--verbose", "-v", is_flag=True, flag_value="info", help="Verbose logging output (INFO, DEFAULT)"
+)
+@click.option("log_level", "--quiet", "-q", is_flag=True, flag_value="warning", help="Minimal logging output (WARNING)")
 @click.option(
     "show_config",
     "--show-config",
@@ -173,13 +238,14 @@ context_settings = {
 )
 @click.version_option(__version__, *("--version", "-V"), message="%(version)s")
 @click.pass_context
-def cli(ctx, **kwargs):
-    log.info(f"ctx=({type(ctx)}) {ctx}")
-    """Command line interface for the MCP relay server."""
+def cli(ctx, **kwargs) -> int:
+    """Run the MCP Relay Server."""
+    ctx.ensure_object(dict)
     dotenv_search = kwargs.get("dotenv") or ".env"
 
-    if log_level := kwargs.get("log_level"):
-        logging.getLogger().setLevel(log_level)
+    set_loglevels(**kwargs)
+    if (log_level := kwargs.get("log_level", None)) and isinstance(log_level, str):
+        kwargs["log_level"] = logging.getLevelName(log_level.upper())
 
     try:
         load_dotenvs(dotenv_search)
@@ -233,19 +299,73 @@ def cli(ctx, **kwargs):
         print(cli_vars)
         raise click.ClickException(err_msg) from e
 
-    if config.mcp_relay.show_config:
-        log.info("event=show_config")
-        dict_config = config.model_dump(
-            mode="json",
-            exclude_unset=False,
-            exclude_none=False,
-            exclude={"mcp_relay": {"show_config", "api_key"}},
-            by_alias=True,
-        )
-        print(yaml.dump(dict_config, sort_keys=False, indent=2))
-        return 0
+    ctx.obj["config"] = config
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(run_server)
+    return 0
 
+
+@cli.command(name="run")
+@click.pass_context
+def run_server(ctx: click.Context) -> int:
+    """Run the MCP Relay Server."""
+    config = ctx.obj["config"]
     return asyncio.run(start_mcp_relay_server(config))
+
+
+@cli.command(name="show-config")
+@click.option("include_api_key", "--include-api-key", is_flag=True, help="Include API key in output")
+@click.pass_context
+def show_config(ctx: click.Context, include_api_key: bool) -> int:
+    """Print MCP Relay Configuration and exit."""
+    config: Config = ctx.obj["config"]
+    log.info("event=show_config")
+    dict_config = config.model_dump(
+        mode="json",
+        exclude_unset=False,
+        exclude_none=False,
+        by_alias=True,
+    )
+    if include_api_key:
+        dict_config["mcpRelay"]["api_key"] = config.mcp_relay.api_key.get_secret_value()
+    print(yaml.dump(dict_config, sort_keys=False, indent=2))
+    return 0
+
+
+@cli.command(name="json-schema")
+@click.option(
+    "output",
+    "-o",
+    "--output",
+    default=None,
+    type=click.Path(dir_okay=False, writable=True, path_type=Path),
+    help="Path to write JSON Schema to",
+)
+@click.option(
+    "format", "-f", "--format", type=click.Choice(choices=["json", "yaml"]), default="json", help="Schema Output Format"
+)
+@click.pass_context
+def json_schema(ctx: click.Context, output: Path, format: Literal["yaml"] | Literal["json"] = "json") -> int:
+    """Print Configuration File JSON Schema, optionally to a file."""
+    schema = Config.model_json_schema(by_alias=True)
+    if format == "yaml":
+        schema_text = yaml.safe_dump(schema)
+    elif format == "json":
+        schema_text = json.dumps(schema, indent=2, sort_keys=False, default=str)
+    if output:
+        if output.is_char_device():
+            pass
+        elif output.exists() and output.is_file():
+            confirmed = click.confirm(
+                f"output file {output} already exists, would you like to overwrite it?", default=True
+            )
+            if not confirmed:
+                click.echo("Aborting.")
+                return 1
+        output.write_text(schema_text)
+    else:
+        print(schema_text, file=sys.stdout)
+    return 0
 
 
 async def start_mcp_relay_server(config: Config):
@@ -253,13 +373,21 @@ async def start_mcp_relay_server(config: Config):
     mcp_servers_config = {k: v.model_dump() for k, v in config.mcp_servers.items()}
     relay_config = config.mcp_relay
 
-    relay_server = PanSecurityRelay(
-        security_scanner_env=relay_config.security_scanner_env(),
-        tool_registry_cache_expiry=relay_config.tool_registry_cache_ttl,
-        max_downstream_servers=relay_config.max_mcp_servers,
-        max_downstream_tools=relay_config.max_mcp_tools,
-        mcp_servers_config=mcp_servers_config,
-    )
+    try:
+        relay_server = PanSecurityRelay(
+            config=relay_config,
+            mcp_servers_config=mcp_servers_config,
+        )
+    except McpRelayConfigurationError:
+        log.exception("Failed to instantiate MCP Relay server")
+        raise
+
+    try:
+        await relay_server.initialize()
+    except ValidationError as e:
+        err_msg = "Failed to initialize MCP Relay server"
+        log.exception(err_msg)
+        raise McpRelayInternalError(err_msg) from e
 
     # Create and run the MCP server
     app = await relay_server.mcp_server()
@@ -269,7 +397,7 @@ async def start_mcp_relay_server(config: Config):
             await relay_server.run_stdio_server(app)
         case TransportType.sse:
             await relay_server.run_sse_server(app, str(relay_config.host), relay_config.port)
-        case TransportType.streamable_http:
+        case TransportType.http:
             log.error("Streamable HTTP transport is not currently supported")
         case _:
             log.error(f"Invalid transport type: {relay_config.transport}")
@@ -330,18 +458,6 @@ def load_config_file(config_path) -> dict:
             )
     log.debug(f'event="Loaded configuration file data" path={config_path} data={config_file_data}')
     return config_file_data
-
-
-def entrypoint():
-    """Entrypoint for the MCP relay server."""
-    setup_logging()
-    try:
-        cli()
-    except TypeError as te:
-        log.exception(f"event=cli_error error={te}")
-        raise
-    except McpRelayBaseError:
-        return 1
 
 
 if __name__ == "__main__":
