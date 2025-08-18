@@ -244,7 +244,7 @@ async def test_collect_tools_from_servers_success(
     mock_list_tools.side_effect = [text_processor_tools, data_analyzer_tools]
     mock_prepare_tool.return_value = None
 
-    await relay._collect_tools_from_servers(servers_config)
+    await relay.initialize_downstream_mcp_servers(servers_config)
 
     assert mock_initialize.call_count == 2
     assert mock_cleanup.call_count == 2
@@ -270,7 +270,7 @@ async def test_collect_tools_from_servers_initialization_failure(mock_initialize
     mock_cleanup.return_value = None
 
     with pytest.raises(Exception) as exc_info:
-        await relay._collect_tools_from_servers(servers_config)
+        await relay.initialize_downstream_mcp_servers(servers_config)
 
     assert "Server initialization failed" in str(exc_info.value)
     mock_list_tools.assert_not_called()
@@ -305,7 +305,7 @@ async def test_collect_tools_from_servers_hidden_mode_detection(
     mock_list_tools.return_value = mock_tools
     mock_prepare_tool.return_value = None
 
-    await relay._collect_tools_from_servers(servers_config)
+    await relay.initialize_downstream_mcp_servers(servers_config)
 
     mock_prepare_tool.assert_any_call("benign_text_processor", mock_tools, True, [])  # hidden_mode enabled
     mock_prepare_tool.assert_any_call("benign_data_analyzer", mock_tools, False, [])  # hidden_mode disabled
