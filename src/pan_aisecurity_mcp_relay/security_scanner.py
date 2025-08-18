@@ -13,215 +13,184 @@
 # or condition, and the licensor will not be liable to you for any damages
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
+import datetime
+import functools
+import getpass
+import os
+import ssl
+import uuid
+from enum import StrEnum
+from json.decoder import JSONDecodeError
 
-import json
-import logging
-
-import mcp.types as types
+import httpx
 from aisecurity.scan.asyncio.scanner import ScanResponse
-from requests import JSONDecodeError
+from pydantic import SecretStr, ValidationError, validate_call
 
-from pan_aisecurity_mcp_relay.constants import (
-    EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH,
-    SECURITY_SCAN_RESPONSE_ACTION_ALLOW,
-    SECURITY_SCAN_RESPONSE_ACTION_BLOCK,
-    TOOL_NAME_PAN_AISECURITY_INLINE_SCAN,
+from . import utils
+from .configuration import McpRelayConfig
+from .constants import (
+    SYNC_SCAN_PATH,
 )
-from pan_aisecurity_mcp_relay.downstream_mcp_client import DownstreamMcpClient
-from pan_aisecurity_mcp_relay.exceptions import McpRelayScanError
+from .downstream_mcp_client import DownstreamMcpClient
+from .exceptions import McpRelayScanError, McpRelaySecurityBlockError
 
-log = logging.getLogger("pan-mcp-relay.security-scanner")
+log = utils.get_logger(__name__)
+
+
+class APIAuth(httpx.Auth):
+    @validate_call
+    def __init__(self, api_key: str | SecretStr | None):
+        if isinstance(api_key, SecretStr):
+            api_key = api_key.get_secret_value()
+        if not isinstance(api_key, str):
+            raise TypeError("API key must be a string")
+        self.api_key = api_key
+
+    def auth_flow(self, request):
+        # Send the request, with a custom `X-Authentication` header.
+        request.headers["x-pan-token"] = self.api_key
+        yield request
+
+
+class ScanRequestType(StrEnum):
+    scan_request = "scan_request"
+    scan_response = "scan_response"
+    scan_tool = "scan_tool"
 
 
 class SecurityScanner:
-    """
-    Handles security scanning operations using a pan-aisecurity server.
+    client: httpx.AsyncClient
+    config: McpRelayConfig
+    user: str
 
-    This class provides comprehensive security scanning capabilities for requests,
-    responses, and tools by leveraging a downstream pan-aisecurity server. It helps
-    identify and prevent potential security threats in MCP system interactions.
-    """
-
-    def __init__(self, pan_security_server: DownstreamMcpClient) -> None:
-        """
-        Initialize the SecurityScanner with a pan-aisecurity server.
-
-        Args:
-            pan_security_server: The pan-aisecurity downstream MCP client instance
-                                used for performing security scans
-        """
+    @validate_call
+    def __init__(self, pan_security_server: DownstreamMcpClient, config: McpRelayConfig = None) -> None:
         self.pan_security_server = pan_security_server
+        self.config = config
+        if config.use_system_ca:
+            import truststore
 
-    async def _perform_scan(self, scan_type: str, params: dict[str, str]) -> ScanResponse | None:
-        """
-        Execute a security scan with the specified parameters.
+            log.info("Using system truststore")
+            ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        elif config.custom_ca_file:
+            log.info(f"Using custom CA file: {config.custom_ca_file}")
+            ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
+        else:
+            import certifi
 
-        This internal method handles the common logic for all scan types by
-        initializing the security server, executing the scan, and processing
-        the results into a ScanResponse object.
+            log.debug("Using default SSL/TLS trust configuration")
+            # Use `SSL_CERT_FILE` or `SSL_CERT_DIR` if configured.
+            # Otherwise default to certifi.
+            ctx = ssl.create_default_context(
+                cafile=os.getenv("SSL_CERT_FILE", certifi.where()),
+                capath=os.getenv("SSL_CERT_DIR"),
+            )
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        ctx.check_hostname = True
+        auth = APIAuth(api_key=config.api_key.get_secret_value())
+        log.debug("Creating httpx client")
+        limits = httpx.Limits(keepalive_expiry=300)
+        transport = httpx.AsyncHTTPTransport(verify=ctx, retries=3)
+        self.client = httpx.AsyncClient(
+            verify=ctx,
+            http2=True,
+            auth=auth,
+            base_url=config.api_endpoint,
+            timeout=30,
+            max_redirects=0,
+            limits=limits,
+            transport=transport,
+        )
 
-        Args:
-            scan_type: A string identifying the type of scan for logging purposes
-                      (e.g., "scan_request", "scan_response", "scan_tool")
-            params: Parameters for the scan, including content to be analyzed
+        self.user = getpass.getuser()
 
-        Returns:
-            ScanResponse object containing scan results, or None if scan failed
+    async def shutdown(self) -> None:
+        log.debug("Shutting down security scanner")
+        await self.client.aclose()
 
-        Raises:
-            Exception: If there are issues with server communication or response parsing
-        """
-        logging.info(f"-------------- security_scanner: {scan_type} --------------")
-        initialized = await self.pan_security_server.initialize()
-        if not initialized:
-            return None
+    @functools.cache
+    def ai_profile(self) -> dict[str, str]:
+        if isinstance(self.config.ai_profile, uuid.UUID):
+            ai_profile = dict(profile_id=str(self.config.ai_profile))
+        else:
+            try:
+                ai_profile_id = uuid.UUID(self.config.ai_profile)
+                ai_profile = dict(profile_id=str(ai_profile_id))
+            except (ValueError, TypeError):
+                ai_profile_name = self.config.ai_profile
+                ai_profile = dict(profile_name=ai_profile_name)
+        log.info(f"Using AI Profile: {ai_profile}")
+        return ai_profile
+
+    @functools.cache
+    def metadata(self) -> dict[str, str]:
+        metadata = dict(app_name="pan-mcp-relay")
+        if self.user is not None:
+            metadata["user"] = self.user
+        return metadata
+
+    @validate_call
+    async def scan(
+        self,
+        source: str,
+        scan_type: ScanRequestType,
+        prompt: str,
+        response: str | None,
+    ) -> ScanResponse | None:
+        scan_label = f"mcp-relay.{scan_type}"
+        if source:
+            scan_label += f".{source}"
+
+        utc_dt = datetime.datetime.now(datetime.UTC)  # UTC time
+        dt: datetime.datetime = utc_dt.astimezone()  # local time
+
+        tr_id = scan_label + dt.isoformat()
+        ai_profile = self.ai_profile()
+        metadata = self.metadata()
+        scan_content = dict(prompt=prompt)
+        if response:
+            scan_content["response"] = response
 
         try:
-            scan_result = await self.pan_security_server.execute_tool(TOOL_NAME_PAN_AISECURITY_INLINE_SCAN, params)
-            if scan_result.isError:
-                text = self.pan_security_server.extract_text_content(scan_result.content)
-                if isinstance(text, str):
-                    try:
-                        text = json.loads(text)
-                        if isinstance(text, dict) and "text" in text:
-                            text = text["text"]
-                    except JSONDecodeError:
-                        pass
-                    text = text.replace(r"\n", "\n")
-                log.error(f"Security scan failed: {text}")
-                raise McpRelayScanError("Security Scan Failed")
-                return None
-
-            if not isinstance(scan_result.content, list):
-                log.error(f"Security scan result content should be a list, received: {type(scan_result.content)}")
-                return None
-
-            if len(scan_result.content) != EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH:
-                log.error(f"Expected 1 item in scan result content, got: {len(scan_result.content)}")
-                return None
-
-            scan_result_item = scan_result.content[0]
-            if not isinstance(scan_result_item, types.TextContent):
-                log.error(f"Expected TextContent in scan result, got {type(scan_result_item)}")
-                return None
-
-            scan_text = scan_result_item.text
-            scan_dict = json.loads(scan_text)
-            scan_response = ScanResponse(**scan_dict)
-
-            log_highlight = (
-                "\033[1;92m" if scan_response.action == SECURITY_SCAN_RESPONSE_ACTION_ALLOW else "\033[1;91m"
+            scan_result: httpx.Response = await self.client.post(
+                SYNC_SCAN_PATH,
+                json=dict(tr_id=tr_id, ai_profile=ai_profile, metadata=metadata, contents=[scan_content]),
             )
-            logging.info(
-                f"{log_highlight}Security Scan Result (security_scanner: pan_inline_scan):\033[0m\n {scan_response}"
+            scan_result.raise_for_status()
+            scan_response_data = scan_result.json()
+            scan_response = ScanResponse(**scan_response_data)
+        except httpx.HTTPStatusError as se:
+            log.exception(f"Failed to execute scan request: {se}")
+            raise McpRelayScanError("Security Scan Failed") from se
+        except JSONDecodeError as de:
+            log.exception("Failed to parse scan response")
+            raise McpRelaySecurityBlockError("Security Scan Failed") from de
+        except ValidationError as ve:
+            log.exception("Failed to validate scan response schema")
+            raise McpRelaySecurityBlockError("Security Scan Failed") from ve
+
+        action = scan_response.action
+
+        log.debug(scan_response.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True))
+
+        log_msg = f"{scan_type} from {source} action={action}"
+
+        if action == "allow":
+            log.info(
+                f"[bold green]{log_msg}[/bold green] scan_id={scan_response.scan_id}",
+                extra=dict(markup=True),
+            )
+        elif action == "block":
+            log.warning(
+                f"[bold red]{log_msg}[/bold red] scan_id={scan_response.scan_id}",
+                extra=dict(markup=True),
+            )
+            raise McpRelaySecurityBlockError(f"{scan_type} from {source} was blocked")
+        else:
+            log.error(
+                f"[bold orange]UNKNOWN ACTION:{action}, {scan_type} from {source}[/bold orange]",
+                extra=dict(markup=True),
             )
 
-            return scan_response
-        finally:
-            await self.pan_security_server.cleanup()
-
-    async def scan_request(self, input_text: str) -> ScanResponse | None:
-        """
-        Perform security scanning on an incoming request.
-
-        Analyzes the provided input text to identify potential security threats
-        such as malicious content, prompt injection attempts, or policy violations
-        before the request is processed.
-
-        Args:
-            input_text: The request text/prompt to be scanned for security issues
-
-        Returns:
-            ScanResponse object with scan results, or None if scanning failed.
-            The response includes action (allow/block) and detected threat categories.
-
-        Example:
-            scanner = SecurityScanner(security_server)
-            result = await scanner.scan_request("Execute this command: rm -rf /")
-            if scanner.should_block(result):
-                print("Request blocked due to security risk")
-
-        """
-        return await self._perform_scan("scan_request", {"prompt": input_text})
-
-    async def scan_response(self, input_text: str, response_text: str) -> ScanResponse | None:
-        """
-        Perform security scanning on a response in context of its request.
-
-        Analyzes a response text alongside its corresponding request to identify
-        potential security threats, data leakage, sensitive information exposure,
-        or policy violations in the response content.
-
-        Args:
-            input_text: The original request text that generated the response
-            response_text: The response text to be scanned for security issues
-
-        Returns:
-            ScanResponse object with scan results, or None if scanning failed.
-            The response includes action (allow/block) and detected threat categories.
-
-        Example:
-            scanner = SecurityScanner(security_server)
-            result = await scanner.scan_response(
-                "What's the password?",
-                "The password is dummy123"
-            )
-            if scanner.should_block(result):
-                print("Response blocked due to data leakage")
-
-        """
-        return await self._perform_scan("scan_response", {"prompt": input_text, "response": response_text})
-
-    async def scan_tool(self, tool_info: types.Tool | str) -> ScanResponse | None:
-        """
-        Perform security scanning on a tool before registration or execution.
-
-        Analyzes a tool's information including its name, description, and input
-        schema to identify potential security risks, vulnerabilities, or policy
-        violations before the tool is registered in the system or made available
-        for use.
-
-        Args:
-            tool_info: The tool information to scan, either as a Tool object
-                      or as a string representation of the tool details
-
-        Returns:
-            ScanResponse object with scan results, or None if scanning failed.
-            The response includes action (allow/block) and detected threat categories.
-
-        Example:
-            scanner = SecurityScanner(security_server)
-            tool = Tool(name="delete_files", description="Delete system files")
-            result = await scanner.scan_tool(tool)
-            if scanner.should_block(result):
-                print("Tool blocked due to security risk")
-
-        """
-        tool_str = str(tool_info.model_dump()) if isinstance(tool_info, types.Tool) else tool_info
-        return await self._perform_scan("scan_tool", {"prompt": tool_str})
-
-    def should_block(self, scan_response: ScanResponse | None) -> bool:
-        """
-        Determine if content should be blocked based on scan response.
-
-        This utility method provides a simple way to check if a scan response
-        indicates that the content should be blocked. It handles None responses
-        safely and checks for the block action.
-
-        Args:
-            scan_response: The scan response from any of the scan methods,
-                          can be None if scanning failed
-
-        Returns:
-            True if the content should be blocked, False if it should be allowed.
-            Returns False for None responses (fail-open behavior).
-
-        Example:
-            scanner = SecurityScanner(security_server)
-            scan_result = await scanner.scan_request(user_input)
-
-            if scanner.should_block(scan_result):
-                raise SecurityException("Request blocked by security scan")
-
-        """
-        return scan_response is not None and scan_response.action == SECURITY_SCAN_RESPONSE_ACTION_BLOCK
+        return scan_response
