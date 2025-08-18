@@ -1,12 +1,14 @@
-# Palo Alto Networks MCP Security Relay
+# Prisma AIRS MCP Security Relay
 
-A security-enhanced [Model Context Protocol](https://modelcontextprotocol.io)
+By Palo Alto Networks
+
+`pan-mcp-relay` is a security-enhanced [Model Context Protocol](https://modelcontextprotocol.io)
 (MCP) relay server that acts as an intermediary between clients and downstream
 MCP servers, providing security scanning and centralized orchestration capabilities.
 
 <!--TOC-->
 
-- [Palo Alto Networks MCP Security Relay](#palo-alto-networks-mcp-security-relay)
+- [Prisma AIRS MCP Security Relay](#prisma-airs-mcp-security-relay)
 - [Overview](#overview)
 - [Installation and Setup](#installation-and-setup)
 - [Configuration](#configuration)
