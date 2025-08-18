@@ -210,7 +210,7 @@ def test_downstream_mcp_client_initialization(test_server_config):
     assert client.name == "test-server"
     assert client.config == test_server_config
     assert client.session is None
-    assert isinstance(client._cleanup_lock, asyncio.Lock)
+    assert isinstance(client.cleanup_lock, asyncio.Lock)
     assert isinstance(client.exit_stack, AsyncExitStack)
 
 
@@ -221,7 +221,7 @@ def test_downstream_mcp_client_initialization_sse(sse_server_config):
     assert client.name == "sse-server"
     assert client.config == sse_server_config
     assert client.session is None
-    assert isinstance(client._cleanup_lock, asyncio.Lock)
+    assert isinstance(client.cleanup_lock, asyncio.Lock)
     assert isinstance(client.exit_stack, AsyncExitStack)
 
 
