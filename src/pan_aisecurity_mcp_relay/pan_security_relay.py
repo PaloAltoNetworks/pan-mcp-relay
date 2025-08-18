@@ -56,6 +56,7 @@ from pydantic import BaseModel, Field, validate_call
 from starlette.applications import Starlette
 from starlette.routing import Route
 
+from . import utils
 from .configuration import McpRelayConfig, McpServerType
 from .constants import (
     MCP_RELAY_NAME,
@@ -77,9 +78,6 @@ from .tool import InternalTool, ToolState
 from .tool_registry import ToolRegistry
 
 __posixpath__ = Path(__file__).resolve()
-
-
-from pan_aisecurity_mcp_relay import utils
 
 log = utils.get_logger(__name__)
 
