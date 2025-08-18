@@ -26,7 +26,6 @@ copyright_skip_words = ["CPY", "CPY001"]
 log = logging.getLogger(__self__.stem)
 
 skip_copyright_prefixes = [
-    Path("examples"),
     Path(".ci/scripts"),
 ]
 
