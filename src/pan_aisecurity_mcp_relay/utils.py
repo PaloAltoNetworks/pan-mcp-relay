@@ -13,9 +13,13 @@
 # or condition, and the licensor will not be liable to you for any damages
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
+import functools
 import logging
 import os
+import sys
 from pathlib import Path
+
+import click
 
 from .constants import MCP_RELAY_NAME
 
@@ -63,3 +67,17 @@ def get_logger(name: str) -> logging.Logger:
     name = name.replace(__package__, MCP_RELAY_NAME)
     name = name.replace("_", "-")
     return logging.getLogger(name)
+
+
+@functools.cache
+def get_app_dir() -> Path:
+    if sys.platform.startswith("win"):
+        app_dir = Path(click.get_app_dir(MCP_RELAY_NAME))
+    else:
+        # Prefer ~/.config/pan-mcp-relay if we can
+        xdg_config = Path.home() / ".config"
+        if xdg_config.exists() and xdg_config.resolve().is_dir():
+            app_dir = Path(xdg_config) / f".{MCP_RELAY_NAME.lower()}"
+        else:
+            return Path(click.get_app_dir(MCP_RELAY_NAME))
+    return app_dir
