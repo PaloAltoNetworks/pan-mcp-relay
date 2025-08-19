@@ -130,11 +130,8 @@ UNIX_EPOCH: Final[datetime] = datetime.fromtimestamp(0)
 # TOOL NAMES
 # =============================================================================
 
-TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO: Final[str] = "list_downstream_servers_info"
+TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO: Final[str] = f"{MCP_RELAY_NAME}:list_downstream_servers_info"
 """Tool name for listing downstream server information."""
-
-TOOL_NAME_PAN_AISECURITY_INLINE_SCAN: Final[str] = "pan_inline_scan"
-"""Tool name for Pan AI Security inline scanning."""
 
 
 # =============================================================================
@@ -144,9 +141,4 @@ TOOL_NAME_PAN_AISECURITY_INLINE_SCAN: Final[str] = "pan_inline_scan"
 EXPECTED_SECURITY_SCAN_RESULT_CONTENT_LENGTH: Final[int] = 1
 """Expected number of content items in security scan results."""
 
-SECURITY_SCAN_RESPONSE_ACTION_BLOCK: Final[str] = "block"
-"""Security scan response indicating content should be blocked."""
-
-SECURITY_SCAN_RESPONSE_ACTION_ALLOW: Final[str] = "allow"
-"""Security scan response indicating content is safe to proceed."""
 SYNC_SCAN_PATH = "/v1/scan/sync/request"

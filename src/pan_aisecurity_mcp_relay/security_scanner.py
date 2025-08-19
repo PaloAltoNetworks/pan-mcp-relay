@@ -150,7 +150,7 @@ class SecurityScanner(BaseModel):
         source: ScanSource,
         scan_type: ScanType,
         prompt: str,
-        response: str | None,
+        response: str | None = None,
     ) -> ScanResponse | None:
         scan_label = f"mcp-relay.{scan_type}"
         if source:

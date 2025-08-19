@@ -53,8 +53,12 @@ class BaseTool(types.Tool):
 
     server_name: str = Field(..., description="The server where this tool is deployed")
     state: ToolState = Field(default=ToolState.ENABLED, description="The state of the tool")
+    original_name: str | None = Field(default=None, description="The original name of the tool")
 
     model_config = ConfigDict(extra="allow")
+
+    def model_post_init(self, context: Any, /) -> None:
+        self.original_name = self.name
 
     def get_argument_descriptions(self) -> list[str]:
         """
@@ -81,7 +85,9 @@ class BaseTool(types.Tool):
         Returns:
             Standard MCP Tool object.
         """
-        return types.Tool(**self.model_dump(exclude={"server_name", "state"}))
+        tool = types.Tool(**self.model_dump(exclude={"server_name", "state"}))
+        tool.name = self.server_tool_name
+        return tool
 
     @computed_field
     @property
@@ -106,6 +112,7 @@ class InternalTool(BaseTool):
 
     def model_post_init(self, __context: Any) -> None:
         """Compute hash after initialization."""
+        super().model_post_init(__context)
         self.sha256_hash = self.compute_hash()
 
     def compute_hash(self) -> str:

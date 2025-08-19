@@ -282,9 +282,9 @@ class PanSecurityRelay(BaseModel):
             await self._update_tool_registry()
 
         # Process each tool
-        for tool in self.tool_registry.get_available_tools():
+        for tool_name, tool in self.tool_registry.get_available_tools().items():
             log.debug(f"Processing tool: {tool.name}")
-            available_tool_list[tool.name] = tool.to_mcp_tool()
+            available_tool_list[tool.server_tool_name] = tool.to_mcp_tool()
             log.debug(f"Tool {tool.name}: State={tool.state}, Total tools={len(available_tool_list)}")
 
         # Add the relay info tool
@@ -322,7 +322,9 @@ class PanSecurityRelay(BaseModel):
         tool = available_tools[name]
 
         # Execute the tool on the downstream server
-        result = await self._execute_on_server(tool.server_name, name, arguments)
+        result = await self._execute_on_server(
+            server_name=tool.server_name, tool_name=tool.original_name, arguments=arguments
+        )
 
         result_content = self.extract_text_content(result.content)
 
@@ -402,7 +404,7 @@ class PanSecurityRelay(BaseModel):
     async def run_sse_server(app: Server, host: str, port: int) -> None:
         """Run the server with SSE transport."""
         log.info(f"Starting server with SSE transport on {host}:{port}")
-        log.info("Press Ctrl-D to exit.")
+        log.info("Press Ctrl-C to exit.")
 
         sse_transport = SseServerTransport("/messages")
         # Use the wrapper classes for the endpoints
