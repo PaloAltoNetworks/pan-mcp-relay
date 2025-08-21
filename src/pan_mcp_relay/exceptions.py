@@ -13,8 +13,7 @@
 # or condition, and the licensor will not be liable to you for any damages
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
-
-
+import httpx
 import mcp.types as types
 
 
@@ -60,16 +59,15 @@ class AiProfileError(McpRelayConfigurationError):
     """Exception for invalid AI profile errors."""
 
 
+# Server and Tool Errors
+
+
+class McpServerInitializationError(McpRelayBaseError):
+    """Exception for Failed MCP Server initialization."""
+
+
 class McpRelayToolExecutionError(McpRelayBaseError):
     """Exception for tool execution errors."""
-
-
-class McpRelayScanError(McpRelayBaseError):
-    """Exception for scan failure errors."""
-
-
-class McpRelaySecurityBlockError(McpRelayBaseError):
-    """Exception for security block errors."""
 
 
 class McpRelayToolNotFoundError(McpRelayBaseError):
@@ -86,3 +84,22 @@ class McpRelayValidationError(McpRelayBaseError):
 
 class McpRelayToolRegistryError(McpRelayBaseError):
     """Exception for tool registry errors."""
+
+
+# Scan & Sanner Errors
+
+
+class McpRelayScanError(McpRelayBaseError):
+    """Exception for scan failure errors."""
+
+
+class ScanApiAuthenticationError(McpRelayScanError, httpx.HTTPStatusError):
+    """Exception for Scan API Authentication Failures (HTTP 4xx)"""
+
+
+class ScanApiInternalError(McpRelayScanError, httpx.HTTPStatusError):
+    """Exception for Scan API Failures (HTTP 5xx)"""
+
+
+class McpRelaySecurityBlockError(McpRelayBaseError):
+    """Exception for security block errors."""

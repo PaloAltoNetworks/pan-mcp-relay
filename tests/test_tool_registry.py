@@ -27,14 +27,14 @@ from unittest.mock import patch
 
 import pytest
 
-from pan_aisecurity_mcp_relay.constants import TOOL_REGISTRY_CACHE_TTL_DEFAULT, UNIX_EPOCH
-from pan_aisecurity_mcp_relay.exceptions import (
+from pan_mcp_relay.constants import TOOL_REGISTRY_CACHE_TTL_DEFAULT, UNIX_EPOCH
+from pan_mcp_relay.exceptions import (
     McpRelayBaseError,
     McpRelayToolRegistryError,
     McpRelayValidationError,
 )
-from pan_aisecurity_mcp_relay.tool import InternalTool, ToolState
-from pan_aisecurity_mcp_relay.tool_registry import ToolRegistry
+from pan_mcp_relay.tool import InternalTool, ToolState
+from pan_mcp_relay.tool_registry import ToolRegistry
 
 
 @pytest.fixture
@@ -130,7 +130,7 @@ def test_tool_registry_initialization_default_expiry():
     """Test ToolRegistry initialization with default cache expiry."""
     registry = ToolRegistry()
 
-    assert registry.internal_tools == []
+    assert registry.tools == []
     assert registry.available_tools == []
     assert registry.tools_by_checksum == {}
     assert registry.last_update == UNIX_EPOCH
@@ -159,7 +159,7 @@ def test_tool_registry_initialization_invalid_expiry():
     assert isinstance(exc_info.value, McpRelayValidationError)
 
 
-@patch("pan_aisecurity_mcp_relay.tool_registry.logger")
+@patch("pan_mcp_relay.tool_registry.logger")
 def test_tool_registry_initialization_logging(mock_logger):
     """Test that initialization logs cache expiry information."""
     expiry = 3600
@@ -172,13 +172,13 @@ def test_update_registry_with_simulated_tools(sample_tool_list):
     """Test updating registry with simulated tools."""
     registry = ToolRegistry()
 
-    with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
+    with patch("pan_mcp_relay.tool_registry.datetime") as mock_datetime:
         mock_now = datetime(2024, 1, 15, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
 
         registry.update_registry(sample_tool_list)
 
-    assert len(registry.internal_tools) == 6
+    assert len(registry.tools) == 6
     assert len(registry.available_tools) == 5  # 5 enabled tools (failing_tool is disabled)
     assert len(registry.tools_by_checksum) == 6
     assert registry.last_update == mock_now
@@ -219,12 +219,12 @@ def test_update_registry_exception_handling(sample_tool_list):
         assert "Failed to update tool registry" in str(exc_info.value)
 
 
-@patch("pan_aisecurity_mcp_relay.tool_registry.logger")
+@patch("pan_mcp_relay.tool_registry.logger")
 def test_update_registry_logging(mock_logger, sample_tool_list):
     """Test that registry update logs information."""
     registry = ToolRegistry()
 
-    with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
+    with patch("pan_mcp_relay.tool_registry.datetime") as mock_datetime:
         mock_now = datetime(2024, 1, 15, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
 
@@ -241,7 +241,7 @@ def test_update_registry_logging(mock_logger, sample_tool_list):
 def test_update_available_tools_filtering(sample_tool_list):
     """Test that _update_available_tools filters enabled tools correctly."""
     registry = ToolRegistry()
-    registry.internal_tools = sample_tool_list
+    registry.tools = sample_tool_list
 
     registry.update_available_tools()
 
@@ -263,7 +263,7 @@ def test_update_available_tools_filtering(sample_tool_list):
 def test_update_hash_mapping(sample_tool_list):
     """Test that _update_hash_mapping creates correct hash mappings."""
     registry = ToolRegistry()
-    registry.internal_tools = sample_tool_list
+    registry.tools = sample_tool_list
 
     registry.update_hash_mapping()
 
@@ -285,7 +285,7 @@ def test_update_hash_mapping_with_empty_hash():
     )
     tool_with_empty_hash.sha256_hash = ""  # Force empty hash
 
-    registry.internal_tools = [tool_with_empty_hash]
+    registry.tools = [tool_with_empty_hash]
     registry.update_hash_mapping()
 
     # Tool with empty hash should not be in mapping
@@ -296,7 +296,7 @@ def test_is_registry_outdated_fresh():
     """Test is_registry_outdated with fresh registry."""
     registry = ToolRegistry(tool_registry_cache_expiry=3600)  # 1 hour
 
-    with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
+    with patch("pan_mcp_relay.tool_registry.datetime") as mock_datetime:
         mock_now = datetime(2024, 1, 15, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
 
@@ -309,7 +309,7 @@ def test_is_registry_outdated_expired():
     """Test is_registry_outdated with expired registry."""
     registry = ToolRegistry(tool_registry_cache_expiry=3600)  # 1 hour
 
-    with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
+    with patch("pan_mcp_relay.tool_registry.datetime") as mock_datetime:
         mock_now = datetime(2024, 1, 15, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
 
@@ -322,7 +322,7 @@ def test_is_registry_outdated_exactly_expired():
     """Test is_registry_outdated at exact expiry time."""
     registry = ToolRegistry(tool_registry_cache_expiry=3600)  # 1 hour
 
-    with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
+    with patch("pan_mcp_relay.tool_registry.datetime") as mock_datetime:
         mock_now = datetime(2024, 1, 15, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
 
@@ -354,7 +354,7 @@ def test_get_all_tools(sample_tool_list):
     all_tools = registry.get_all_tools()
 
     assert len(all_tools) == 6
-    assert all_tools is registry.internal_tools
+    assert all_tools is registry.tools
 
     # Should include both enabled and disabled tools
     states = [tool.state for tool in all_tools]
@@ -480,7 +480,7 @@ def test_get_registry_stats(sample_tool_list):
     """Test getting registry statistics."""
     registry = ToolRegistry(tool_registry_cache_expiry=1800)
 
-    with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
+    with patch("pan_mcp_relay.tool_registry.datetime") as mock_datetime:
         mock_now = datetime(2024, 1, 15, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
 
@@ -503,7 +503,7 @@ def test_get_registry_stats_fresh_registry(sample_tool_list):
     """Test registry statistics with fresh registry."""
     registry = ToolRegistry()
 
-    with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
+    with patch("pan_mcp_relay.tool_registry.datetime") as mock_datetime:
         mock_now = datetime(2024, 1, 15, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
 
@@ -520,7 +520,7 @@ def test_clear_registry(sample_tool_list):
     registry.update_registry(sample_tool_list)
 
     # Verify registry has data
-    assert len(registry.internal_tools) > 0
+    assert len(registry.tools) > 0
     assert len(registry.available_tools) > 0
     assert len(registry.tools_by_checksum) > 0
     assert registry.last_update != UNIX_EPOCH
@@ -528,13 +528,13 @@ def test_clear_registry(sample_tool_list):
     registry.clear_registry()
 
     # Verify registry is cleared
-    assert len(registry.internal_tools) == 0
+    assert len(registry.tools) == 0
     assert len(registry.available_tools) == 0
     assert len(registry.tools_by_checksum) == 0
     assert registry.last_update == UNIX_EPOCH
 
 
-@patch("pan_aisecurity_mcp_relay.tool_registry.logger")
+@patch("pan_mcp_relay.tool_registry.logger")
 def test_clear_registry_logging(mock_logger):
     """Test that clear registry logs information."""
     registry = ToolRegistry()
@@ -570,7 +570,7 @@ def test_repr_operator(sample_tool_list):
     """Test __repr__ operator for registry."""
     registry = ToolRegistry()
 
-    with patch("pan_aisecurity_mcp_relay.tool_registry.datetime") as mock_datetime:
+    with patch("pan_mcp_relay.tool_registry.datetime") as mock_datetime:
         mock_now = datetime(2024, 1, 15, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
 

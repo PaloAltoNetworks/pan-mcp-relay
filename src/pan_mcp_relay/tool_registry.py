@@ -21,8 +21,6 @@ This module provides the ToolRegistry class for managing and caching internal to
 with expiration-based refresh logic and efficient lookup capabilities.
 """
 
-import json
-from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -53,13 +51,13 @@ class ToolRegistry(BaseModel):
 
     config: McpRelayConfig = None
     refresh_interval: int = Field(default=TOOL_REGISTRY_CACHE_TTL_DEFAULT, init=False)
-    internal_tools: dict[str, InternalTool] = Field(default_factory=dict, init=False)
+    tools: dict[str, InternalTool] = Field(default_factory=dict, init=False)
     available_tools: dict[str, InternalTool] = Field(default_factory=dict, init=False)
     tools_by_checksum: dict[str, InternalTool] = Field(default_factory=dict, init=False)
     last_update: datetime = Field(default=UNIX_EPOCH, init=False)
 
     def model_post_init(self, context: Any, /) -> None:
-        """Post initialization hook for tool registry model."""
+        """Post-initialization hook for tool registry."""
         self.refresh_interval = self.config.tool_registry_cache_ttl
         log.info(
             "Tool registry initialized with refresh period of %d seconds.",
@@ -67,7 +65,7 @@ class ToolRegistry(BaseModel):
         )
 
     @validate_call
-    def update_registry(self, internal_tool_list: dict[str, InternalTool]) -> None:
+    def update_registry(self, tools: dict[str, InternalTool]) -> None:
         """
         Update the registry with a new list of tools and refresh all internal collections.
 
@@ -75,17 +73,20 @@ class ToolRegistry(BaseModel):
         updates the hash-to-tool mapping, and refreshes the last updated timestamp.
 
         Args:
-            internal_tool_list: New list of InternalTool objects to register
+            tools: New list of InternalTool objects to register
 
         Raises:
             McpRelayInternalError: If internal_tool_list is None or invalid
             McpRelayToolRegistryError: If registry update operation fails
         """
-        if internal_tool_list is None:
+        if tools is None:
             raise McpRelayInternalError("Tool list cannot be None")
+        if not tools:
+            log.warning("Update registry failed: no tools found")
 
+        log.debug(f"Updating tool registry with {len(tools)} internal tools")
         try:
-            self.internal_tools = internal_tool_list
+            self.tools = tools
             self.update_available_tools()
             self.update_hash_mapping()
             self.last_update = datetime.now()
@@ -93,7 +94,7 @@ class ToolRegistry(BaseModel):
             log.info(
                 "Tool registry updated at %s with %d tools (%d available).",
                 self.last_update,
-                len(self.internal_tools),
+                len(self.tools),
                 len(self.available_tools),
             )
         except Exception as e:
@@ -101,16 +102,23 @@ class ToolRegistry(BaseModel):
 
     def update_available_tools(self) -> None:
         """Update the available tools list with only enabled tools."""
-        self.available_tools = {
-            name: tool for name, tool in self.internal_tools.items() if tool.state == ToolState.ENABLED
-        }
+        self.available_tools.clear()
+        for tool_name, tool in self.tools.items():
+            if tool.state == ToolState.ENABLED:
+                log_handler = log.debug
+                self.available_tools[tool_name] = tool
+            else:
+                log_handler = log.info
+            log_handler(f"[tool_registry.update]: {tool_name}: {tool.state}")
 
     def update_hash_mapping(self) -> None:
         """Update the hash-to-tool mapping for quick lookups."""
         self.tools_by_checksum.clear()
-        for tool in self.internal_tools.values():
+        for tool_name, tool in self.tools.items():
             if tool.sha256_hash:  # Ensure hash exists
                 self.tools_by_checksum[tool.sha256_hash] = tool
+            else:
+                log.warning(f"Tool {tool_name} is missing sha256_hash")
 
     def is_registry_outdated(self) -> bool:
         """
@@ -141,7 +149,7 @@ class ToolRegistry(BaseModel):
         Returns:
             list[InternalTool]: Complete list of all tools in the registry
         """
-        return self.internal_tools
+        return self.tools
 
     @validate_call
     def get_tool_by_hash(self, sha256_hash: str) -> InternalTool | None:
@@ -159,49 +167,6 @@ class ToolRegistry(BaseModel):
         """
         return self.tools_by_checksum.get(sha256_hash)
 
-    def get_server_tool_map(self) -> dict[str, dict[str, InternalTool]]:
-        """
-        Group all tools by their server name for organized access.
-
-        Creates a mapping where each server name points to a list of tools
-        that belong to that server, including both enabled and disabled tools.
-
-        Returns:
-            dict[str, list[InternalTool]]: Dictionary mapping server names to their tool lists
-        """
-        server_tool_map: dict[str, dict[str, InternalTool]] = defaultdict(dict)
-
-        for tool_name, tool in self.internal_tools.items():
-            server_name = tool.server_name
-            server_tool_map[server_name][tool_name] = tool
-
-        return server_tool_map
-
-    def get_server_tool_map_json(self) -> str:
-        """
-        Get the server-to-tools mapping as a JSON string representation.
-
-        Converts the server tool mapping to a nested JSON structure where
-        each server's tools are serialized as JSON strings within the main JSON object.
-
-        Returns:
-            str: JSON string containing the server-to-tools mapping with pretty formatting
-
-        Raises:
-            AISecMcpRelayException: json.JSONEncodeError: If tools cannot be serialized to JSON
-        """
-        try:
-            server_tool_map = self.get_server_tool_map()
-            serializable = {
-                server_name: [tool.model_dump() for tool in tool_list.values()]
-                for server_name, tool_list in server_tool_map.items()
-            }
-            return json.dumps(serializable, indent=2, ensure_ascii=False)
-
-        except (AttributeError, TypeError) as e:
-            log.error("Failed to serialize tools to JSON: %s", e)
-            raise McpRelayToolRegistryError(f"Tool serialization failed {e}")
-
     def get_registry_stats(self) -> dict[str, Any]:
         """
         Get statistics about the current registry state.
@@ -209,12 +174,9 @@ class ToolRegistry(BaseModel):
         Returns:
             dict[str, any]: Dictionary containing registry statistics
         """
-        server_count = len(set(tool.server_name for tool in self.internal_tools.values()))
-
         return {
-            "total_tools": len(self.internal_tools),
+            "total_tools": len(self.tools),
             "available_tools": len(self.available_tools),
-            "server_count": server_count,
             "last_updated": self.last_update.isoformat(),
             "is_outdated": self.is_registry_outdated(),
             "cache_expiry_seconds": self.refresh_interval,
@@ -224,7 +186,7 @@ class ToolRegistry(BaseModel):
         """
         Clear all tools from the registry and reset timestamps.
         """
-        self.internal_tools.clear()
+        self.tools.clear()
         self.available_tools.clear()
         self.tools_by_checksum.clear()
         self.last_update = UNIX_EPOCH
@@ -233,7 +195,7 @@ class ToolRegistry(BaseModel):
 
     def __len__(self) -> int:
         """Return the total number of tools in the registry."""
-        return len(self.internal_tools)
+        return len(self.tools)
 
     def __contains__(self, sha256_hash: str) -> bool:
         """Check if a tool with the given hash exists in the registry."""
@@ -242,7 +204,7 @@ class ToolRegistry(BaseModel):
     def __repr__(self) -> str:
         """Return string representation of the registry."""
         return (
-            f"ToolRegistry(total_tools={len(self.internal_tools)}, "
+            f"ToolRegistry(total_tools={len(self.tools)}, "
             f"available_tools={len(self.available_tools)}, "
             f"last_updated={self.last_update})"
         )

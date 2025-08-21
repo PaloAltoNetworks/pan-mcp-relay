@@ -24,7 +24,7 @@ The key goals of the MCP Security Relay are:
 
 The project is structured as a standard Python application:
 
-- **`src/pan_aisecurity_mcp_relay/`**: Contains the core source code of the application.
+- **`src/pan_mcp_relay/`**: Contains the core source code of the application.
     - **`main.py`**: The main entry point of the application. It handles command-line argument parsing and initializes the relay server.
     - **`pan_security_relay.py`**: The core of the relay server. It manages downstream servers, the tool registry, and security scanning.
     - **`downstream_mcp_client.py`**: A client for communicating with downstream MCP servers.

@@ -14,8 +14,9 @@
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
 import logging
+import urllib.parse
 from pathlib import Path
-from typing import Annotated, Any, Literal, TypedDict
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     AliasChoices,
@@ -26,6 +27,7 @@ from pydantic import (
     Field,
     IPvAnyAddress,
     SecretStr,
+    model_validator,
 )
 from pydantic.alias_generators import to_camel, to_pascal
 from pydantic.types import PathType
@@ -33,9 +35,6 @@ from pydantic.types import PathType
 from .constants import (
     API_ENDPOINT_RE,
     DEFAULT_API_ENDPOINT,
-    ENV_AI_PROFILE,
-    ENV_API_ENDPOINT,
-    ENV_API_KEY,
     MAX_MCP_SERVERS_DEFAULT,
     MAX_MCP_TOOLS_DEFAULT,
     TOOL_REGISTRY_CACHE_TTL_DEFAULT,
@@ -47,12 +46,6 @@ from .utils import expand_vars, get_logger
 log = get_logger(__name__)
 
 
-class SecurityScannerEnv(TypedDict):
-    ENV_API_KEY: str
-    ENV_AI_PROFILE: str
-    ENV_API_ENDPOINT: str
-
-
 class CustomAliasGenerator(AliasGenerator):
     def generate_aliases(self, field_name: str) -> tuple[str | None, str | AliasPath | AliasChoices | None, str | None]:
         alias = field_name
@@ -62,16 +55,20 @@ class CustomAliasGenerator(AliasGenerator):
 
 
 def make_validation_aliases(field_name: str, *extras: str) -> AliasChoices:
-    choices = dict.fromkeys([
-        field_name,
-        to_camel(field_name),
-        to_pascal(field_name),
-        field_name.lower(),
-        field_name.replace("_", "-"),
-        field_name.replace("_", ""),
-        *extras,
-    ])
-    return AliasChoices(*choices.keys())
+    field_names: list[str] = [field_name, *extras]
+    choices: list[str] = []
+    for field_name in field_names:
+        for choice in (
+            field_name,
+            to_camel(field_name),
+            to_pascal(field_name),
+            field_name.lower(),
+            field_name.replace("_", "-"),
+            field_name.replace("_", ""),
+        ):
+            if choice not in choices:
+                choices.append(choice)
+    return AliasChoices(*choices)
 
 
 class McpRelayConfig(BaseModel):
@@ -129,6 +126,13 @@ class McpRelayConfig(BaseModel):
         default=None, description="Path to custom trusted root CA file"
     )
 
+    def log_level_name(self) -> str:
+        """Log level name. One of: NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL."""
+        return logging.getLevelName(self.log_level)
+
+    def debug_enabled(self) -> bool:
+        return self.log_level <= logging.DEBUG
+
     def model_post_init(self, context: Any):
         log.debug(f"Expanding environment variables on {self!r}")
         for k in self.__class__.model_fields.keys():
@@ -143,46 +147,87 @@ class McpRelayConfig(BaseModel):
                 log.debug(f"Expanded env var {k!r} from {v!r} to {new_v!r}")
                 setattr(self, k, new_v)
 
-    def security_scanner_env(self) -> SecurityScannerEnv:
-        """Get environment variables for the Security Scanner."""
-        return SecurityScannerEnv(**{
-            ENV_API_KEY: str(self.api_key.get_secret_value()),
-            ENV_AI_PROFILE: str(self.ai_profile),
-            ENV_API_ENDPOINT: self.api_endpoint,
-        })
-
 
 class BaseMcpServer(BaseModel):
-    type: TransportType
+    """Base Class for all MCP Servers"""
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+    type: TransportType | None
 
 
 class StdioMcpServer(BaseMcpServer):
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
-    type: Literal[TransportType.stdio] | None = TransportType.stdio
+    """Stdio MCP Server"""
+
+    type: Literal[TransportType.stdio] = Field(default=TransportType.stdio)
     command: str
     args: list[str] | None = Field(default_factory=list)
     cwd: Path | None = None
     env: dict[str, str] | None = Field(default_factory=dict)
 
-
-class SseMcpServer(BaseMcpServer):
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
-    type: Literal[TransportType.sse] | None = TransportType.sse
-    url: str
-    headers: dict[str, str] = Field(default_factory=dict)
+    def model_post_init(self, context: Any):
+        if self.type is None:
+            self.type = TransportType.stdio
 
 
-class HttpMcpServer(BaseMcpServer):
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
-    type: Literal[TransportType.http] | None = TransportType.http
+class HttpMcpServerBase(BaseMcpServer):
+    """Base class for HTTP MCP Servers (SSE, Streamable HTTP)"""
+
+    type: Literal[TransportType.sse, TransportType.http] | None
     url: str
     headers: dict[str, str] = Field(default_factory=dict)
     timeout: float = Field(default=30.0, ge=0, lt=300)
     sse_read_timeout: float = Field(default=30.0, ge=0, lt=300)
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_type_if_missing(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            urlvar: str | Any | None = data.get("url", None)
+            type_: str | Any | None = data.get("type", None)
+            if isinstance(type_, str) and not type_.strip():
+                type_ = None
+            if not isinstance(urlvar, str):
+                return data
+
+            url = urllib.parse.urlparse(urlvar)
+            if type_ is None:
+                if "sse" in url.path.lower():
+                    type_ = TransportType.sse
+                else:
+                    type_ = TransportType.http
+                data["type"] = str(type_)
+        return data
+
+    def model_post_init(self, context: Any):
+        self.url = self.url.strip()
+        headers = self.headers.copy()
+        self.headers = {}
+        for k, v in headers.items():
+            k = k.strip()
+            self.headers[k] = v.strip()
+
+        url = urllib.parse.urlparse(self.url)
+        if self.type is None:
+            if "sse" in url.path.lower():
+                self.type = TransportType.sse
+            else:
+                self.type = TransportType.http
+
+
+class SseMcpServer(HttpMcpServerBase):
+    """SSE MCP Server"""
+
+    type: Literal[TransportType.sse] = Field(default=TransportType.sse)
+
+
+class HttpMcpServer(HttpMcpServerBase):
+    """Streamable HTTP MCP Server"""
+
+    type: Literal[TransportType.http] = Field(default=TransportType.http)
     terminate_on_close: bool = False
 
 
-type McpServerType = StdioMcpServer | SseMcpServer | HttpMcpServer
+type McpServerType = StdioMcpServer | HttpMcpServer | SseMcpServer
 
 
 class Config(BaseModel):
@@ -190,8 +235,10 @@ class Config(BaseModel):
 
     model_config = ConfigDict(alias_generator=to_camel, extra="ignore", validate_by_alias=True, validate_by_name=True)
 
-    mcp_relay: McpRelayConfig | None = Field(description="MCP Relay Configuration", alias="mcpRelay")
-    mcp_servers: dict[str, StdioMcpServer | SseMcpServer | HttpMcpServer] | None = Field(
+    mcp_relay: McpRelayConfig | None = Field(
+        default_factory=McpRelayConfig, description="MCP Relay Configuration", alias="mcpRelay"
+    )
+    mcp_servers: dict[str, StdioMcpServer | HttpMcpServer | SseMcpServer] | None = Field(
         default_factory=dict,
         description="MCP Servers Configuration",
         alias="mcpServers",
@@ -199,7 +246,25 @@ class Config(BaseModel):
     )
 
     def model_post_init(self, context: Any, /) -> None:
-        if len(self.mcp_servers) > self.mcp_relay.max_mcp_servers:
+        if self.mcp_servers and len(self.mcp_servers) > self.mcp_relay.max_mcp_servers:
             raise McpRelayConfigurationError(
                 f"Too many MCP servers ({len(self.mcp_servers)} > {self.mcp_relay.max_mcp_servers})"
             )
+
+    # @field_validator("mcp_servers", mode="before")
+    # @classmethod
+    # def server_type(cls, value: dict[str, McpServerType] | Any) -> Any:
+    #     if isinstance(value, HttpMcpServerBase):
+    #         if isinstance(value, HttpMcpServer):
+    #             return value
+    #         if isinstance(value, SseMcpServer):
+    #             return value
+    #     if isinstance(value, dict):
+    #         typ = value.get("type")
+    #         if typ is not None and typ not in [
+    #             str(TransportType.stdio),
+    #             str(TransportType.sse),
+    #             str(TransportType.http),
+    #         ]:
+    #             raise ValueError(f"invalid transport type: {typ}")
+    #     return value

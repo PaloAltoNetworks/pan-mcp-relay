@@ -30,7 +30,7 @@ import mcp.types as types
 import pytest
 from pydantic import ValidationError
 
-from pan_aisecurity_mcp_relay.tool import BaseTool, InternalTool, RelayTool, ToolState
+from pan_mcp_relay.tool import BaseTool, InternalTool, RelayTool, ToolState
 
 
 @pytest.fixture

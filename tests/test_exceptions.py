@@ -16,7 +16,7 @@
 
 import mcp.types as types
 
-from pan_aisecurity_mcp_relay.exceptions import McpRelayBaseError, McpRelayServerNotFoundError
+from pan_mcp_relay.exceptions import McpRelayBaseError, McpRelayServerNotFoundError
 
 """Test cases for AISecMcpRelayException class."""
 

@@ -114,7 +114,7 @@ TOOL_REGISTRY_CACHE_TTL_DEFAULT: Final[int] = 60 * 60 * 24
 MAX_MCP_SERVERS_DEFAULT: Final[int] = 32
 """Maximum number of downstream servers that can be configured."""
 
-MAX_MCP_TOOLS_DEFAULT: Final[int] = 64
+MAX_MCP_TOOLS_DEFAULT: Final[int] = 256
 """Maximum total number of tools across all servers."""
 
 

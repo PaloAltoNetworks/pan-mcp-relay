@@ -14,9 +14,9 @@
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
 
+from . import client as client
 from . import configuration as configuration
 from . import constants as constants
-from . import downstream_mcp_client as downstream_mcp_client
 from . import exceptions as exceptions
 from . import main as main
 from . import pan_security_relay as pan_security_relay

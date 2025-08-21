@@ -30,6 +30,7 @@ import httpx
 import yaml
 from aisecurity.scan.asyncio.scanner import ScanResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, validate_call
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from . import utils
 from ._version import __version__
@@ -38,7 +39,7 @@ from .constants import (
     MCP_RELAY_NAME,
     SYNC_SCAN_PATH,
 )
-from .exceptions import McpRelayScanError, McpRelaySecurityBlockError
+from .exceptions import McpRelayScanError, McpRelaySecurityBlockError, ScanApiAuthenticationError, ScanApiInternalError
 
 log = utils.get_logger(__name__)
 
@@ -145,6 +146,7 @@ class SecurityScanner(BaseModel):
         return metadata
 
     @validate_call
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     async def scan(
         self,
         source: ScanSource,
@@ -179,6 +181,23 @@ class SecurityScanner(BaseModel):
             scan_response_data = scan_result.json()
             scan_response = ScanResponse(**scan_response_data)
         except httpx.HTTPStatusError as se:
+            response_data: dict | None = None
+            response_body: bytes | None = None
+            api_error: str | None = None
+            try:
+                response_data = se.response.json()
+            except JSONDecodeError:
+                response_body = se.response.content
+            if response_data:
+                api_error = response_data.get("error", {}).get("message", None)
+            if api_error is None:
+                api_error = "Unknown Error"
+                log.debug(response_body)
+            api_error = f"{api_error} ({se.response.status_code})"
+            if 400 <= se.response.status_code < 500:
+                raise ScanApiAuthenticationError(api_error) from se
+            elif se.response.status_code > 500:
+                raise ScanApiInternalError(api_error) from se
             log.exception(f"Failed to execute scan request: {se}")
             raise McpRelayScanError("Security Scan Failed") from se
         except JSONDecodeError as de:

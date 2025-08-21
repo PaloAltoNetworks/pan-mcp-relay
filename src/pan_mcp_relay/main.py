@@ -13,16 +13,17 @@
 # or condition, and the licensor will not be liable to you for any damages
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
-
 import asyncio
 import json
 import logging
 import os
 import shutil
+import signal
 import sys
 from pathlib import Path
 from typing import Literal
 
+import anyio
 import click
 import dotenv
 import rich.logging
@@ -54,8 +55,14 @@ from .constants import (
     TOOL_REGISTRY_CACHE_TTL_DEFAULT,
     TransportType,
 )
-from .exceptions import McpRelayBaseError, McpRelayConfigurationError, McpRelayInternalError
+from .exceptions import McpRelayBaseError, McpRelayConfigurationError
 from .pan_security_relay import PanSecurityRelay
+from .server import (
+    run_http_server,
+    run_stdio_server,
+    setup_http_server,
+    setup_sse_server,
+)
 from .utils import deep_merge, expand_path, expand_vars, getenv
 
 log = utils.get_logger(__name__)
@@ -80,7 +87,7 @@ def setup_logging():
     )
 
 
-def set_loglevels(log_level: int, **kwargs) -> None:
+def set_loglevels(**kwargs) -> None:
     """Configure Log Levels for libraries"""
     # level_to_name = getattr(logging, "_nameToLevel")  # int -> str
     log_level = get_loglevel(**kwargs)
@@ -94,7 +101,7 @@ def set_loglevels(log_level: int, **kwargs) -> None:
 
 
 def get_loglevel(**kwargs):
-    kwarg_level = kwargs.get("level", None)
+    kwarg_level = kwargs.get("log_level", None)
     if isinstance(kwarg_level, str):
         kwarg_level = kwarg_level.upper()
     env_level = os.getenv(ENV_LOG_LEVEL, None)
@@ -164,7 +171,7 @@ def entrypoint():
     "transport",
     "-t",
     "--transport",
-    type=click.Choice(["stdio", "sse"]),
+    type=click.Choice(TransportType._member_names_),
     default="stdio",
     help=f"Transport protocol to use [{ENV_TRANSPORT}={getenv(ENV_TRANSPORT)}]",
 )
@@ -176,7 +183,7 @@ def entrypoint():
 )
 @click.option(
     "tool_registry_cache_ttl",
-    "-t",
+    "-TTL",
     "--tool-registry-cache-ttl",
     type=int,
     default=TOOL_REGISTRY_CACHE_TTL_DEFAULT,
@@ -184,7 +191,7 @@ def entrypoint():
 )
 @click.option(
     "max_mcp_servers",
-    "-m",
+    "-MS",
     "--max-mcp-servers",
     type=int,
     default=MAX_MCP_SERVERS_DEFAULT,
@@ -192,7 +199,7 @@ def entrypoint():
 )
 @click.option(
     "max_mcp_tools",
-    "-n",
+    "-MT",
     "--max-mcp-tools",
     type=int,
     default=MAX_MCP_TOOLS_DEFAULT,
@@ -310,7 +317,9 @@ def cli(ctx, **kwargs) -> int:
 def run_server(ctx: click.Context) -> int:
     """Run the MCP Relay Server."""
     config = ctx.obj["config"]
-    return asyncio.run(start_mcp_relay_server(config))
+    # start = functools.partial(start_mcp_relay_server, config=config)
+    # return anyio.run(start, backend="asyncio")
+    return asyncio.run(start_mcp_relay_server(config=config))
 
 
 @cli.command(name="show-config")
@@ -368,6 +377,16 @@ def json_schema(ctx: click.Context, output: Path, format: Literal["yaml"] | Lite
     return 0
 
 
+async def signal_handler(scope: anyio.CancelScope):
+    with anyio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as signals:
+        async for signum in signals:
+            signame = str(signum).split(".")[-1]
+            log.warning(f"Received signal {signame}")
+
+            scope.cancel()
+            return
+
+
 async def start_mcp_relay_server(config: Config):
     """Initialize and Start the MCP Relay"""
     mcp_servers_config = {k: v.model_dump() for k, v in config.mcp_servers.items()}
@@ -378,30 +397,27 @@ async def start_mcp_relay_server(config: Config):
             config=relay_config,
             mcp_servers_config=mcp_servers_config,
         )
-    except McpRelayConfigurationError:
-        log.exception("Failed to instantiate MCP Relay server")
-        raise
+    except McpRelayConfigurationError as ce:
+        log.error(f"Failed to instantiate MCP Relay server: {ce}")
+        return 1
 
-    try:
-        await relay_server.initialize()
-    except ValidationError as e:
-        err_msg = "Failed to initialize MCP Relay server"
-        log.exception(err_msg)
-        raise McpRelayInternalError(err_msg) from e
-
-    # Create and run the MCP server
-    app = await relay_server.mcp_server()
-
-    match relay_config.transport:
-        case TransportType.stdio:
-            await relay_server.run_stdio_server(app)
-        case TransportType.sse:
-            await relay_server.run_sse_server(app, str(relay_config.host), relay_config.port)
-        case TransportType.http:
-            log.error("Streamable HTTP transport is not currently supported")
-        case _:
-            log.error(f"Invalid transport type: {relay_config.transport}")
-            return 1
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(signal_handler, tg.cancel_scope)
+        async with relay_server:
+            # Create and run the MCP server
+            app = await relay_server.mcp_server()
+            match relay_config.transport:
+                case TransportType.stdio:
+                    await run_stdio_server(config.mcp_relay, app)
+                case TransportType.sse:
+                    sse_server = setup_sse_server(config.mcp_relay, app, relay_server.server_lifespan)
+                    await run_http_server(config.mcp_relay, sse_server)
+                case TransportType.http:
+                    shttp_server = setup_http_server(config.mcp_relay, app, relay_server.server_lifespan)
+                    await run_http_server(config.mcp_relay, shttp_server)
+                case _:
+                    log.error(f"Invalid transport type: {relay_config.transport}")
+                    return 1
 
     return 0
 
