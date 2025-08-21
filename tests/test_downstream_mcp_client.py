@@ -33,10 +33,10 @@ import mcp.shared.exceptions
 import mcp.types as types
 import pytest
 from mcp import ClientSession
+from pan_mcp_relay.downstream_mcp_client import DownstreamMcpClient
 from tenacity import RetryError
 
-from pan_aisecurity_mcp_relay.downstream_mcp_client import DownstreamMcpClient
-from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayInvalidConfigurationError
+from pan_mcp_relay.exceptions import McpRelayConfigurationError
 
 
 @pytest.fixture
@@ -209,9 +209,9 @@ def test_downstream_mcp_client_initialization(test_server_config):
 
     assert client.name == "test-server"
     assert client.config == test_server_config
-    assert client.session is None
-    assert isinstance(client._cleanup_lock, asyncio.Lock)
-    assert isinstance(client.exit_stack, AsyncExitStack)
+    assert client._session is None
+    assert isinstance(client._shutdown_lock, asyncio.Lock)
+    assert isinstance(client._exit_stack, AsyncExitStack)
 
 
 def test_downstream_mcp_client_initialization_sse(sse_server_config):
@@ -220,12 +220,12 @@ def test_downstream_mcp_client_initialization_sse(sse_server_config):
 
     assert client.name == "sse-server"
     assert client.config == sse_server_config
-    assert client.session is None
-    assert isinstance(client._cleanup_lock, asyncio.Lock)
-    assert isinstance(client.exit_stack, AsyncExitStack)
+    assert client._session is None
+    assert isinstance(client._shutdown_lock, asyncio.Lock)
+    assert isinstance(client._exit_stack, AsyncExitStack)
 
 
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.log", autospec=True)
 def test_downstream_mcp_client_initialization_logging(mock_logging, test_server_config):
     """Test that client initialization logs configuration information."""
     DownstreamMcpClient("test-server", test_server_config)
@@ -235,7 +235,7 @@ def test_downstream_mcp_client_initialization_logging(mock_logging, test_server_
 
 
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.stdio_client", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.stdio_client", autospec=True)
 async def test_initialize_echo_server_success(mock_stdio_client, echo_server_config):
     """Test successful initialization of echo server connection."""
     # Setup mocks for echo server connection
@@ -250,18 +250,18 @@ async def test_initialize_echo_server_success(mock_stdio_client, echo_server_con
 
     client = DownstreamMcpClient("echo-server", echo_server_config)
 
-    with patch.object(client.exit_stack, "enter_async_context") as mock_enter_context:
+    with patch.object(client._exit_stack, "enter_async_context") as mock_enter_context:
         mock_enter_context.side_effect = [mock_stdio_transport, mock_session]
 
         await client.initialize()
 
-    assert client.session is not None
-    assert client.session == mock_session
+    assert client._session is not None
+    assert client._session == mock_session
     mock_session.initialize.assert_called_once()
 
 
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.sse_client", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.sse_client", autospec=True)
 async def test_initialize_sse_server_success(mock_sse_client, sse_server_config):
     """Test successful initialization of SSE server connection."""
     # Setup mocks for SSE connection
@@ -276,13 +276,13 @@ async def test_initialize_sse_server_success(mock_sse_client, sse_server_config)
 
     client = DownstreamMcpClient("sse-server", sse_server_config)
 
-    with patch.object(client.exit_stack, "enter_async_context") as mock_enter_context:
+    with patch.object(client._exit_stack, "enter_async_context") as mock_enter_context:
         mock_enter_context.side_effect = [mock_sse_transport, mock_session]
 
         await client.initialize()
 
-    assert client.session is not None
-    assert client.session == mock_session
+    assert client._session is not None
+    assert client._session == mock_session
     mock_session.initialize.assert_called_once()
 
 
@@ -293,15 +293,15 @@ async def test_initialize_sse_server_missing_url():
     client = DownstreamMcpClient("sse-server", sse_config_no_url)
 
     with pytest.raises(
-        AISecMcpRelayInvalidConfigurationError,
+        McpRelayConfigurationError,
         match=re.escape(r"invalid MCP server configuration: sse-server (missing url)"),
     ):
         await client.initialize()
 
 
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.stdio_client", autospec=True)
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.stdio_client", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.log", autospec=True)
 async def test_initialize_server_environment_variables(mock_logging, mock_stdio_client, performance_server_config):
     """Test server initialization with environment variable handling."""
     mock_stdio_client.return_value = AsyncMock()
@@ -310,7 +310,7 @@ async def test_initialize_server_environment_variables(mock_logging, mock_stdio_
     mock_session = AsyncMock(spec=ClientSession)
     client = DownstreamMcpClient("performance-server", performance_server_config)
 
-    with patch.object(client.exit_stack, "enter_async_context") as mock_enter_context:
+    with patch.object(client._exit_stack, "enter_async_context") as mock_enter_context:
         with patch("os.environ", {"EXISTING_VAR": "existing_value"}):
             mock_enter_context.side_effect = [(AsyncMock(), AsyncMock()), mock_session]
 
@@ -321,9 +321,9 @@ async def test_initialize_server_environment_variables(mock_logging, mock_stdio_
     mock_logging.debug.assert_any_call("Initializing downstream mcp server: performance-server...")
 
 
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.stdio_client", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.stdio_client", autospec=True)
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.log", autospec=True)
 async def test_initialize_stdio_server_failure(mock_logging, mock_stdio_client, test_server_config):
     """Test server initialization failure handling."""
     # Simulate connection failure
@@ -335,15 +335,15 @@ async def test_initialize_stdio_server_failure(mock_logging, mock_stdio_client, 
 
     client = DownstreamMcpClient(server_name, test_server_config)
 
-    with pytest.raises(AISecMcpRelayInvalidConfigurationError, match=err_msg):
+    with pytest.raises(McpRelayConfigurationError, match=err_msg):
         await client.initialize()
 
     mock_logging.exception.assert_called_with(err_msg)
 
 
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.sse_client")
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.sse_client")
+@patch("pan_mcp_relay.downstream_mcp_client.log", autospec=True)
 async def test_initialize_sse_server_failure(mock_logging, mock_sse_client, sse_server_config):
     """Test SSE server initialization failure handling."""
     # Simulate connection failure
@@ -351,7 +351,7 @@ async def test_initialize_sse_server_failure(mock_logging, mock_sse_client, sse_
 
     client = DownstreamMcpClient("sse-server", sse_server_config)
 
-    with pytest.raises(AISecMcpRelayInvalidConfigurationError, match="Error setting up server sse-server"):
+    with pytest.raises(McpRelayConfigurationError, match="Error setting up server sse-server"):
         await client.initialize()
 
     mock_logging.exception.assert_called_with("Error setting up server sse-server: All connection attempts failed")
@@ -361,11 +361,11 @@ async def test_initialize_sse_server_failure(mock_logging, mock_sse_client, sse_
 async def test_list_tools_external_server_success(mock_external_tools_list):
     """Test successful tool listing from external test server."""
     client = DownstreamMcpClient("test-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Mock external server tool response
     mock_tools_response = [("tools", mock_external_tools_list)]
-    client.session.list_tools.return_value = mock_tools_response
+    client._session.list_tools.return_value = mock_tools_response
 
     tools = await client.list_tools()
 
@@ -397,10 +397,10 @@ async def test_list_tools_server_not_initialized():
 async def test_list_tools_server_empty_response():
     """Test tool listing with empty response from server."""
     client = DownstreamMcpClient("test-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Mock empty response from server
-    client.session.list_tools.return_value = []
+    client._session.list_tools.return_value = []
 
     tools = await client.list_tools()
 
@@ -408,11 +408,11 @@ async def test_list_tools_server_empty_response():
 
 
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.log", autospec=True)
 async def test_execute_tool_echo_success(mock_logging):
     """Test successful execution of echo tool."""
     client = DownstreamMcpClient("echo-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Mock echo tool response
     mock_echo_response = types.CallToolResult(
@@ -427,7 +427,7 @@ async def test_execute_tool_echo_success(mock_logging):
             )
         ]
     )
-    client.session.call_tool.return_value = mock_echo_response
+    client._session.call_tool.return_value = mock_echo_response
 
     # Execute echo tool
     echo_args = {"text": "Hello, World!"}
@@ -435,18 +435,18 @@ async def test_execute_tool_echo_success(mock_logging):
     result = await client.execute_tool("echo_tool", echo_args)
 
     assert result == mock_echo_response
-    client.session.call_tool.assert_called_once_with("echo_tool", echo_args)
+    client._session.call_tool.assert_called_once_with("echo_tool", echo_args)
 
     mock_logging.info.assert_any_call("Executing echo_tool...")
     mock_logging.info.assert_any_call(f"arguments: {echo_args}")
 
 
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.log", autospec=True)
 async def test_execute_tool_fixed_response_success(mock_logging):
     """Test successful execution of fixed response tool."""
     client = DownstreamMcpClient("test-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Mock fixed response tool response
     mock_fixed_response = types.CallToolResult(
@@ -462,7 +462,7 @@ async def test_execute_tool_fixed_response_success(mock_logging):
             )
         ]
     )
-    client.session.call_tool.return_value = mock_fixed_response
+    client._session.call_tool.return_value = mock_fixed_response
 
     # Execute fixed response tool
     fixed_args = {"response_type": "success", "include_metadata": True}
@@ -470,15 +470,15 @@ async def test_execute_tool_fixed_response_success(mock_logging):
     result = await client.execute_tool("fixed_response_tool", fixed_args)
 
     assert result == mock_fixed_response
-    client.session.call_tool.assert_called_once_with("fixed_response_tool", fixed_args)
+    client._session.call_tool.assert_called_once_with("fixed_response_tool", fixed_args)
 
 
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.log", autospec=True)
 async def test_execute_tool_slow_response_success(mock_logging):
     """Test successful execution of slow response tool."""
     client = DownstreamMcpClient("performance-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Mock slow response tool response
     mock_slow_response = types.CallToolResult(
@@ -493,7 +493,7 @@ async def test_execute_tool_slow_response_success(mock_logging):
             )
         ]
     )
-    client.session.call_tool.return_value = mock_slow_response
+    client._session.call_tool.return_value = mock_slow_response
 
     # Execute slow response tool
     slow_args = {"delay_seconds": 2.5, "content": "Delayed response content"}
@@ -519,22 +519,22 @@ async def test_execute_tool_server_not_initialized():
 
 
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.log", autospec=True)
 async def test_execute_tool_server_error_with_retry(mock_logging):
     """Test tool execution error handling with retry mechanism."""
     client = DownstreamMcpClient("test-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Simulate server error
     server_error = Exception("Server temporarily unavailable")
-    client.session.call_tool.side_effect = server_error
+    client._session.call_tool.side_effect = server_error
 
     # The retry decorator will wrap the exception in a tenacity.RetryError
     with pytest.raises(RetryError) as exc_info:
         await client.execute_tool("echo_tool", {"text": "test"})
 
     # Should retry 3 times (default retry configuration)
-    assert client.session.call_tool.call_count == 3
+    assert client._session.call_tool.call_count == 3
 
     # Verify the underlying exception is the original exception
     original_exception = exc_info.value.last_attempt.exception()
@@ -650,7 +650,7 @@ def test_extract_text_content_direct_string_data():
 def test_check_initialized_when_session_exists():
     """Test _check_initialized when server session exists."""
     client = DownstreamMcpClient("test-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Should not raise exception
     client._check_initialized()
@@ -668,19 +668,19 @@ def test_check_initialized_when_session_none():
 async def test_cleanup_server_connection():
     """Test cleanup of server connection resources."""
     client = DownstreamMcpClient("test-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     mock_exit_stack = AsyncMock()
-    client.exit_stack = mock_exit_stack
+    client._exit_stack = mock_exit_stack
 
-    await client.cleanup()
+    await client.shutdown()
 
     mock_exit_stack.aclose.assert_called_once()
-    assert client.session is None
+    assert client._session is None
 
 
 @pytest.mark.asyncio
-@patch("pan_aisecurity_mcp_relay.downstream_mcp_client.log", autospec=True)
+@patch("pan_mcp_relay.downstream_mcp_client.log", autospec=True)
 async def test_cleanup_server_with_exception(mock_logging):
     """Test cleanup handling exceptions during server cleanup."""
     server_name = "test-server"
@@ -688,10 +688,10 @@ async def test_cleanup_server_with_exception(mock_logging):
 
     mock_exit_stack = AsyncMock()
     mock_exit_stack.aclose.side_effect = Exception("Cleanup error")
-    client.exit_stack = mock_exit_stack
+    client._exit_stack = mock_exit_stack
 
     # Should not raise exception, but log error
-    await client.cleanup()
+    await client.shutdown()
 
     mock_logging.exception.assert_called_with(f"Error during cleanup of server {server_name}")
 
@@ -702,10 +702,10 @@ async def test_concurrent_cleanup_calls():
     client = DownstreamMcpClient("test-server", {})
 
     mock_exit_stack = AsyncMock()
-    client.exit_stack = mock_exit_stack
+    client._exit_stack = mock_exit_stack
 
     # Start multiple cleanup operations concurrently
-    cleanup_tasks = [client.cleanup() for _ in range(3)]
+    cleanup_tasks = [client.shutdown() for _ in range(3)]
     await asyncio.gather(*cleanup_tasks)
 
     # Should call aclose for each task
@@ -720,13 +720,13 @@ async def test_external_server_complete_workflow(test_server_config, mock_extern
     # Mock successful initialization
     with patch.object(client, "initialize") as mock_init:
         mock_init.return_value = None
-        client.session = AsyncMock(spec=ClientSession)
+        client._session = AsyncMock(spec=ClientSession)
 
         await client.initialize()
 
         # Mock tool listing
         mock_tools_response = [("tools", mock_external_tools_list)]
-        client.session.list_tools.return_value = mock_tools_response
+        client._session.list_tools.return_value = mock_tools_response
 
         # List tools
         tools = await client.list_tools()
@@ -736,7 +736,7 @@ async def test_external_server_complete_workflow(test_server_config, mock_extern
         mock_echo_result = types.CallToolResult(
             content=[types.TextContent(type="text", text='{"echoed": "test content"}')]
         )
-        client.session.call_tool.return_value = mock_echo_result
+        client._session.call_tool.return_value = mock_echo_result
 
         # Execute echo tool
         result = await client.execute_tool("echo_tool", {"text": "test content"})
@@ -744,14 +744,14 @@ async def test_external_server_complete_workflow(test_server_config, mock_extern
         assert result == mock_echo_result
 
         # Cleanup connection
-        await client.cleanup()
+        await client.shutdown()
 
 
 @pytest.mark.asyncio
 async def test_server_error_recovery_scenario(test_server_config):
     """Test server error recovery and retry scenarios."""
     client = DownstreamMcpClient("test-server", test_server_config)
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Simulate intermittent server errors
     call_count = 0
@@ -763,7 +763,7 @@ async def test_server_error_recovery_scenario(test_server_config):
             raise Exception("Temporary server error")
         return types.CallToolResult(content=[types.TextContent(type="text", text='{"status": "success"}')])
 
-    client.session.call_tool.side_effect = side_effect
+    client._session.call_tool.side_effect = side_effect
 
     # Should succeed after retries
     result = await client.execute_tool("echo_tool", {"text": "test"})
@@ -776,11 +776,11 @@ async def test_multiple_servers_scenario(echo_server_config, performance_server_
     """Test scenario with multiple external servers."""
     # Echo server
     echo_client = DownstreamMcpClient("echo-server", echo_server_config)
-    echo_client.session = AsyncMock(spec=ClientSession)
+    echo_client._session = AsyncMock(spec=ClientSession)
 
     # Performance server
     perf_client = DownstreamMcpClient("performance-server", performance_server_config)
-    perf_client.session = AsyncMock(spec=ClientSession)
+    perf_client._session = AsyncMock(spec=ClientSession)
 
     # Both servers should be able to list tools
     mock_echo_tools = [
@@ -800,8 +800,8 @@ async def test_multiple_servers_scenario(echo_server_config, performance_server_
         )
     ]
 
-    echo_client.session.list_tools.return_value = mock_echo_tools
-    perf_client.session.list_tools.return_value = mock_perf_tools
+    echo_client._session.list_tools.return_value = mock_echo_tools
+    perf_client._session.list_tools.return_value = mock_perf_tools
 
     echo_tools = await echo_client.list_tools()
     perf_tools = await perf_client.list_tools()
@@ -816,7 +816,7 @@ async def test_multiple_servers_scenario(echo_server_config, performance_server_
 async def test_error_all_tool_scenario():
     """Test error_all_tool that always returns errors."""
     client = DownstreamMcpClient("test-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Mock error response
     error_response = types.CallToolResult(
@@ -832,7 +832,7 @@ async def test_error_all_tool_scenario():
             )
         ]
     )
-    client.session.call_tool.return_value = error_response
+    client._session.call_tool.return_value = error_response
 
     # Execute error tool
     result = await client.execute_tool("error_all_tool", {"input": "test"})
@@ -852,7 +852,7 @@ async def test_error_all_tool_scenario():
 async def test_passthrough_tool_scenario():
     """Test passthrough tool that returns input unchanged."""
     client = DownstreamMcpClient("utility-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Mock passthrough response
     test_data = {"key1": "value1", "key2": "value2", "nested": {"data": "test"}}
@@ -864,7 +864,7 @@ async def test_passthrough_tool_scenario():
             )
         ]
     )
-    client.session.call_tool.return_value = passthrough_response
+    client._session.call_tool.return_value = passthrough_response
 
     # Execute passthrough tool
     result = await client.execute_tool("passthrough_tool", {"data": test_data})
@@ -884,11 +884,11 @@ async def test_passthrough_tool_scenario():
 async def test_failing_tool_exception_scenario():
     """Test failing tool that throws exceptions."""
     client = DownstreamMcpClient("test-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Simulate tool throwing exception
     tool_exception = Exception("Intentional tool failure")
-    client.session.call_tool.side_effect = tool_exception
+    client._session.call_tool.side_effect = tool_exception
 
     # Should fail after retries
     with pytest.raises(RetryError):
@@ -897,14 +897,14 @@ async def test_failing_tool_exception_scenario():
         )
 
     # Verify exception was retried
-    assert client.session.call_tool.call_count == 3
+    assert client._session.call_tool.call_count == 3
 
 
 @pytest.mark.asyncio
 async def test_slow_response_tool_performance_scenario():
     """Test slow response tool with various delay configurations."""
     client = DownstreamMcpClient("performance-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Test different delay scenarios
     delay_scenarios = [0.1, 1.0, 2.5, 5.0]
@@ -923,7 +923,7 @@ async def test_slow_response_tool_performance_scenario():
                 )
             ]
         )
-        client.session.call_tool.return_value = mock_response
+        client._session.call_tool.return_value = mock_response
 
         result = await client.execute_tool(
             "slow_response_tool", {"delay_seconds": delay, "content": f"Test content {delay}"}
@@ -936,7 +936,7 @@ async def test_slow_response_tool_performance_scenario():
 async def test_fixed_response_tool_all_types_scenario():
     """Test fixed response tool with all response types."""
     client = DownstreamMcpClient("mock-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     response_types = ["success", "warning", "info", "error"]
 
@@ -954,7 +954,7 @@ async def test_fixed_response_tool_all_types_scenario():
                 )
             ]
         )
-        client.session.call_tool.return_value = mock_response
+        client._session.call_tool.return_value = mock_response
 
         result = await client.execute_tool(
             "fixed_response_tool", {"response_type": response_type, "include_metadata": True}
@@ -973,7 +973,7 @@ async def test_fixed_response_tool_all_types_scenario():
 async def test_mixed_tools_workflow_scenario(mock_external_tools_list):
     """Test workflow using multiple different tools in sequence."""
     client = DownstreamMcpClient("test-server", {})
-    client.session = AsyncMock(spec=ClientSession)
+    client._session = AsyncMock(spec=ClientSession)
 
     # Simulate workflow: echo -> fixed response -> passthrough
     workflow_responses = [
@@ -982,7 +982,7 @@ async def test_mixed_tools_workflow_scenario(mock_external_tools_list):
         types.CallToolResult(content=[types.TextContent(type="text", text='{"passthrough": true}')]),
     ]
 
-    client.session.call_tool.side_effect = workflow_responses
+    client._session.call_tool.side_effect = workflow_responses
 
     # Execute workflow steps
     step1 = await client.execute_tool("echo_tool", {"text": "step1"})
@@ -993,4 +993,4 @@ async def test_mixed_tools_workflow_scenario(mock_external_tools_list):
     assert step1 == workflow_responses[0]
     assert step2 == workflow_responses[1]
     assert step3 == workflow_responses[2]
-    assert client.session.call_tool.call_count == 3
+    assert client._session.call_tool.call_count == 3

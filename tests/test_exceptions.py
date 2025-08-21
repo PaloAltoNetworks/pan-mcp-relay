@@ -16,7 +16,7 @@
 
 import mcp.types as types
 
-from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayBaseException, AISecMcpRelayServerNotFoundError
+from pan_mcp_relay.exceptions import McpRelayBaseError, McpRelayServerNotFoundError
 
 """Test cases for AISecMcpRelayException class."""
 
@@ -24,14 +24,14 @@ from pan_aisecurity_mcp_relay.exceptions import AISecMcpRelayBaseException, AISe
 def test_init_with_message_only():
     """Test exception initialization with message only."""
     message = "Test error message"
-    exception = AISecMcpRelayBaseException(message)
+    exception = McpRelayBaseError(message)
 
     assert exception.message == message
 
 
 def test_init_with_empty_message():
     """Test exception initialization with empty message."""
-    exception = AISecMcpRelayBaseException()
+    exception = McpRelayBaseError()
 
     assert exception.message == ""
 
@@ -39,7 +39,7 @@ def test_init_with_empty_message():
 def test_str_with_message_only():
     """Test string representation with message only."""
     message = "Something went wrong"
-    exception = AISecMcpRelayBaseException(message)
+    exception = McpRelayBaseError(message)
 
     assert str(exception) == f"{message}"
 
@@ -47,7 +47,7 @@ def test_str_with_message_only():
 def test_to_mcp_format_with_message_and_error_type():
     """Test to_mcp_format method with message and error type."""
     message = "Server not found"
-    exception = AISecMcpRelayServerNotFoundError(message)
+    exception = McpRelayServerNotFoundError(message)
 
     result = exception.to_mcp_format()
 

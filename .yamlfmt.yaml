@@ -5,5 +5,8 @@ formatter:
   retain_line_breaks_single: true
   drop_merge_tag: true
   scan_folded_as_literal: true
+  retain_line_breaks: true
+  eof_newline: true
+  force_array_style: block
 
 gitignore_excludes: true

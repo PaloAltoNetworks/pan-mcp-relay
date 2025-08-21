@@ -1,0 +1,100 @@
+# Palo Alto Networks Prisma AIRS MCP Relay Example Configuration File
+#
+# Configuration File Loading Precedence:
+# --config-file CLI flag
+# MCP_RELAY_CONFIG_FILE environment variable
+# ${PWD}/mcp-relay.yaml
+# ~/.mcp-relay.yaml
+# ~/.config/pan-mcp-relay/mcp-relay.yaml
+# ${PWD}/mcp-relay.json
+# ~/.mcp-relay.json
+# ~/.config/pan-mcp-relay/mcp-relay.json
+#
+##############################
+### Configuration Key Names ##
+# Configuration key names support multiple naming formats,
+# and are case-sensitive.
+#
+# For example, the following are all supported in the order specified,
+# the first valid configuration key name found will be used.
+#
+# mcp_relay: { api_key: "" } # snake_case
+# mcpRelay:  { apiKey:  "" } # camelCase
+# McpRelay:  { ApiKey:  "" } # PascalCase
+# mcp-relay: { api-key: "" } # kebab-case
+# mcprelay:  { apikey:  "" } # plainlowercase
+#
+##############################
+#
+mcpRelay:
+  # Prisma AIRS API Key (required), environment variables supported
+  # default api_key: None
+  api_key: |
+    ${PRISMA_AIRS_API_KEY}
+  # AI Profile Name or ID (required), environment variables supported
+  # default ai_profile: None
+  ai_profile: |
+    your-ai-profile-name-or-id
+  # api_endpoint Optional, default shown
+  # aliases: api_endpoint, apiEndpoint, ApiEndpoint, api-endpoint, apiendpoint, endpoint, Endpoint
+  # default endpoint: https://service.api.aisecurity.paloaltonetworks.com
+  api_endpoint: |
+    https://service.api.aisecurity.paloaltonetworks.com
+  # Relay MCP Server Configuration
+  # default transport: stdio
+  transport: sse
+  # default host: 127.0.0.1
+  host: 127.0.0.1
+  # default port: 8000
+  port: 8001
+  # default tool_registry_cache_ttl: 86400
+  tool_registry_cache_ttl: 86400
+  # default max_mcp_servers: 32
+  max_mcp_servers: 32
+  # default max_mcp_tools: 256
+  max_mcp_tools: 256
+  # default dotenv: None
+  dotenv: ~/.config/pan-mcp-relay/.env
+
+# Example / demo MCP Servers
+mcpServers:
+  stdio-command-example:
+    command: brew
+    args:
+      - mcp-server
+    # Optional working directory, supports environment variables
+    cwd: "${HOMEBREW_PREFIX}"
+    # optional environment variables, inherited from the parent shell
+    env:
+      HOMEBREW_NO_ENV_HINTS: 1
+  filesystem:
+    command: npx
+    args:
+      - -y
+      - '@modelcontextprotocol/server-filesystem'
+      # Command line arguments support environment variables
+      - "${HOME}/.local/mcp-filesystem"
+      - "${XDG_PICTURES_DIR}"
+    env:
+      # Environment variables expansion supported
+      SOME_ENV_VAR: |
+        "${ANOTHER_ENV_VAR}
+
+  streamable-http-example:
+    type: http
+    url: "https://localhost:3000/mcp"
+    timeout: 30
+    sse_read_timeout: 30
+    terminate_on_close: false
+    headers:
+      # Headers support Environment variable expansion
+      Authorization: "Bearer ${LOCAL_HTTP_MCP_SERVER_AUTH_TOKEN}"
+
+  sse-http-example:
+    # NOTE: "type: sse" is required for SSE MCP Servers
+    type: sse
+    url: "https://localhost:3001/sse"
+    timeout: 30
+    sse_read_timeout: 30
+    headers:
+      x-extra-header-key: x-extra-header-value

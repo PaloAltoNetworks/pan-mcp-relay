@@ -1,0 +1,46 @@
+# Palo Alto Networks Prisma AIRS MCP Relay Example Configuration File
+#
+# Configuration File Loading Precedence:
+# --config-file CLI flag
+# MCP_RELAY_CONFIG_FILE environment variable
+# ${PWD}/mcp-relay.yaml
+# ~/.mcp-relay.yaml
+# ~/.config/pan-mcp-relay/mcp-relay.yaml
+# ${PWD}/mcp-relay.json
+# ~/.mcp-relay.json
+# ~/.config/pan-mcp-relay/mcp-relay.json
+#
+mcpRelay:
+  # Prisma AIRS API Key (required), environment variables supported
+  apiKey: |
+    ${PRISMA_AIRS_API_KEY}
+  # AI Profile Name or ID (required), environment variables supported
+  aiProfile: |
+    your-ai-profile-name-or-id
+  # Endpoint Optional, default shown
+  # endpoint: |
+  #  https://service.api.aisecurity.paloaltonetworks.com
+
+# Example / demo MCP Servers
+mcpServers:
+  homebrew:
+    command: brew
+    args:
+      - mcp-server
+    # Optional working directory, supports environment variables
+    cwd: "${HOMEBREW_PREFIX}"
+    # optional environment variables, inherited from the parent shell
+    env:
+      HOMEBREW_NO_ENV_HINTS: 1
+  fetch:
+    command: uvx
+    args:
+      - mcp-server-fetch
+  filesystem:
+    command: npx
+    args:
+      - -y
+      - '@modelcontextprotocol/server-filesystem'
+      - /var/tmp/change/this/path
+      # Command line arguments support environment variables
+      - "${XDG_PICTURES_DIR}"

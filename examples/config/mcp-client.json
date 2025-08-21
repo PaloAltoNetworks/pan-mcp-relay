@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pan-mcp-relay": {
+      "command": "uvx",
+      "args": [
+        "pan-mcp-relay",
+        "--config-file",
+        "~/.config/pan-mcp-relay/mcp-relay.yaml"
+      ]
+    }
+  }
+}

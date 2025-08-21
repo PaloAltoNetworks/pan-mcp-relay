@@ -1,4 +1,4 @@
-version: '3.38'
+version: '3.44'
 
 includes:
   ci:
@@ -33,23 +33,33 @@ tasks:
       - task --help
       - task --list
 
+  setup:
+    desc: "Install all required development, build, and packaging tools (uv, ruff, pre-commit, hatch)"
+    cmds:
+      - task: setup:uv
+      - task: setup:ruff
+      - task: setup:pre-commit
+      - task: setup:hatch
+      - task: sync
+
   setup:uv:
     desc: "Install 'pipx' and 'uv' (Python Project & Dependency Management)"
-    interactive: true
+    set: [xtrace, nounset, pipefail, errexit]
     # language=sh
     cmds:
       - |
-        if !command -v pipx &>/dev/null; then
-          python3 -m pip install pipx --user
-        fi
-        python3 -m pipx install uv
+        curl=$(command -v curl)
+        $curl -LsSf https://astral.sh/uv/install.sh | sh
     status:
       - command -v uv
+    preconditions:
+      - command -v curl
 
   setup:ruff:
     desc: "Install 'Ruff' (Python Linting and Formatting) using 'uv'"
     deps:
       - setup:uv
+    set: [xtrace, nounset, pipefail, errexit]
     # language=sh
     cmds:
       - uv tool install --upgrade ruff
@@ -60,9 +70,10 @@ tasks:
 
   setup:pre-commit:
     desc: "Install pre-commit and pre-commit hooks"
+    set: [xtrace, nounset, pipefail, errexit]
     # language=sh
     cmds:
-      - uv tool install pre-commit
+      - uv tool install --upgrade pre-commit
       - uv tool run pre-commit install --install-hooks
     preconditions:
       - command -v uv
@@ -72,64 +83,32 @@ tasks:
       - test -f .git/hooks/pre-commit
       - grep -q '\.pre-commit-config\.yaml' .git/hooks/pre-commit
 
+  setup:hatch:
+    desc: "Install hatch (Python build & packaging tool)"
+    env:
+      UV_FROZEN: 1
+    # language=sh
+    cmds:
+      - uv tool install --upgrade hatch
+    preconditions:
+      - command -v uv
+    status:
+      - command -v hatch
+
   sync:
-    desc: "uv sync --all-extras"
+    desc: "Ensure Python package dependencies are installed"
     run: once
     silent: true
     # language=sh
     cmds:
       - >-
         {{if not .SKIP_SYNC}}uv sync --all-extras {{.SYNC_ARGS}} {{.CLI_ARGS}}{{end}}
-      - |
-        cat <<'EOT' | tee requirements.txt requirements.in &>/dev/null
-        #
-        # THIS FILE IS AUTO-GENERATED
-        # YOUR CHANGES WILL BE OVERWRITTEN
-        # DO NOT MANUALLY EDIT THIS FILE
-        #
-        # Add dependencies with 'uv add':
-        #
-        #   for package/release dependencies:
-        #     uv add package_name
-        #
-        #   for development dependencies:
-        #    uv add --dev package_name
-        #
-        # Regenerate this file with:
-        #   'task sync' or 'task export'
-        EOT
-      - uv export --frozen --no-emit-project --no-hashes >> requirements.txt
-      - |
-        uv tree --frozen --depth 1 --no-dev --no-default-groups |
-        sed -E -e '1d' -e 's/^[^a-z]+//' -e 's/ v[0-9].+$//' |
-        sort -b >> requirements.in
-
-  export:
-    run: once
-    desc: "uv export > requirements.txt"
-    cmds:
-      - task: sync
-        vars:
-          SKIP_SYNC: true
-
-  dep:
-    desc: "Ensure Python package dependencies are installed"
-    deps:
-      - task: setup:uv
-    # language=sh
-    cmds:
-      - uv tool install --upgrade hatch
-      - task: export
 
   update:
     desc: "Update Python Dependencies"
     # language=sh
     cmds:
-      - uv tool install --upgrade hatch
-      - uv sync --all-extras --reinstall --upgrade
-      - task: export
-        vars:
-          SKIP_SYNC: true
+      - uv sync --all-extras --upgrade
     deps:
       - task: setup:uv
 
@@ -154,24 +133,11 @@ tasks:
     preconditions:
       - command -v uv
 
-  _hatch:
-    internal: true
-    run: once
-    env:
-      UV_FROZEN: 1
-    # language=sh
-    cmds:
-      - uv tool install hatch
-    preconditions:
-      - command -v uv
-    status:
-      - command -v hatch
-
   clean:
     desc: "Remove all local build and test artifacts"
     run: once
     deps:
-      - task: _hatch
+      - task: setup:hatch
     # language=sh
     cmds:
       - |
@@ -188,30 +154,96 @@ tasks:
     preconditions:
       - command -v hatch
 
-  test:
-    desc: "Run project unit tests with pyteset"
-    # language=sh
-    cmds:
-      - >-
-        uv run --all-extras --frozen
-        pytest --cov --numprocesses=auto
-        {{.CLI_ARGS}}
-    preconditions:
-      - command -v uv
-
-  test:matrix:
-    desc: "Run test suite with all currently supported Python Versions"
+  fmt:
+    desc: "Automatically format project files"
     deps:
-      - task: _hatch
+      - task: fmt:py
+      - task: fmt:yaml
+
+  fmt:py:
+    desc: "Automatically format Python files"
     # language=sh
     cmds:
-      - uvx hatch@latest test --all --cover
+      - ruff format .
+    preconditions:
+      - command -v ruff
+
+  fmt:yaml:
+    desc: "Automatically format YAML files"
+    # language=sh
+    cmds:
+      - yamlfmt -conf {{.REPO_ROOT}}/.yamlfmt.yaml -gitignore_excludes -dstar "**.yaml" "**.yml"
+    preconditions:
+      - command -v yamlfmt
+
+  lint:
+    desc: "ruff check --fix --preview --unsafe-fixes"
+    # language=sh
+    cmds:
+      - ruff check --fix --preview --unsafe-fixes
+    preconditions:
+      - command -v ruff
+
+  lint:mypy:
+    desc: "Run mypy type-checking tests"
+    deps:
+      - task: lint
+    # language=sh
+    cmds:
+      - uv run --all-extras --frozen mypy check {{.CLI_ARGS}}
+    preconditions:
+      - command -v ruff
+
+  lint:pyright:
+    desc: "Run mypy & pyright type-checking tests"
+    deps:
+      - task: lint
+    # language=sh
+    cmds:
+      - uv run --all-extras --frozen pyright {{.CLI_ARGS}}
+    preconditions:
+      - command -v ruff
+
+  pre-commit:
+    desc: "Run pre-commit hooks"
+    # language=sh
+    cmds:
+      - uv tool run pre-commit run -v
+    preconditions:
+      - command -v pre-commit
+
+  readme:generate-toc:
+    desc: Generate the Table of Contents in README.md
+    # language=sh
+    cmds:
+      - uvx --from md-toc md_toc --in-place cmark README.md
+    preconditions:
+      - sh: command -v uvx
+        msg: "Command not found: uvx"
+
+  readme:render:
+    desc: Render README.md using PyPi's Markdown to HTML Renderer (readme-renderer)
+    deps:
+      - task: readme:generate-toc
+    # language=sh
+    cmds:
+      - mkdir -p .local
+      - uv run --all-extras --frozen -m readme_renderer -f md README.md -o .local/index.html
+      - screen -dmS http.server .venv/bin/python3 -m http.server -d .local
+      - open http://[::]:8000
+      - screen -r http.server
+    preconditions:
+      - command -v ruff
+      - command -v screen
 
   build:
     desc: "Build the project artifacts"
     deps:
-      - task: _hatch
+      - task: setup:hatch
       - task: clean
+      - task: fmt
+      - task: lint
+      - task: pre-commit
     env:
       UV_FROZEN: 1
     # language=sh
@@ -236,20 +268,40 @@ tasks:
         mkdir -p "dist/${tar_gz_dst}" &&
         tar -C "dist/${tar_gz_dst}" --strip-components=1 -zxvf "dist/${latest_tar_gz}"
 
+  test:
+    desc: "Run project unit tests with pyteset"
+    # language=sh
+    cmds:
+      - >-
+        uv run --all-extras --frozen
+        pytest --cov --numprocesses=auto
+        {{.CLI_ARGS}}
+    preconditions:
+      - command -v uv
+
+  test:matrix:
+    desc: "Run test suite with all currently supported Python Versions"
+    deps:
+      - task: setup:hatch
+    # language=sh
+    cmds:
+      - uvx hatch@latest test --all --cover
+
   bump:
     desc: "Bump the project version. See 'hatch version' docs: https://hatch.pypa.io/latest/version/"
     deps:
-      - task: _hatch
+      - task: setup:hatch
     env:
       UV_FROZEN: 1
     # language=sh
     cmds:
       - uv run --frozen hatch version {{.CLI_ARGS | default "dev" }}
+
   _publish:
     internal: true
     silent: false
     deps:
-      - task: _hatch
+      - task: setup:hatch
       - task: build
     env:
       UV_FROZEN: 1
@@ -276,54 +328,6 @@ tasks:
       - task: _publish
         vars:
           HATCH_INDEX_REPO: main
-
-  fmt:
-    desc: "Automatically format project files"
-    deps:
-      - task: fmt:py
-      - task: fmt:yaml
-
-  fmt:py:
-    desc: "Automatically format Python files"
-    # language=sh
-    cmds:
-      - ruff format .
-
-  fmt:yaml:
-    desc: "Automatically format YAML files"
-    # language=sh
-    cmds:
-      - yamlfmt -conf {{.REPO_ROOT}}/.yamlfmt.yaml -gitignore_excludes -dstar "**.yaml" "**.yml"
-
-  lint:
-    desc: "ruff check --fix --preview --unsafe-fixes"
-    # language=sh
-    cmds:
-      - ruff check --fix --preview --unsafe-fixes
-
-  lint:mypy:
-    desc: "Run mypy type-checking tests"
-    deps:
-      - task: lint
-    # language=sh
-    cmds:
-      - uv run --all-extras --frozen mypy check {{.CLI_ARGS}}
-
-  lint:pyright:
-    desc: "Run mypy & pyright type-checking tests"
-    deps:
-      - task: lint
-    # language=sh
-    cmds:
-      - uv run --all-extras --frozen pyright {{.CLI_ARGS}}
-
-  pre-commit:
-    desc: "Run pre-commit hooks"
-    # language=sh
-    cmds:
-      - uv tool run pre-commit run -v
-    preconditions:
-      - command -v pre-commit
 
   sec:
     desc: "Run Security Linters"
@@ -360,27 +364,6 @@ tasks:
       - command -v git
       - command -v uv
 
-  readme:generate-toc:
-    desc: Generate the Table of Contents in README.md
-    # language=sh
-    cmds:
-      - uvx --from md-toc md_toc --in-place cmark README.md
-    preconditions:
-      - sh: command -v uvx
-        msg: "Command not found: uvx"
-
-  readme:render:
-    desc: Render README.md using PyPi's Markdown to HTML Renderer (readme-renderer)
-    deps:
-      - task: readme:generate-toc
-    # language=sh
-    cmds:
-      - mkdir -p .local
-      - uv run --all-extras --frozen -m readme_renderer -f md README.md -o .local/index.html
-      - screen -dmS http.server .venv/bin/python3 -m http.server -d .local
-      - open http://[::]:8000
-      - screen -r http.server
-
   keyring:update-key:main:
     desc: Update {{.PUBLISH_URL_PYPI_MAIN}} API Token using 'keyring' (secure password storage)
     # language=sh
@@ -409,13 +392,11 @@ tasks:
           --debug=FILTER \
           --filter="- /.gitlab-ci.yml" \
           --filter="+ /tests/" \
-          --filter="+ /tests/" \
           --filter="+ /tests/***" \
-          --filter="- /tests/***" \
           --filter="+ LICENSE" \
           --filter="+ README.md" \
           --filter="+ CHANGELOG.md" \
-          --filter="+ pan_aisecurity_mcp_relay/***" \
+          --filter="+ src/***" \
           --filter="+ examples/***" \
           --filter="+ .*ignore" \
           --filter="+ /.ci/***" \
@@ -433,3 +414,30 @@ tasks:
     requires:
       vars:
         - DEST_DIR
+
+  run:
+    desc: "Run the pan-mcp-relay"
+    deps:
+      - task: sync
+    # language=sh
+    cmds:
+      - uv run pan-mcp-relay
+    preconditions:
+      - command -v uv
+
+  build:run:
+    desc: "Run the pan-mcp-relay"
+    deps:
+      - task: build
+    # language=sh
+    cmds:
+      - uv run pan-mcp-relay
+    preconditions:
+      - command -v uv
+
+  copyright:
+    desc: "Ensure copyright notice is inserted in all source code files"
+    cmds:
+      - uv run --script .ci/scripts/copyright.py
+    preconditions:
+      - command -v uv

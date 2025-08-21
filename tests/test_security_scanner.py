@@ -21,12 +21,12 @@ import mcp.types as types
 import pytest
 from aisecurity.scan.asyncio.scanner import ScanResponse
 
-from pan_aisecurity_mcp_relay.security_scanner import SecurityScanner
+from pan_mcp_relay.security_scanner import SecurityScanner
 
 
 @pytest.mark.asyncio
 @patch(
-    "pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+    "pan_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
     new_callable=AsyncMock,
 )
 def test_init(mock_pan_security_server):
@@ -37,7 +37,7 @@ def test_init(mock_pan_security_server):
 
 @pytest.mark.asyncio
 @patch(
-    "pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+    "pan_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
     new_callable=AsyncMock,
 )
 async def test_perform_scan_success_block(mock_pan_security_server):
@@ -64,9 +64,9 @@ async def test_perform_scan_success_block(mock_pan_security_server):
     mock_scan_result.content = mock_call_tool_result.content
 
     # Setup the mock chain
-    mock_pan_security_server.initialize = AsyncMock()
+    mock_pan_security_server._initialize = AsyncMock()
     mock_pan_security_server.execute_tool = AsyncMock(return_value=mock_scan_result)
-    mock_pan_security_server.cleanup = AsyncMock()
+    mock_pan_security_server.shutdown = AsyncMock()
 
     # Create scanner instance
     mock_scanner = SecurityScanner(mock_pan_security_server)
@@ -86,7 +86,7 @@ async def test_perform_scan_success_block(mock_pan_security_server):
 
 @pytest.mark.asyncio
 @patch(
-    "pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+    "pan_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
     new_callable=AsyncMock,
 )
 async def test_perform_scan_success_allow(mock_pan_security_server):
@@ -113,9 +113,9 @@ async def test_perform_scan_success_allow(mock_pan_security_server):
     mock_scan_result.content = mock_call_tool_result.content
 
     # Setup the mock chain
-    mock_pan_security_server.initialize = AsyncMock()
+    mock_pan_security_server._initialize = AsyncMock()
     mock_pan_security_server.execute_tool = AsyncMock(return_value=mock_scan_result)
-    mock_pan_security_server.cleanup = AsyncMock()
+    mock_pan_security_server.shutdown = AsyncMock()
 
     # Create scanner instance
     mock_scanner = SecurityScanner(mock_pan_security_server)
@@ -135,14 +135,14 @@ async def test_perform_scan_success_allow(mock_pan_security_server):
 
 @pytest.mark.asyncio
 @patch(
-    "pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+    "pan_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
     new_callable=AsyncMock,
 )
 async def test_perform_scan_error_initialize_raises_exception(mock_pan_security_server):
     """Test when initialize raises an exception."""
     # Setup mocks
-    mock_pan_security_server.initialize = AsyncMock(side_effect=Exception("Initialization failed"))
-    mock_pan_security_server.cleanup = AsyncMock()
+    mock_pan_security_server._initialize = AsyncMock(side_effect=Exception("Initialization failed"))
+    mock_pan_security_server.shutdown = AsyncMock()
 
     # Create scanner instance
     mock_scanner = SecurityScanner(mock_pan_security_server)
@@ -155,12 +155,12 @@ async def test_perform_scan_error_initialize_raises_exception(mock_pan_security_
         await mock_scanner._perform_scan("scan_response", params)
 
     # Cleanup should still be called due to finally block
-    mock_pan_security_server.cleanup.assert_not_called()
+    mock_pan_security_server.shutdown.assert_not_called()
 
 
 @pytest.mark.asyncio
 @patch(
-    "pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+    "pan_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
     new_callable=AsyncMock,
 )
 async def test_perform_scan_error_empty_content_list(mock_pan_security_server):
@@ -170,9 +170,9 @@ async def test_perform_scan_error_empty_content_list(mock_pan_security_server):
     mock_scan_result.content = []  # Empty list
 
     # Setup mocks
-    mock_pan_security_server.initialize = AsyncMock()
+    mock_pan_security_server._initialize = AsyncMock()
     mock_pan_security_server.execute_tool = AsyncMock(return_value=mock_scan_result)
-    mock_pan_security_server.cleanup = AsyncMock()
+    mock_pan_security_server.shutdown = AsyncMock()
 
     # Create scanner instance
     mock_scanner = SecurityScanner(mock_pan_security_server)
@@ -185,12 +185,12 @@ async def test_perform_scan_error_empty_content_list(mock_pan_security_server):
 
     # Assertions
     assert result is None
-    mock_pan_security_server.cleanup.assert_called_once()
+    mock_pan_security_server.shutdown.assert_called_once()
 
 
 @pytest.mark.asyncio
 @patch(
-    "pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+    "pan_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
     new_callable=AsyncMock,
 )
 async def test_perform_scan_error_scan_result_is_error(mock_pan_security_server):
@@ -203,10 +203,10 @@ async def test_perform_scan_error_scan_result_is_error(mock_pan_security_server)
     mock_scan_result.content = [mock_error_content]
 
     # Setup mocks
-    mock_pan_security_server.initialize = AsyncMock()
+    mock_pan_security_server._initialize = AsyncMock()
     mock_pan_security_server.execute_tool = AsyncMock(return_value=mock_scan_result)
     mock_pan_security_server.extract_text_content = Mock(return_value="Security scan failed due to invalid input")
-    mock_pan_security_server.cleanup = AsyncMock()
+    mock_pan_security_server.shutdown = AsyncMock()
 
     # Create scanner instance
     mock_scanner = SecurityScanner(mock_pan_security_server)
@@ -220,12 +220,12 @@ async def test_perform_scan_error_scan_result_is_error(mock_pan_security_server)
     # Assertions
     assert result is None
     mock_pan_security_server.extract_text_content.assert_called_once()
-    mock_pan_security_server.cleanup.assert_called_once()
+    mock_pan_security_server.shutdown.assert_called_once()
 
 
 @pytest.mark.asyncio
 @patch(
-    "pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+    "pan_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
     new_callable=AsyncMock,
 )
 async def test_invalid_api_key_error(mock_pan_security_server):
@@ -241,12 +241,12 @@ async def test_invalid_api_key_error(mock_pan_security_server):
     mock_scan_result.content = [mock_error_content]
 
     # Setup mocks
-    mock_pan_security_server.initialize = AsyncMock()
+    mock_pan_security_server._initialize = AsyncMock()
     mock_pan_security_server.execute_tool = AsyncMock(return_value=mock_scan_result)
     mock_pan_security_server.extract_text_content = AsyncMock(
         return_value="aisecurity.exceptions.AISecSDKException: AISEC_SERVER_SIDE_ERROR:(403) HTTP response body: {'error':{'message':Invalid API Key or Oauth Token}}"
     )
-    mock_pan_security_server.cleanup = AsyncMock()
+    mock_pan_security_server.shutdown = AsyncMock()
 
     # Create scanner instance
     mock_scanner = SecurityScanner(mock_pan_security_server)
@@ -260,12 +260,12 @@ async def test_invalid_api_key_error(mock_pan_security_server):
     # Assertions
     assert result is None
     mock_pan_security_server.extract_text_content.assert_called_once()
-    mock_pan_security_server.cleanup.assert_called_once()
+    mock_pan_security_server.shutdown.assert_called_once()
 
 
 @pytest.mark.asyncio
 @patch(
-    "pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+    "pan_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
     new_callable=AsyncMock,
 )
 async def test_api_rate_limit_error(mock_pan_security_server):
@@ -281,12 +281,12 @@ async def test_api_rate_limit_error(mock_pan_security_server):
     mock_scan_result.content = [mock_error_content]
 
     # Setup mocks
-    mock_pan_security_server.initialize = AsyncMock()
+    mock_pan_security_server._initialize = AsyncMock()
     mock_pan_security_server.execute_tool = AsyncMock(return_value=mock_scan_result)
     mock_pan_security_server.extract_text_content = AsyncMock(
         return_value="Error during sync scan: AISEC_SERVER_SIDE_ERROR:(429)  HTTP response body: {'error':{'message':Rate limit exceeded}}"
     )
-    mock_pan_security_server.cleanup = AsyncMock()
+    mock_pan_security_server.shutdown = AsyncMock()
 
     # Create scanner instance
     mock_scanner = SecurityScanner(mock_pan_security_server)
@@ -300,11 +300,11 @@ async def test_api_rate_limit_error(mock_pan_security_server):
     # Assertions
     assert result is None
     mock_pan_security_server.extract_text_content.assert_called_once()
-    mock_pan_security_server.cleanup.assert_called_once()
+    mock_pan_security_server.shutdown.assert_called_once()
 
 
 @patch(
-    "pan_aisecurity_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
+    "pan_mcp_relay.downstream_mcp_client.DownstreamMcpClient",
     new_callable=Mock,
 )
 def test_should_block(mock_pan_security_server):

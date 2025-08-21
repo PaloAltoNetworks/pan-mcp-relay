@@ -13,12 +13,11 @@
 # or condition, and the licensor will not be liable to you for any damages
 # arising out of these terms or the use or nature of the software, under
 # any kind of legal claim.
-
-
+import httpx
 import mcp.types as types
 
 
-class AISecMcpRelayBaseException(Exception):
+class McpRelayBaseError(Exception):
     """Base exception class for mcp-relay-related exceptions."""
 
     def __init__(self, message: str = "") -> None:
@@ -37,33 +36,70 @@ class AISecMcpRelayBaseException(Exception):
         return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=str(self))])
 
 
-class AISecMcpRelayInternalError(AISecMcpRelayBaseException):
+class McpRelayInternalError(McpRelayBaseError):
     """Exception for internal errors."""
 
 
-class AISecMcpRelayInvalidConfigurationError(AISecMcpRelayBaseException):
+# Configuration Related Exceptions
+
+
+class McpRelayConfigurationError(McpRelayBaseError):
     """Exception for invalid configuration errors."""
 
 
-class AISecMcpRelayToolExecutionError(AISecMcpRelayBaseException):
+class ApiKeyError(McpRelayConfigurationError):
+    """Exception for invalid API key errors."""
+
+
+class ApiEndpointError(McpRelayConfigurationError):
+    """Exception for invalid API endpoint errors."""
+
+
+class AiProfileError(McpRelayConfigurationError):
+    """Exception for invalid AI profile errors."""
+
+
+# Server and Tool Errors
+
+
+class McpServerInitializationError(McpRelayBaseError):
+    """Exception for Failed MCP Server initialization."""
+
+
+class McpRelayToolExecutionError(McpRelayBaseError):
     """Exception for tool execution errors."""
 
 
-class AISecMcpRelaySecurityBlockError(AISecMcpRelayBaseException):
-    """Exception for security block errors."""
-
-
-class AISecMcpRelayToolNotFoundError(AISecMcpRelayBaseException):
+class McpRelayToolNotFoundError(McpRelayBaseError):
     """Exception for tool not found errors."""
 
 
-class AISecMcpRelayServerNotFoundError(AISecMcpRelayBaseException):
+class McpRelayServerNotFoundError(McpRelayBaseError):
     """Exception for server not found errors."""
 
 
-class AISecMcpRelayValidationError(AISecMcpRelayBaseException):
+class McpRelayValidationError(McpRelayBaseError):
     """Exception for validation errors."""
 
 
-class AISecMcpRelayToolRegistryError(AISecMcpRelayBaseException):
+class McpRelayToolRegistryError(McpRelayBaseError):
     """Exception for tool registry errors."""
+
+
+# Scan & Sanner Errors
+
+
+class McpRelayScanError(McpRelayBaseError):
+    """Exception for scan failure errors."""
+
+
+class ScanApiAuthenticationError(McpRelayScanError, httpx.HTTPStatusError):
+    """Exception for Scan API Authentication Failures (HTTP 4xx)"""
+
+
+class ScanApiInternalError(McpRelayScanError, httpx.HTTPStatusError):
+    """Exception for Scan API Failures (HTTP 5xx)"""
+
+
+class McpRelaySecurityBlockError(McpRelayBaseError):
+    """Exception for security block errors."""

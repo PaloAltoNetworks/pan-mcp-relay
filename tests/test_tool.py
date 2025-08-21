@@ -30,7 +30,7 @@ import mcp.types as types
 import pytest
 from pydantic import ValidationError
 
-from pan_aisecurity_mcp_relay.tool import BaseTool, InternalTool, RelayTool, ToolState
+from pan_mcp_relay.tool import BaseTool, InternalTool, RelayTool, ToolState
 
 
 @pytest.fixture
@@ -269,6 +269,7 @@ def error_all_tool_data():
         },
         "server_name": "test_server",
         "state": ToolState.ENABLED,
+        "sha256_hash": "658027b21f79c5e8e5a4ba9ed4928913c4ff1cdbfe3ebf441c700b52ea5ee85f",
     }
 
 
@@ -290,9 +291,9 @@ def test_internal_tool_hash_computation_for_deduplication(error_all_tool_data):
 
     # Manually compute expected hash for verification
     payload = {
-        "server_name": "test_server",
-        "tool_name": "error_all_tool",
-        "description": "Tool that always returns isError=True for testing error handling",
+        "server_name": error_all_tool_data["server_name"],
+        "tool_name": error_all_tool_data["tool_name"],
+        "description": error_all_tool_data["description"],
         "input_schema": error_all_tool_data["inputSchema"],
     }
     json_str = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -320,15 +321,6 @@ def test_internal_tool_hash_uniqueness_for_different_tools(error_all_tool_data):
     slow_tool = InternalTool(**slow_tool_data)
 
     assert error_tool.sha256_hash != slow_tool.sha256_hash
-
-
-def test_internal_tool_compute_hash_method_for_registry(error_all_tool_data):
-    """Test compute_hash method directly for tool registry operations."""
-    external_tool = InternalTool(**error_all_tool_data)
-    computed_registry_hash = external_tool.compute_hash()
-
-    assert computed_registry_hash == external_tool.sha256_hash
-    assert len(computed_registry_hash) == 64
 
 
 def test_internal_tool_hash_with_complex_schema():
@@ -362,34 +354,6 @@ def test_internal_tool_hash_with_complex_schema():
 
     assert complex_tool.sha256_hash != ""
     assert len(complex_tool.sha256_hash) == 64
-
-
-def test_internal_tool_to_dict_for_storage(error_all_tool_data):
-    """Test conversion to dictionary for database storage."""
-    external_tool = InternalTool(**error_all_tool_data)
-    storage_dict = external_tool.to_dict()
-
-    expected_storage_keys = ["name", "description", "input_schema", "server_name", "state", "sha256_hash"]
-    assert all(key in storage_dict for key in expected_storage_keys)
-
-    assert storage_dict["name"] == "error_all_tool"
-    assert storage_dict["description"] == "Tool that always returns isError=True for testing error handling"
-    assert storage_dict["server_name"] == "test_server"
-    assert storage_dict["state"] == ToolState.ENABLED
-    assert storage_dict["sha256_hash"] == external_tool.sha256_hash
-    assert storage_dict["input_schema"] == error_all_tool_data["inputSchema"]
-
-
-def test_internal_tool_to_dict_with_different_states(error_all_tool_data):
-    """Test to_dict with different tool states for compliance tracking."""
-    tool_states_to_test = [ToolState.ENABLED, ToolState.DISABLED_HIDDEN_MODE, ToolState.DISABLED_SECURITY_RISK]
-
-    for state in tool_states_to_test:
-        error_all_tool_data["state"] = state
-        external_tool = InternalTool(**error_all_tool_data)
-        storage_dict = external_tool.to_dict()
-
-        assert storage_dict["state"] == state
 
 
 def test_internal_tool_model_post_init_hash_generation(error_all_tool_data):

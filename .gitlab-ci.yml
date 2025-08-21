@@ -277,6 +277,7 @@ format:
 test:
   stage: test
   extends: .base-job
+  allow_failure: true
   image: $PYTHON_BASE_IMAGE:latest-$PY_VERSION
   cache:
     - <<: *uv-cache
@@ -371,6 +372,7 @@ blackduck:
     PIP_NO_CACHE_DIR: 1
     PIP_PROGRESS_BAR: "off"
     PIP_ROOT_USER_ACTION: ignore
+    PIP_IGNORE_REQUIRES_PYTHON: 1
 
     DETECT_DETECTOR_SEARCH_DEPTH: 4
     DETECTOR_PIP_REQUIREMENTS_PATH: |

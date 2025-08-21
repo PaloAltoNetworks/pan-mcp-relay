@@ -1,0 +1,4 @@
+!*.log
+!.local/
+!.local/*
+!.local/*.diff

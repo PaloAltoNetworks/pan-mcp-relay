@@ -3,10 +3,10 @@
 # Project Metadata #
 ####################
 [project]
-name = "pan-aisecurity-mcp-relay"
+name = "pan-mcp-relay"
 dynamic = ["version"]
 description = "Palo Alto Networks AI Security MCP Relay"
-requires-python = ">= 3.10"
+requires-python = ">= 3.12"
 License-Expression = "LicenseRef-PolyForm-Internal-Use-License-1.0.0"
 License-File = ["LICENSE"]
 readme = "README.md"
@@ -21,23 +21,36 @@ keywords = [
   "Prompt Injection",
 ]
 dependencies = [
+  "anyio>=4.10.0",
   "backports-strenum>=1.3.1,<2.0 ; python_full_version < '3.11'",
+  "httpx[http2]>=0.28.1",
   "mcp[cli,rich,ws]>=1.12.1",
   "pan-aisecurity>=0.4.0.5.post2",
   "pydantic>=2.11.7",
+  "pydantic-settings[yaml]>=2.10.1",
   "python-dotenv>=1.1.1",
   "rich>=14.0",
   "tenacity>=9.1.2",
+  "truststore>=0.10.4",
 ]
 
 [dependency-groups]
 dev = [
-  "types-python-dateutil>=2.8",
-  "truststore>=0.10.1",
+  "coverage-enable-subprocess>=1.0",
+  "coverage[toml]",
+  "mypy>=1.5",
   "packaging>=25.0",
-  "versioningit>=3.1",
-  "python-dotenv>=1.1",
+  "pyright[nodejs]>=1.1.401",
+  "pytest-asyncio>=1.0.0",
+  "pytest-cov>=6.0",
+  "pytest-mock>=3.14.1",
+  "pytest-xdist[psutil]>=3.7.0",
+  "pytest>=8.3.5",
+  "readme-renderer[md]>=44.0",
+  "truststore>=0.10.1",
+  "types-python-dateutil>=2.8",
   "unittest2pytest>=0.5",
+  "versioningit>=3.1",
 ]
 ci = [
   "httpx[http2]>=0.28",
@@ -54,23 +67,7 @@ Issues = "https://github.com/paloaltonetworks/aisecurity-mcp-relay/issues"
 # Changelog = "https://github.com/paloaltonetworks/aisecurity-mcp-relay/blob/main/CHANGELOG.md"
 
 [project.scripts]
-pan-mcp-relay = "pan_aisecurity_mcp_relay.main:entrypoint"
-
-[project.optional-dependencies]
-test = [
-  "coverage-enable-subprocess>=1.0",
-  "coverage[toml]",
-  "mypy>=1.5",
-  "pyright[nodejs]>=1.1.401",
-  "pytest-asyncio>=1.0.0",
-  "pytest-cov>=6.0",
-  "pytest-mock>=3.14.1",
-  "pytest-xdist[psutil]>=3.7.0",
-  "pytest>=8.3.5",
-]
-docs = [
-    "readme-renderer[md]>=44.0",
-]
+pan-mcp-relay = "pan_mcp_relay.main:entrypoint"
 
 ###########################
 # Build System: Hatchling #
@@ -92,10 +89,10 @@ include = [
   ".ruff.toml",
 ]
 artifacts = [
-  "src/pan_aisecurity_mcp_relay/_version.py"
+  "src/pan_mcp_relay/_version.py"
 ]
 #only-include = [
-#  "src/pan_aisecurity_mcp_relay/",
+#  "src/pan_mcp_relay/",
 #  "README.md",
 #  "CHANGELOG.md",
 #]
@@ -141,11 +138,11 @@ distance-dirty = "{next_version}.dev{distance}+{rev}.d{build_date:%Y%m%d}"
 # Example formatted version: 1.2.4.dev42+ge174a1f.d20230922
 
 [tool.versioningit.write]
-file = "src/pan_aisecurity_mcp_relay/_version.py"
+file = "src/pan_mcp_relay/_version.py"
 
 [tool.hatch.build.hooks.versioningit-onbuild]
-source-file = "src/pan_aisecurity_mcp_relay/_version.py"
-build-file = "pan_aisecurity_mcp_relay/_version.py"
+source-file = "src/pan_mcp_relay/_version.py"
+build-file = "pan_mcp_relay/_version.py"
 require-match = false
 append-line = "__version__ = \"{version}\""
 
