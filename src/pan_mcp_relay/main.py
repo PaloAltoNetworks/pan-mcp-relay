@@ -20,11 +20,13 @@ import os
 import shutil
 import signal
 import sys
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, TypeVarTuple
 
 import anyio
 import click
+import click.shell_completion
 import dotenv
 import rich.logging
 import yaml
@@ -66,6 +68,8 @@ from .server import (
 from .utils import deep_merge, expand_path, expand_vars, getenv
 
 log = utils.get_logger(__name__)
+
+PosArgsT = TypeVarTuple("PosArgsT")
 
 
 def setup_logging():
@@ -118,11 +122,12 @@ def get_loglevel(**kwargs):
     return log_level
 
 
-context_settings = {
-    "auto_envvar_prefix": RELAY_PREFIX,
-    "max_content_width": shutil.get_terminal_size().columns,
-    "show_default": True,
-}
+context_settings = dict(
+    auto_envvar_prefix=RELAY_PREFIX,
+    max_content_width=shutil.get_terminal_size().columns,
+    show_default=True,
+    help_option_names=["-h", "--help"],
+)
 
 
 def entrypoint():
@@ -176,7 +181,7 @@ def entrypoint():
     help=f"Transport protocol to use [{ENV_TRANSPORT}={getenv(ENV_TRANSPORT)}]",
 )
 @click.option(
-    "host", "-h", "--host", default="127.0.0.1", help=f"Host for HTTP/SSE server [{ENV_HOST}={getenv(ENV_HOST)}]"
+    "host", "-H", "--host", default="127.0.0.1", help=f"Host for HTTP/SSE server [{ENV_HOST}={getenv(ENV_HOST)}]"
 )
 @click.option(
     "port", "-p", "--port", type=int, default=8000, help=f"Port for HTTP/SSE server [{ENV_PORT}={getenv(ENV_PORT)}]"
@@ -249,13 +254,14 @@ def cli(ctx, **kwargs) -> int:
     """Run the MCP Relay Server."""
     ctx.ensure_object(dict)
     dotenv_search = kwargs.get("dotenv") or ".env"
+    dotenv_src = ctx.get_parameter_source("dotenv")
 
     set_loglevels(**kwargs)
     if (log_level := kwargs.get("log_level", None)) and isinstance(log_level, str):
         kwargs["log_level"] = logging.getLevelName(log_level.upper())
 
     try:
-        load_dotenvs(dotenv_search)
+        load_dotenvs(dotenv_search=dotenv_search, dotenv_src=dotenv_src)
     except RuntimeError:
         log.exception("event=failed_to_load_dotenv")
         print(dotenv_search)
@@ -377,8 +383,30 @@ def json_schema(ctx: click.Context, output: Path, format: Literal["yaml"] | Lite
     return 0
 
 
+@cli.command(name="completion")
+@click.argument(
+    "shell",
+    required=True,
+    type=click.types.Choice(
+        choices=[
+            "zsh",
+            "bash",
+            "fish",
+        ]
+    ),
+)
+@click.pass_context
+def completion(ctx: click.Context, shell: str):
+    """
+    Generate shell autocompletion script for the specified shell.
+    """
+    root = ctx.find_root()
+    complete_var = "_PAN_MCP_RELAY_COMPLETE"
+    return click.shell_completion.shell_complete(root.command, {}, root.info_name, complete_var, "zsh_source")
+
+
 async def signal_handler(scope: anyio.CancelScope):
-    with anyio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as signals:
+    with anyio.open_signal_receiver(signal.SIGINT, signal.SIGTERM, signal.SIGABRT, signal.SIGQUIT) as signals:
         async for signum in signals:
             signame = str(signum).split(".")[-1]
             log.warning(f"Received signal {signame}")
@@ -406,23 +434,27 @@ async def start_mcp_relay_server(config: Config):
         async with relay_server:
             # Create and run the MCP server
             app = await relay_server.mcp_server()
+            func: Callable[[*PosArgsT], Awaitable[Any]]
+            args: tuple[*PosArgsT] = ()
             match relay_config.transport:
                 case TransportType.stdio:
-                    await run_stdio_server(config.mcp_relay, app)
+                    func, args = run_stdio_server, (config.mcp_relay, app)
                 case TransportType.sse:
                     sse_server = setup_sse_server(config.mcp_relay, app, relay_server.server_lifespan)
-                    await run_http_server(config.mcp_relay, sse_server)
+                    func, args = run_http_server, (config.mcp_relay, sse_server)
                 case TransportType.http:
                     shttp_server = setup_http_server(config.mcp_relay, app, relay_server.server_lifespan)
-                    await run_http_server(config.mcp_relay, shttp_server)
+                    func, args = run_http_server, (config.mcp_relay, shttp_server)
                 case _:
                     log.error(f"Invalid transport type: {relay_config.transport}")
                     return 1
+            async with anyio.create_task_group() as runner_tg:
+                runner_tg.start_soon(func, *args)
 
     return 0
 
 
-def load_dotenvs(dotenv_search):
+def load_dotenvs(dotenv_search: str | None, dotenv_src: ParameterSource):
     if not dotenv_search or not isinstance(dotenv_search, str):
         return
     log.debug(f"Searching for .env files: {dotenv_search}")
@@ -444,7 +476,7 @@ def load_dotenvs(dotenv_search):
             loaded_paths.append(path)
             continue
         log.debug(f"No env .env file found at {orig_path}")
-    if not loaded_paths:
+    if not loaded_paths and dotenv_src in [ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT]:
         log.warning(f"No .env files found in search path: {search_paths}")
 
 

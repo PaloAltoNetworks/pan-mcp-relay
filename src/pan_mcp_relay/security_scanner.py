@@ -17,6 +17,7 @@ import datetime
 import functools
 import getpass
 import hashlib
+import http
 import json
 import os
 import ssl
@@ -27,10 +28,11 @@ from json.decoder import JSONDecodeError
 from typing import Any
 
 import httpx
+import tenacity
 import yaml
 from aisecurity.scan.asyncio.scanner import ScanResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, validate_call
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import stop_after_attempt, wait_fixed
 
 from . import utils
 from ._version import __version__
@@ -122,6 +124,7 @@ class SecurityScanner(BaseModel):
     async def shutdown(self) -> None:
         log.debug("Shutting down security scanner")
         await self.client.aclose()
+        log.debug("Security scanner shutdown complete")
 
     @functools.cache
     def ai_profile(self) -> dict[str, str]:
@@ -146,7 +149,12 @@ class SecurityScanner(BaseModel):
         return metadata
 
     @validate_call
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+    @tenacity.retry(
+        reraise=True,
+        retry=tenacity.retry_if_not_exception_type((ScanApiAuthenticationError, McpRelaySecurityBlockError)),
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(2),
+    )
     async def scan(
         self,
         source: ScanSource,
@@ -194,7 +202,7 @@ class SecurityScanner(BaseModel):
                 api_error = "Unknown Error"
                 log.debug(response_body)
             api_error = f"{api_error} ({se.response.status_code})"
-            if 400 <= se.response.status_code < 500:
+            if se.response.status_code in [http.HTTPStatus.UNAUTHORIZED, http.HTTPStatus.FORBIDDEN]:
                 raise ScanApiAuthenticationError(api_error) from se
             elif se.response.status_code > 500:
                 raise ScanApiInternalError(api_error) from se
@@ -202,7 +210,7 @@ class SecurityScanner(BaseModel):
             raise McpRelayScanError("Security Scan Failed") from se
         except JSONDecodeError as de:
             log.exception("Failed to parse scan response")
-            raise McpRelaySecurityBlockError("Security Scan Failed") from de
+            raise McpRelayScanError("Security Scan Failed JSON Decoding") from de
         except ValidationError as ve:
             log.exception("Failed to validate scan response schema")
             raise McpRelaySecurityBlockError("Security Scan Failed") from ve

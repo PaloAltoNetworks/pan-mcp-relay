@@ -150,6 +150,7 @@ class PanSecurityRelay:
         async with self._shutdown_lock:
             await self.scanner.shutdown()
             await self._exit_stack.aclose()
+        log.debug("MCP Relay server shutdown complete")
 
     @asynccontextmanager
     async def server_lifespan(self, _server: Server) -> AsyncIterator[Any]:
@@ -342,7 +343,7 @@ class PanSecurityRelay:
         await self.scanner.scan(ScanSource.call_tool, ScanType.scan_response, input_text, str(result_content))
 
         if result.isError:
-            raise McpRelayToolExecutionError(str(result.content))
+            log.error(str(result.content))
 
         return result
 

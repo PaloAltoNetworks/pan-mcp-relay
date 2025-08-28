@@ -18,10 +18,11 @@ import contextlib
 from typing import Any
 
 import mcp.client.session_group
+import tenacity
 from mcp import McpError, types
 from mcp.client.session_group import ServerParameters
 from pydantic import validate_call
-from tenacity import retry, retry_if_not_exception_type, stop_after_attempt
+from tenacity import retry_if_not_exception_type, stop_after_attempt
 
 from .. import utils
 
@@ -39,10 +40,11 @@ class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
         exit_stack: contextlib.AsyncExitStack | None = None,
     ) -> None:
         super().__init__(exit_stack, component_name_hook=self.component_name_hook)
+        self._server_info_to_server_name = {}
         self._session_to_server_name = {}
         self._tool_to_serverinfo = {}
 
-    @retry(retry=(retry_if_not_exception_type(McpError)), stop=stop_after_attempt(3))
+    @tenacity.retry(retry=(retry_if_not_exception_type(McpError)), stop=stop_after_attempt(3))
     async def call_tool(self, name: str, args: dict[str, Any]) -> types.CallToolResult:
         server_name = await self.get_server_name_by_tool(name)
         log_msg = f"call_tool: name={name} args={args}"
@@ -62,7 +64,8 @@ class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
     def component_name_hook(self, name: str, serverinfo: types.Implementation) -> str:
         """Custom Component Name Hook for ClientSessionGroup base class"""
         self._tool_to_serverinfo[name] = serverinfo
-        new_name = f"{serverinfo.name}:{name}"
+        server_name = self._server_info_to_server_name.get(serverinfo)
+        new_name = f"{server_name}:{name}"
         log.debug(f"component rename: {name} -> {new_name}")
         return new_name
 
@@ -78,6 +81,11 @@ class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
     ) -> mcp.ClientSession:
         """Connects to a single MCP server."""
         log.info(f"connecting to server - server_name={server_name}")
-        session = await super().connect_to_server(server_params)
+        server_info: mcp.types.Implementation
+        session: mcp.ClientSession
+        server_info, session = await self._establish_session(server_params)
+        await self.connect_with_session(server_info, session)
+
+        self._server_info_to_server_name[server_info] = server_name
         self._session_to_server_name[session] = server_name
         return session
