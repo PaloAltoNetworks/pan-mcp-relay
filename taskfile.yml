@@ -14,6 +14,8 @@ vars:
     3.9
   PUBLISH_URL_PYPI_MAIN: https://upload.pypi.org/legacy/
   PUBLISH_URL_PYPI_TEST: https://test.pypi.org/legacy/
+  RENDER_README_PORT: 20080
+  RENDER_README_HOST: "::"
 
 env:
   UV_NATIVE_TLS: true
@@ -225,12 +227,25 @@ tasks:
     desc: Render README.md using PyPi's Markdown to HTML Renderer (readme-renderer)
     deps:
       - task: readme:generate-toc
-    # language=sh
+    sources:
+      - README.md
+    generates:
+      - .local/index.html
     cmds:
       - mkdir -p .local
       - uv run --all-extras --frozen -m readme_renderer -f md README.md -o .local/index.html
-      - screen -dmS http.server .venv/bin/python3 -m http.server -d .local
-      - open http://[::]:8000
+
+  readme:view:
+    desc: Render and View README.md in a browser
+    deps:
+      - task: readme:render
+    set: [nounset, pipefail, errexit]
+    # language=sh
+    cmds:
+      - screen -dmS http.server uv run --no-sync python3 -m http.server --directory .local --bind "{{.RENDER_README_HOST}}" "{{.RENDER_README_PORT}}"
+      - echo "Sleeping for 3 seconds... we'll be right back!"
+      - sleep 3
+      - open "http://[{{.RENDER_README_HOST}}]:{{.RENDER_README_PORT}}"
       - screen -r http.server
     preconditions:
       - command -v ruff
@@ -244,6 +259,7 @@ tasks:
       - task: fmt
       - task: lint
       - task: pre-commit
+      - task: readme:render
     env:
       UV_FROZEN: 1
     # language=sh
@@ -421,7 +437,7 @@ tasks:
       - task: sync
     # language=sh
     cmds:
-      - uv run pan-mcp-relay
+      - uv run --no-sync pan-mcp-relay
     preconditions:
       - command -v uv
 
@@ -441,3 +457,16 @@ tasks:
       - uv run --script .ci/scripts/copyright.py
     preconditions:
       - command -v uv
+
+  completion:
+    desc: "Generate shell completion files"
+    env:
+      UV_FROZEN: 1
+    # language=sh
+    cmds:
+      - |
+        for shell in zsh bash fish; do
+        uv run pan-mcp-relay completion ${shell} |
+        perl -gpe 's/\n+\z/\n/gms' > completion/pan-mcp-relay.${shell}
+        done
+      - pre-commit run --files completion/*
