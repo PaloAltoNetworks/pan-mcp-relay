@@ -23,6 +23,7 @@ keywords = [
 dependencies = [
   "anyio>=4.10.0",
   "backports-strenum>=1.3.1,<2.0 ; python_full_version < '3.11'",
+  "click>=8.2.1",
   "httpx[http2]>=0.28.1",
   "mcp[cli,rich,ws]>=1.12.1",
   "pan-aisecurity>=0.4.0.5.post2",
