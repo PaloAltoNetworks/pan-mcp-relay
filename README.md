@@ -8,9 +8,12 @@ By Palo Alto Networks
 - [Overview](#overview)
   - [Prerequisites](#prerequisites)
   - [Requirements for Prisma AIRS API Usage](#requirements-for-prisma-airs-api-usage)
-- [Installation and Setup](#installation-and-setup)
-  - [Install via pypi.org](#install-via-pypiorg)
+- [Installation](#installation)
+  - [Standalone installer](#standalone-installer)
+  - [Quickstart: Install and Run via pypi.org](#quickstart-install-and-run-via-pypiorg)
+  - [Standard Install](#standard-install)
   - [Install the bleeding edge development version](#install-the-bleeding-edge-development-version)
+  - [Upgrade](#upgrade)
 - [Configuration](#configuration)
   - [MCP Relay Server Configuration](#mcp-relay-server-configuration)
     - [Configuration Precedence](#configuration-precedence)
@@ -22,6 +25,7 @@ By Palo Alto Networks
   - [pan-mcp-relay CLI Usage](#pan-mcp-relay-cli-usage)
   - [Running the Relay Server](#running-the-relay-server)
     - [stdio transport (default)](#stdio-transport-default)
+    - [Streamable HTTP transport](#streamable-http-transport)
     - [SSE transport](#sse-transport)
 - [Legal](#legal)
 
@@ -34,17 +38,19 @@ By Palo Alto Networks
 </a>
 
 `pan-mcp-relay` is a security-enhanced [Model Context Protocol](https://modelcontextprotocol.io)
-(MCP) Relay (_Proxy_) Server providing real-time AI threat protection for MCP Clients, built with the [Prisma AIRS API].
+(MCP) Relay (_Proxy_) Server providing real-time AI threat protection for MCP Clients, built with the [Prisma AIRS AI Runtime API Intercept].
 
-`pan-mcp-relay` will help protect MCP Clients such as IDE's, LLM Chat Clients and AI Agents from harmful MCP Server Tools by automatically scanning and blocking
-various threats, including prompt injections, malicious URLs, insecure outputs, AI agentic threats, sensitive data loss and more.
+`pan-mcp-relay` will help protect MCP Clients such as IDE's, LLM Chat Clients, and AI Agents from harmful MCP Server Tools by automatically scanning and blocking
+various threats, including prompt injections, malicious URLs, insecure outputs, AI agentic threats, sensitive data loss, and more.
 
 The MCP Relay scans all MCP Server tool descriptions, tool call parameters, and tool call responses.
 
 For licensing, onboarding, activation, and to obtain an API authentication key and profile name, refer to the
-[Prisma AIRS AI Runtime API Intecept] administration documentation.
+[Prisma AIRS AI Runtime: API Intercept Overview] administration documentation.
 
 ## Prerequisites
+
+Follow the following Activation and Onboarding guides:
 
 1. Create and associate a [deployment profile](https://docs.paloaltonetworks.com/ai-runtime-security/activation-and-onboarding/ai-runtime-security-api-intercept-overview/ai-deployment-profile-airs-api-intercept) for Prisma AIRS AI Runtime API intercept in your Customer Support Portal.
 2. [Onboard Prisma AIRS AI Runtime API intercept](https://docs.paloaltonetworks.com/ai-runtime-security/activation-and-onboarding/ai-runtime-security-api-intercept-overview/onboard-api-runtime-security-api-intercept-in-scm) in Strata Cloud Manager.
@@ -52,15 +58,15 @@ For licensing, onboarding, activation, and to obtain an API authentication key a
 
 ## Requirements for Prisma AIRS API Usage
 
-1. **API Key Token**: This token is generated during the onboarding process in Strata Cloud Manager (see the onboarding prerequisite step above).
-Include the API key token in all API requests using the `x-pan-token` header.
+1. **API Key**: Generate an API Key during the onboarding process in Strata Cloud Manager (see the onboarding prerequisite step above).
+  * Specify the API Key via configuration flag, environment variable or configuration file.
 2. **AI Security Profile Name**: This is the API security profile you created during the onboarding process in Strata Cloud Manager (see the prerequisite step on creating an API security profile above).
-Specify this profile name or the profile ID in the API request payload in the `ai_profile` field.
+  * Specify the profile name or the profile ID via configuration flag, environment variable, or configuration file.
 
 > [!NOTE]
 > You can manage API keys and AI security profiles in Strata Cloud Manager.
 >
-> 1. Log in to [Strata Cloud Manager](http://stratacloudmanager.paloaltonetworks.com/).
+> 1. Log in to [Strata Cloud Manager].
 > 2. Navigate to **Insights > Prisma AIRS > Prisma AIRS AI Runtime: API Intercept**.
 > 3. In the top right corner, click:
 >
@@ -68,46 +74,158 @@ Specify this profile name or the profile ID in the API request payload in the `a
 > - **Manage > Security Profiles** to fetch details or update AI security profiles.
 > - **Manage > Custom Topics** create or update custom topics for custom topic guardrails threat detections.
 >
-> For complete details, refer to adminstration guide for the section on how to [manage applications, API Keys, security profiles, and custom topics](https://docs.paloaltonetworks.com/ai-runtime-security/administration/prevent-network-security-threats/airs-apirs-manage-api-keys-profile-apps).
+> For complete details, refer to the Activation and Onboarding guides on how to [Manage Applications, API Keys, Security Profiles, and Custom Topics].
 
 <a id="installation" href="#installation">
 
-# Installation and Setup
+# Installation
 
 </a>
 
-We highly recommend using [uv](https://docs.astral.sh/uv/getting-started/installation/) over `pip` or `pipx`. Try it!
+We **_highly recommend_** using [`uv`] over `pip` or `pipx`. Try it! You'll love it.
 
-Update uv if already installed: `uv self update`
+<details><summary>Installing uv</summary>
 
-## Install via pypi.org
+See more installation methods at <https://docs.astral.sh/uv/getting-started/installation/>.
 
-Install and run `pan-mcp-relay`, showing the CLI help:
+## Standalone installer
+
+uv provides a standalone installer to download and install uv:
+
+=== "macOS and Linux"
+
+    Use `curl` to download the script and execute it with `sh`:
+
+    ```console
+    $ curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+
+    If your system doesn't have `curl`, you can use `wget`:
+
+    ```console
+    $ wget -qO- https://astral.sh/uv/install.sh | sh
+    ```
+
+    Request a specific version by including it in the URL:
+
+    ```console
+    $ curl -LsSf https://astral.sh/uv/0.8.13/install.sh | sh
+    ```
+
+=== "Windows"
+
+    Use `irm` to download the script and execute it with `iex`:
+
+    ```pwsh-session
+    PS> powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+
+    Changing the [execution policy](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-7.4#powershell-execution-policies) allows running a script from the internet.
+
+    Request a specific version by including it in the URL:
+
+    ```pwsh-session
+    PS> powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/0.8.13/install.ps1 | iex"
+    ```
+
+!!! tip
+
+    The installation script may be inspected before use:
+
+    === "macOS and Linux"
+
+        ```console
+        $ curl -LsSf https://astral.sh/uv/install.sh | less
+        ```
+
+    === "Windows"
+
+        ```pwsh-session
+        PS> powershell -c "irm https://astral.sh/uv/install.ps1 | more"
+        ```
+
+    Alternatively, the installer or binaries can be downloaded directly from [GitHub](#github-releases).
+
+
+</details>
+
+Update uv if already installed - uv releases updates frequently, so make sure you're on the latest.
+
+```
+uv self update
+```
+
+<a id="quickstart-install-and-run-via-pypi-org" href="#quickstart-install-and-run-via-pypi-org">
+
+## Quickstart: Install and Run via pypi.org
+
+</a>
+
+Install and run `pan-mcp-relay` in one line, showing the CLI help:
 
 ```sh
-uvx pan-mcp-relay --help
+uvx pan-mcp-relay@latest --help
+```
 
-# or
+> [!NOTE]
+> While this makes it easy to get started, you can get faster startup times by following the [Standard Install](#standard-install)
 
-uv tool install pan-mcp-relay
+
+<a id="standard-install" href="#standard-install">
+
+## Standard Install
+
+</a>
+
+`uv` installs to a standard location, which automatically added to your `$PATH` during uv installation.
+
+On macOS and Linux, this is usually `~/.local/bin`.
+
+```sh
+# Installs to $(uv tool dir)/pan-mcp-relay
+uv tool install pan-mcp-relay@latest
+
+# Executable symlinked to $(uv tool dir --bin)/pan-mcp-relay
 pan-mcp-relay --help
 ```
 
+
+<a id="install-the-bleeding-edge-development-version" href="#install-the-bleeding-edge-development-version">
+
 ## Install the bleeding edge development version
+
+</a>
+
 
 ```sh
 uv tool install https://github.com/PaloAltoNetworks/aisecurity-mcp-relay.git
 pan-mcp-relay --help
 ```
 
-Create an [`mcp-relay.yaml`](#configuration) configuration file containing:
-1. Prisma AIRS API Configuration
-   * Prisma AIRS API Key
-   * Prisma AIRS AI Profile
-   * Prisma AIRS API Endpoint (Optional)
-2. MCP Servers
-   * Supports stdio, SSE and HTTP MCP Servers.
-3. Run the MCP Relay Server
+
+<a id="upgrade" href="#upgrade">
+
+## Upgrade
+
+</a>
+
+If you're using `uvx pan-mcp-relay@latest`, you're already using the latest version.
+
+Update the installed version with
+
+```sh
+uv tool install --upgrade pan-mcp-relay
+```
+
+1. Install or Upgrade `pan-mcp-relay` using `uv`: `uv tool install --upgrade pan-mcp-relay`
+2. Create an [`mcp-relay.yaml`](#configuration) configuration file containing:
+   1. Prisma AIRS API Configuration
+      * Prisma AIRS API Key
+      * Prisma AIRS AI Profile
+      * [Prisma AIRS API Endpoint] (Optional, defaults to United States Prisma AIRS API Endpoint.)
+   2. MCP Servers
+      * Supports stdio, SSE, and Streamable HTTP MCP Servers.
+   3. Run the MCP Relay Server
 
 
 <a id="configuration" href="#configuration">
@@ -122,8 +240,11 @@ Create an [`mcp-relay.yaml`](#configuration) configuration file containing:
 
 </a>
 
+<a id="configuration-precedence" href="#configuration-precedence">
 
 ### Configuration Precedence
+
+</a>
 
 1. CLI Flags
 2. Environment Variables
@@ -141,7 +262,11 @@ Create an [`mcp-relay.yaml`](#configuration) configuration file containing:
 - `~/.mcp-relay.json`
 - `~/.config/pan-mcp-relay/mcp-relay.json`
 
+<a id="configuration-file-format" href="#configuration-file-format">
+
 ### Configuration File Format
+
+</a>
 
 An example MCP Relay Server configuration is available in the repository in `examples/config/mcp-relay.yaml`
 
@@ -149,7 +274,7 @@ Copy or create a new `mcp-relay.yaml` file. The only _required_ section is `mcpS
 
 ```yaml
 # mcpRelay section is optional.
-# API Key, AI Profile and API Endpoint can be specified via CLI flags or environment variables.
+# Specify API Key, AI Profile and API Endpoint via CLI flags or environment variables.
 mcpRelay:
   # Prisma AIRS API Key (required), environment variables supported
   apiKey: |
@@ -161,7 +286,7 @@ mcpRelay:
   # endpoint: |
   #  https://service.api.aisecurity.paloaltonetworks.com
 
-# mcpServers section is required, with at least one MCP Server.
+# mcpServers section requires at least one MCP Server.
 mcpServers:
   # Example / demo MCP Servers
   homebrew:
@@ -194,7 +319,7 @@ mcpServers:
 
 </a>
 
-In addition to CLI flags and the configuration file, `pan-mcp-relay` supports reading configuration through the following environment variables:
+In addition to CLI flags and the configuration file, `pan-mcp-relay` supports setting configuration through the following environment variables:
 
 ```sh
 # Required for Prisma AIRS API
@@ -203,7 +328,7 @@ PRISMA_AIRS_API_KEY=YOUR_API_KEY
 PRISMA_AIRS_AI_PROFILE=YOUR_AI_PROFILE_NAME
 
 # Optional, default is https://service.api.aisecurity.paloaltonetworks.com
-PRISMA_AIRS_API_ENDPOINT=YOUR_API_ENDPOINT
+PRISMA_AIRS_API_ENDPOINT=https://service.api.aisecurity.paloaltonetworks.com
 # See https://pan.dev/prisma-airs/scan/api/#scan-api-endpoints for additional regional API endpoints
 
 # Defaults shown for all other Environment Variables
@@ -214,14 +339,17 @@ MCP_RELAY_HOST=127.0.0.1
 # Port for SSE Transport Mode
 MCP_RELAY_TOOL_CACHE_TTL=86400
 MCP_RELAY_MAX_SERVERS=32
-MCP_RELAY_MAX_TOOLS=64
+MCP_RELAY_MAX_TOOLS=256
 # Path to optional .env file
 MCP_RELAY_DOTENV=
 # Supports $PATH-style colon-separated list and environment variables. Directory entries will search for a file named `.env`
 # MCP_RELAY_DOTENV=$HOME/.env:~/.config/pan-mcp-relay:$PWD
+
+MCP_RELAY_LOG_LEVEL=INFO
+
 ```
 
-<a id="client-configuration" href="#client-configuration">
+<a id="mcp-client-configuration" href="#mcp-client-configuration">
 
 ## MCP Client Configuration
 
@@ -235,8 +363,20 @@ Create a new config file `mcp-relay.json` to use with your MCP Client (IDE, Chat
     "pan-mcp-relay": {
       "command": "uvx",
       "args": [
-        "pan-mcp-relay"
+        "pan-mcp-relay@latest"
       ]
+    }
+  }
+}
+```
+
+For faster startup times, install/upgrade `pan-mcp-relay` using `uv tool install --upgrade pan-mcp-relay`, and use the command name directly:
+
+```json
+{
+  "mcpServers": {
+    "pan-mcp-relay": {
+      "command": "pan-mcp-relay"
     }
   }
 }
@@ -277,13 +417,11 @@ Optionally, specify additional environment variables or CLI flags:
 
 </a>
 
-The relay supports two transport mechanisms:
+The MCP Relay Server supports the standard MCP transport mechanisms:
 
 - **`stdio` Transport**: For local process communication (default)
-- **`SSE` Transport**: For HTTP-based communication using Server-Sent Events
-
-> [!NOTE]
-> Running the MCP Server in Streamable HTTP is coming soon.
+- **`Streamable` Transport**: For HTTP-based communication, supporting SSE (Server-Sent Events).
+- **`SSE` Transport**: For backwards compatibility with SSE-only MCP Clients.
 
 <a id="usage" href="#usage">
 
@@ -298,7 +436,7 @@ The relay supports two transport mechanisms:
 </a>
 
 ```terminaloutput
-uv run pan-mcp-relay --help
+pan-mcp-relay --help
 Usage: pan-mcp-relay [OPTIONS] COMMAND [ARGS]...
 
   Run the MCP Relay Server.
@@ -308,13 +446,14 @@ Options:
   -e, --api-endpoint TEXT         Prisma AIRS API Endpoint [PRISMA_AIRS_API_ENDPOINT=]
   -p, --ai-profile TEXT           Prisma AIRS AI Profile Name or ID [PRISMA_AIRS_AI_PROFILE=]
   -c, --config-file FILE          Path to configuration file (yaml, json) [MCP_RELAY_CONFIG_FILE=]
-  -t, --transport [stdio|sse]     Transport protocol to use [MCP_RELAY_TRANSPORT=]  [default: stdio]
+  -t, --transport [stdio|sse|http]
+                                  Transport protocol to use [MCP_RELAY_TRANSPORT=]  [default: stdio]
   -h, --host TEXT                 Host for HTTP/SSE server [MCP_RELAY_HOST=]  [default: 127.0.0.1]
   -p, --port INTEGER              Port for HTTP/SSE server [MCP_RELAY_PORT=]  [default: 8000]
-  -t, --tool-registry-cache-ttl INTEGER
+  -TTL, --tool-registry-cache-ttl INTEGER
                                   Tool registry cache TTL (in seconds) [MCP_RELAY_TOOL_CACHE_TTL=]  [default: 86400]
-  -m, --max-mcp-servers INTEGER   Maximum number of downstream MCP servers to allow [MCP_RELAY_MAX_SERVERS=]  [default: 32]
-  -n, --max-mcp-tools INTEGER     Maximum number of MCP tools to allow [MCP_RELAY_MAX_TOOLS=]  [default: 64]
+  -MS, --max-mcp-servers INTEGER  Maximum number of downstream MCP servers to allow [MCP_RELAY_MAX_SERVERS=]  [default: 32]
+  -MT, --max-mcp-tools INTEGER    Maximum number of MCP tools to allow [MCP_RELAY_MAX_TOOLS=]  [default: 256]
   --env TEXT                      Use ./.env file, or specify colon separated path to .env file(s)or directories containing .env files. [MCP_RELAY_DOTENV=]
   --system-ca                     Use System CA instead of Mozilla CA Bundle
   --capath FILE                   Path to Custom Trusted CA bundle
@@ -354,6 +493,18 @@ uvx pan-mcp-relay --config-file ~/.config/pan-mcp-relay/mcp-relay.yaml
 uvx pan-mcp-relay --env /var/run/secrets/.env
 ```
 
+<a id="streamable-http-transport" href="#streamable-http-transport">
+
+### Streamable HTTP transport
+
+</a>
+
+```sh
+# Run with Streamable transport
+pan-mcp-relay --transport=http
+```
+
+
 <a id="sse-transport" href="#sse-transport">
 
 ### SSE transport
@@ -362,12 +513,9 @@ uvx pan-mcp-relay --env /var/run/secrets/.env
 
 ```sh
 # Run with SSE transport
-uv run pan-mcp-relay \
-  --config-file=config.json \
-  --transport=sse \
-  --host=127.0.0.1 \
-  --port=8000
+pan-mcp-relay --transport=sse
 ```
+
 
 <a id="legal" href="#legal">
 
@@ -375,9 +523,9 @@ uv run pan-mcp-relay \
 
 </a>
 
-Copyright (c) 2025, Palo Alto Networks
+Copyright © 2025, Palo Alto Networks
 
-Licensed under the [Polyform Internal Use License 1.0.0](https://polyformproject.org/licenses/internal-use/1.0.0)
+Licensed under the [Polyform Internal Use License 1.0.0]
 (the "License"); you may not use this file except in compliance with the License.
 
 You may obtain a copy of the License at:
@@ -396,5 +544,11 @@ any kind of legal claim.
 <!---Protected_by_PANW_Code_Armor_2024 - Y3ByfC9haWZ3L29wZW5zb3VyY2UvYWlzZWN1cml0eS1tY3AtcmVsYXl8MjE5NDV8bWFpbg== --->
 
 
-[Prisma AIRS API]: https://pan.dev/prisma-airs/scan/api/
-[Prisma AIRS AI Runtime API Intecept]: https://docs.paloaltonetworks.com/ai-runtime-security/activation-and-onboarding/ai-runtime-security-api-intercept-overview
+[Prisma AIRS AI Runtime API Intercept]: <https://pan.dev/prisma-airs/scan/api/> "Prisma AIRS AI Runtime API Intercept | Develop with Palo Alto Networks"
+[Prisma AIRS AI Runtime: API Intercept Overview]: <https://docs.paloaltonetworks.com/ai-runtime-security/activation-and-onboarding/ai-runtime-security-api-intercept-overview> "Prisma AIRS AI Runtime: API Intercept Overview"
+[`uv`]: <https://docs.astral.sh/uv/getting-started/installation/> "Installation | uv"
+[uv: Installation]: <https://docs.astral.sh/uv/getting-started/installation/> "Installation | uv"
+[Strata Cloud Manager]: <http://stratacloudmanager.paloaltonetworks.com/>
+[Manage Applications, API Keys, Security Profiles, and Custom Topics]: <https://docs.paloaltonetworks.com/ai-runtime-security/administration/prevent-network-security-threats/airs-apirs-manage-api-keys-profile-apps> "Manage Applications, API Keys, Security Profiles, and Custom Topics"
+[Polyform Internal Use License 1.0.0]: <https://polyformproject.org/licenses/internal-use/1.0.0>
+[Prisma AIRS API Endpoint]: <https://pan.dev/prisma-airs/scan/api/#scan-api-endpoints> "Prisma AIRS API: Scan API Endpoints"
