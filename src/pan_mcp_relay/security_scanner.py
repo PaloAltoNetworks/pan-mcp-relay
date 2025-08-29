@@ -103,7 +103,7 @@ class SecurityScanner(BaseModel):
         ctx.minimum_version = ssl.TLSVersion.TLSv1_3
         ctx.verify_mode = ssl.CERT_REQUIRED
         ctx.check_hostname = True
-        auth = APIAuth(api_key=self.config.api_key.get_secret_value())
+        auth = APIAuth(api_key=self.config.api_key.get_secret_value().strip())
         log.debug("Creating httpx client")
         limits = httpx.Limits(keepalive_expiry=300)
         transport = httpx.AsyncHTTPTransport(verify=ctx, retries=3)
@@ -138,7 +138,7 @@ class SecurityScanner(BaseModel):
                 ai_profile_name = self.config.ai_profile
                 ai_profile = dict(profile_name=ai_profile_name)
         ai_profile_text = yaml.safe_dump(ai_profile)
-        log.info(f"Using AI Profile: {ai_profile_text}")
+        log.info(f"Using AI Profile: {ai_profile_text.strip()}")
         return ai_profile
 
     @functools.cache

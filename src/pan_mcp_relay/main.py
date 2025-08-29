@@ -29,10 +29,12 @@ import click
 import click.shell_completion
 import dotenv
 import rich.logging
+import rich.markup
 import yaml
 from click.core import ParameterSource
 from pydantic import ValidationError
 from rich import print
+from rich.syntax import Syntax
 
 from . import utils
 from ._version import __version__
@@ -57,7 +59,7 @@ from .constants import (
     TOOL_REGISTRY_CACHE_TTL_DEFAULT,
     TransportType,
 )
-from .exceptions import McpRelayBaseError, McpRelayConfigurationError
+from .exceptions import McpRelayBaseError, McpRelayConfigurationError, McpRelayConfigurationErrorGroup
 from .pan_security_relay import PanSecurityRelay
 from .server import (
     run_http_server,
@@ -142,27 +144,33 @@ def entrypoint():
         return 1
 
 
+def format_env_help(help: str, envvar: str, masked: bool = False) -> str:
+    """Format Click Option Help Text"""
+    return f"{help} [{envvar}={getenv(envvar, masked)}]"
+
+
 @click.group(context_settings=context_settings, invoke_without_command=True)
 @click.option(
     "api_key",
     "-k",
     "--api-key",
     envvar=ENV_API_KEY,
-    help=f"Prisma AIRS API Key [{ENV_API_KEY}={getenv(ENV_API_KEY, True)}]",
+    help=format_env_help("Prisma AIRS API Key", ENV_API_KEY, True),
+    # help=f"Prisma AIRS API Key [{ENV_API_KEY}={getenv(ENV_API_KEY, True)}]",
 )
 @click.option(
     "api_endpoint",
     "-e",
     "--api-endpoint",
     envvar=ENV_API_ENDPOINT,
-    help=f"Prisma AIRS API Endpoint [{ENV_API_ENDPOINT}={getenv(ENV_API_ENDPOINT)}]",
+    help=format_env_help("Prisma AIRS API Endpoint", ENV_API_ENDPOINT),
 )
 @click.option(
     "ai_profile",
     "-p",
     "--ai-profile",
     envvar=ENV_AI_PROFILE,
-    help=f"Prisma AIRS AI Profile Name or ID [{ENV_AI_PROFILE}={getenv(ENV_AI_PROFILE)}]",
+    help=format_env_help("Prisma AIRS AI Profile Name or ID", ENV_AI_PROFILE),
 )
 @click.option(
     "config_file",
@@ -170,7 +178,7 @@ def entrypoint():
     "--config-file",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     envvar=ENV_CONFIG_FILE,
-    help=f"Path to configuration file (yaml, json) [{ENV_CONFIG_FILE}={getenv(ENV_CONFIG_FILE)}]",
+    help=format_env_help("Path to configuration file (yaml, json)", ENV_CONFIG_FILE),
 )
 @click.option(
     "transport",
@@ -178,7 +186,7 @@ def entrypoint():
     "--transport",
     type=click.Choice(TransportType._member_names_),
     default="stdio",
-    help=f"Transport protocol to use [{ENV_TRANSPORT}={getenv(ENV_TRANSPORT)}]",
+    help=format_env_help("Transport protocol to use", ENV_TRANSPORT),
 )
 @click.option(
     "host", "-H", "--host", default="127.0.0.1", help=f"Host for HTTP/SSE server [{ENV_HOST}={getenv(ENV_HOST)}]"
@@ -192,7 +200,7 @@ def entrypoint():
     "--tool-registry-cache-ttl",
     type=int,
     default=TOOL_REGISTRY_CACHE_TTL_DEFAULT,
-    help=f"Tool registry cache TTL (in seconds) [{ENV_TOOL_CACHE_TTL}={getenv(ENV_TOOL_CACHE_TTL)}]",
+    help=format_env_help("Tool registry cache TTL (in seconds)", ENV_TOOL_CACHE_TTL),
 )
 @click.option(
     "max_mcp_servers",
@@ -200,7 +208,7 @@ def entrypoint():
     "--max-mcp-servers",
     type=int,
     default=MAX_MCP_SERVERS_DEFAULT,
-    help=f"Maximum number of downstream MCP servers to allow [{ENV_MAX_SERVERS}={getenv(ENV_MAX_SERVERS)}]",
+    help=format_env_help("Maximum number of downstream MCP servers to allow", ENV_MAX_SERVERS),
 )
 @click.option(
     "max_mcp_tools",
@@ -208,7 +216,7 @@ def entrypoint():
     "--max-mcp-tools",
     type=int,
     default=MAX_MCP_TOOLS_DEFAULT,
-    help=f"Maximum number of MCP tools to allow [{ENV_MAX_TOOLS}={getenv(ENV_MAX_TOOLS)}]",
+    help=format_env_help("Maximum number of MCP tools to allow", ENV_MAX_TOOLS),
 )
 @click.option(
     "dotenv",
@@ -246,7 +254,7 @@ def entrypoint():
     "--dump-config",
     envvar=ENV_SHOW_CONFIG,
     is_flag=True,
-    help=f"Show configuration and exit [{ENV_SHOW_CONFIG}={getenv(ENV_SHOW_CONFIG)}]",
+    help=format_env_help("Show configuration and exit", ENV_SHOW_CONFIG),
 )
 @click.version_option(__version__, *("--version", "-V"), message="%(version)s")
 @click.pass_context
@@ -269,21 +277,27 @@ def cli(ctx, **kwargs) -> int:
     # Clean up CLI arguments: remove empty strings and null values, expand environment variables
     for k in list(kwargs.keys()):
         if kwargs[k] is None:
+            log.debug(f"Removing None kwarg: {k}")
             del kwargs[k]
             continue
         elif isinstance(kwargs[k], str):
             if kwargs[k].strip() == "":
+                log.debug(f'Removing Empty ("") kwarg: {k}')
                 del kwargs[k]
                 continue
+            log.debug(f"Expanding kwarg: {k}={kwargs[k]}")
             kwargs[k] = expand_vars(kwargs[k])
+            log.debug(f"Expanded kwarg: {k}={kwargs[k]}")
         src = ctx.get_parameter_source(k)
         if src == ParameterSource.DEFAULT:
+            log.debug(f"Removing Default kwarg: {k}={kwargs[k]}")
             del kwargs[k]
             continue
 
     config_file: Path | None = expand_path(kwargs.get("config_file"))
     config_file = find_config_file(config_file)
     if config_file:
+        log.debug(f'Set kwarg["config_file"]={config_file}')
         kwargs["config_file"] = config_file
 
     cli_vars = {"mcpRelay": kwargs}
@@ -297,20 +311,32 @@ def cli(ctx, **kwargs) -> int:
         cli_config = Config(**cli_vars)
         file_config_data = file_config.model_dump(exclude_unset=True, exclude_none=True)
         cli_config_data = cli_config.model_dump(exclude_unset=True, exclude_none=True)
-        log.debug(f"event=merging_config\nconfig_file={file_config_data}\ncli={cli_config_data}")
+        # log.debug(f"event=merging_config\nconfig_file={file_config_data}\ncli={cli_config_data}")
         merged_config = deep_merge(
             file_config_data,
             cli_config_data,
         )
-        log.debug(f"event=merged_config merged={merged_config}")
+        # log.debug(f"event=merged_config merged={merged_config}")
         config: Config = Config(**merged_config)
-        log.debug(f"event=loaded_config config={config.model_dump(exclude_unset=True, exclude_none=True)}")
+        # log.debug(f"event=loaded_config config={config.model_dump(exclude_unset=True, exclude_none=True)}")
     except ValidationError as e:
-        err_msg = 'event="failed to validate configuration"'
-        log.exception(err_msg)
-        print(config_file_data)
-        print(cli_vars)
-        raise click.ClickException(err_msg) from e
+        yaml_config = yaml.dump(dict(config_file=config_file_data, cli=cli_vars))
+        print(Syntax(yaml_config, "yaml", background_color="default"))
+        err_msg = f'event="failed to validate configuration"\n{e}'
+        log.error(err_msg)
+        raise click.Abort()
+
+    try:
+        config.check_required()
+    except McpRelayConfigurationErrorGroup as eg:
+        as_yaml = yaml.dump(config.model_dump(mode="json"))
+        syntax = Syntax(as_yaml, "yaml", background_color="default")
+        print("[bold]# Current Configuration[/]")
+        print(syntax)
+        log.error(f"{eg.message} ({len(eg.exceptions)} errors)")
+        for e in eg.exceptions:
+            log.error(str(e))
+        raise click.Abort()
 
     ctx.obj["config"] = config
     if ctx.invoked_subcommand is None:
@@ -495,13 +521,25 @@ def find_config_file(config_path: Path | None) -> Path | None:
     return None
 
 
+def clean_values[T: dict | list | str | bool | int | float | None](data: T) -> T:
+    if isinstance(data, dict):
+        return {k: clean_values(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [clean_values(v) for v in data]
+    if isinstance(data, str):
+        return data.strip()
+    else:
+        return data
+
+
 def load_config_file(config_path) -> dict:
     with config_path.open("r") as config_fd:
         config_file_data = yaml.safe_load(config_fd)
         if not config_file_data:
             config_file_data = {}
+        config_file_data = clean_values(config_file_data)
         if not isinstance(config_file_data, dict):
-            raise click.ClickException(
+            raise McpRelayConfigurationError(
                 f'error="Invalid configuration file format" path={config_path}. expected=dict revceived={type(config_file_data)}'
             )
     log.debug(f'event="Loaded configuration file data" path={config_path} data={config_file_data}')

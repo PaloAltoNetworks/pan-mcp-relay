@@ -29,24 +29,24 @@
 mcpRelay:
   # Prisma AIRS API Key (required), environment variables supported
   # default api_key: None
-  api_key: |
+  api_key: >-
     ${PRISMA_AIRS_API_KEY}
   # AI Profile Name or ID (required), environment variables supported
   # default ai_profile: None
-  ai_profile: |
+  ai_profile: >-
     your-ai-profile-name-or-id
   # api_endpoint Optional, default shown
   # aliases: api_endpoint, apiEndpoint, ApiEndpoint, api-endpoint, apiendpoint, endpoint, Endpoint
   # default endpoint: https://service.api.aisecurity.paloaltonetworks.com
-  api_endpoint: |
+  api_endpoint: >-
     https://service.api.aisecurity.paloaltonetworks.com
   # Relay MCP Server Configuration
   # default transport: stdio
   transport: sse
   # default host: 127.0.0.1
-  host: 127.0.0.1
+  host: ${MCP_RELAY_HOST}
   # default port: 8000
-  port: 8001
+  port: 8000
   # default tool_registry_cache_ttl: 86400
   tool_registry_cache_ttl: 86400
   # default max_mcp_servers: 32
@@ -63,7 +63,7 @@ mcpServers:
     args:
       - mcp-server
     # Optional working directory, supports environment variables
-    cwd: "${HOMEBREW_PREFIX}"
+    cwd: ${HOMEBREW_PREFIX}
     # optional environment variables, inherited from the parent shell
     env:
       HOMEBREW_NO_ENV_HINTS: 1
@@ -73,12 +73,12 @@ mcpServers:
       - -y
       - '@modelcontextprotocol/server-filesystem'
       # Command line arguments support environment variables
-      - "${HOME}/.local/mcp-filesystem"
-      - "${XDG_PICTURES_DIR}"
+      - ${HOME}/.local/mcp-filesystem
+      - ${XDG_PICTURES_DIR}
     env:
       # Environment variables expansion supported
-      SOME_ENV_VAR: |
-        "${ANOTHER_ENV_VAR}
+      SOME_ENV_VAR: >-
+        ${ANOTHER_ENV_VAR}
 
   streamable-http-example:
     type: http
@@ -88,12 +88,13 @@ mcpServers:
     terminate_on_close: false
     headers:
       # Headers support Environment variable expansion
-      Authorization: "Bearer ${LOCAL_HTTP_MCP_SERVER_AUTH_TOKEN}"
+      Authorization: >-
+        Bearer ${LOCAL_HTTP_MCP_SERVER_AUTH_TOKEN}
 
   sse-http-example:
     # NOTE: "type: sse" is required for SSE MCP Servers
     type: sse
-    url: "https://localhost:3001/sse"
+    url: https://localhost:3001/sse
     timeout: 30
     sse_read_timeout: 30
     headers:

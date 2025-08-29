@@ -29,6 +29,17 @@ from .. import utils
 log = utils.get_logger(__name__)
 
 
+def serverinfo_str(serverinfo: types.Implementation) -> str:
+    fields: list[str] = []
+    if serverinfo.name:
+        fields.append(serverinfo.name)
+    if serverinfo.title:
+        fields.append(serverinfo.title)
+    if serverinfo.version:
+        fields.append(serverinfo.version)
+    return ":".join(fields)
+
+
 class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
     _session_to_server_name: dict[mcp.ClientSession, str]
     """Lookup Server Name by mcp.ClientSession"""
@@ -64,7 +75,7 @@ class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
     def component_name_hook(self, name: str, serverinfo: types.Implementation) -> str:
         """Custom Component Name Hook for ClientSessionGroup base class"""
         self._tool_to_serverinfo[name] = serverinfo
-        server_name = self._server_info_to_server_name.get(serverinfo)
+        server_name = self._server_info_to_server_name.get(serverinfo_str(serverinfo))
         new_name = f"{server_name}:{name}"
         log.debug(f"component rename: {name} -> {new_name}")
         return new_name
@@ -86,6 +97,6 @@ class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
         server_info, session = await self._establish_session(server_params)
         await self.connect_with_session(server_info, session)
 
-        self._server_info_to_server_name[server_info] = server_name
+        self._server_info_to_server_name[serverinfo_str(server_info)] = server_name
         self._session_to_server_name[session] = server_name
         return session

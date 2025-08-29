@@ -94,9 +94,9 @@ class RelayClient(BaseModel):
         All parameter values are subject to environment variable expansion.
         """
         # Prepare environment variables
-        env: dict[str, str] = os.environ.copy()
+        env: dict[str, str | int | float | bool] = os.environ.copy()
         if self.config.env:
-            env.update(self.config["env"])
+            env.update(self.config.env)
         command = self.config.command
         if not command:
             err_msg = f"invalid MCP server configuration: {self.name} (missing command)"
@@ -107,6 +107,8 @@ class RelayClient(BaseModel):
         for k, v in config_env.items():
             if v is None:
                 continue
+            if not isinstance(v, str):
+                v = str(v)
             v = v.strip()
             if v:
                 env[k] = string.Template(v).safe_substitute(os.environ)

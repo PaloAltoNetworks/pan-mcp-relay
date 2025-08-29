@@ -30,6 +30,8 @@ API_DOMAIN = "api.aisecurity.paloaltonetworks.com"
 API_ENDPOINT_RE = r"^https://service(?:-[a-z]{2}|\.[a-z]{2,3})?\." + re.escape(API_DOMAIN) + r"/?$"
 DEFAULT_API_ENDPOINT = f"https://service.{API_DOMAIN}"
 
+ENV_VAR_RE = re.compile(r"[^\n]*(\${\w+}|\$\w+)")
+
 # Environment Variables
 
 API_PREFIX = "PRISMA_AIRS"

@@ -52,9 +52,11 @@ import anyio
 import mcp
 import mcp.types as types
 import yaml
-from mcp.client.session_group import ServerParameters
+from mcp import StdioServerParameters
+from mcp.client.session_group import ServerParameters, SseServerParameters, StreamableHttpParameters
 from mcp.server.lowlevel import Server
 from pydantic import validate_call
+from rich.syntax import Syntax
 
 from . import utils
 from .client import RelayClient
@@ -108,13 +110,6 @@ class PanSecurityRelay:
         self._client_session_group = client_session_group
         self._exit_stack.enter_async_context(client_session_group.__aenter__)
         self._exit_stack.push_async_exit(client_session_group.__aexit__)
-
-        if len(self.mcp_servers_config) == 0:
-            raise McpRelayConfigurationError("No MCP servers configured.")
-        elif len(self.mcp_servers_config) >= self.config.max_mcp_servers:
-            raise McpRelayConfigurationError(
-                f"MCP servers configuration limit exceeded, maximum allowed: {self.config.max_mcp_servers}"
-            )
 
     async def __aenter__(self) -> Self:
         return self
@@ -194,8 +189,14 @@ class PanSecurityRelay:
                 session = await self._client_session_group.connect_to_server_with_name(server_name, server_params)
                 client_sessions.append((server_name, session))
             except mcp.McpError as e:
-                log.error(f"Failed starting server: {server_name}: {e}")
-                log.error(server_params)
+                log.error(f"Failed starting server '{server_name}': {e}")
+                match server_params:
+                    case StdioServerParameters():
+                        log.error(
+                            f"command={server_params.command}, args={server_params.args}, cwd={server_params.cwd}"
+                        )
+                    case SseServerParameters() | StreamableHttpParameters():
+                        log.error(f"url={server_params.url}")
 
         for server_name, server_config in self.mcp_servers_config.items():
             client = RelayClient(name=server_name, config=server_config)
@@ -232,7 +233,9 @@ class PanSecurityRelay:
             # Security scan
             tool_info_dict = internal_tool.model_dump(mode="json", exclude_none=True, exclude_unset=True)
             tool_info_yaml = yaml.dump(tool_info_dict, sort_keys=False)
-            log.debug(f"Scanning Tool Description:\n{tool_info_yaml!s}")
+            yaml_syntax = Syntax(tool_info_yaml, "yaml")
+
+            log.debug(f"[bold]Scanning Tool Description:[/bold]\n{yaml_syntax}", extra=dict(markup=True))
             try:
                 await self.scanner.scan(
                     source=ScanSource.prepare_tool, scan_type=ScanType.scan_tool, prompt=tool_info_yaml, response=None
