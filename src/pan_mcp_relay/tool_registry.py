@@ -85,6 +85,7 @@ class ToolRegistry(BaseModel):
             log.warning("Update registry failed: no tools found")
 
         log.debug(f"Updating tool registry with {len(tools)} internal tools")
+        log.info(f"wenfu test tools: {tools}")
         try:
             self.tools = tools
             self.update_available_tools()
@@ -128,10 +129,10 @@ class ToolRegistry(BaseModel):
             bool: True if the registry is outdated (past expiry time), False otherwise
         """
         time_elapsed = datetime.now() - self.last_update
-        is_oudated = time_elapsed > timedelta(seconds=self.refresh_interval)
-        if is_oudated:
+        is_outdated = time_elapsed > timedelta(seconds=self.refresh_interval)
+        if is_outdated:
             log.debug("tool registry cache expired ({time_elapsed})")
-        return is_oudated
+        return is_outdated
 
     def get_available_tools(self) -> dict[str, InternalTool]:
         """

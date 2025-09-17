@@ -15,6 +15,7 @@
 # any kind of legal claim.
 
 import contextlib
+import re
 from typing import Any
 
 import mcp.client.session_group
@@ -32,17 +33,19 @@ log = utils.get_logger(__name__)
 class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
     _session_to_server_name: dict[mcp.ClientSession, str]
     """Lookup Server Name by mcp.ClientSession"""
-    _tool_to_serverinfo: dict[str, types.Implementation]
+    # _tool_to_serverinfo: dict[str, types.Implementation]
     """Lookup Server info by Tool Name"""
 
     def __init__(
         self,
         exit_stack: contextlib.AsyncExitStack | None = None,
     ) -> None:
+        # super().__init__(exit_stack)
         super().__init__(exit_stack, component_name_hook=self.component_name_hook)
-        self._server_info_to_server_name = {}
+        # self._server_info_to_server_name = {}
+        # self._server_name_to_server_info = {}
         self._session_to_server_name = {}
-        self._tool_to_serverinfo = {}
+        # self._tool_to_serverinfo = {}
 
     @tenacity.retry(retry=(retry_if_not_exception_type(McpError)), stop=stop_after_attempt(3))
     async def call_tool(self, name: str, args: dict[str, Any]) -> types.CallToolResult:
@@ -63,11 +66,23 @@ class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
 
     def component_name_hook(self, name: str, serverinfo: types.Implementation) -> str:
         """Custom Component Name Hook for ClientSessionGroup base class"""
-        self._tool_to_serverinfo[name] = serverinfo
-        server_name = self._server_info_to_server_name.get(serverinfo)
-        new_name = f"{server_name}:{name}"
-        log.debug(f"component rename: {name} -> {new_name}")
+        log.info(f"wenfu test: component_name_hook={name} serverinfo={serverinfo.model_dump_json()}")
+        # self._tool_to_serverinfo[name] = serverinfo
+        # server_name = self._server_info_to_server_name.get(serverinfo.model_dump_json())
+        server_name = self.format_server_name(serverinfo.name)
+        new_name = f"{server_name}.{name}"
+        log.info(f"component rename: {name} -> {new_name}")
         return new_name
+
+    @staticmethod
+    def format_server_name(raw_name: str) -> str:
+        # Lowercase and trim whitespace
+        lower_namer = raw_name.strip().lower()
+        # Replace anything not a-z or 0-9 with '-'
+        clean_name = re.sub(r"[^a-z0-9]", "-", lower_namer)
+        # Collapse multiple '-' and trim
+        formatted_name = re.sub(r"-{2,}", "-", clean_name).strip("-")
+        return formatted_name
 
     @validate_call
     async def connect_to_server(self, server_params: ServerParameters) -> NotImplementedError:
@@ -85,7 +100,9 @@ class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
         session: mcp.ClientSession
         server_info, session = await self._establish_session(server_params)
         await self.connect_with_session(server_info, session)
+        # listToolResult = await session.list_tools()
+        # log.info(f"connecting to server - list_tools={listToolResult.model_dump_json()}")
 
-        self._server_info_to_server_name[server_info] = server_name
+        # self._server_info_to_server_name[server_info.model_dump_json()] = server_name
         self._session_to_server_name[session] = server_name
         return session

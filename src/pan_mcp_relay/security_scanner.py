@@ -42,6 +42,7 @@ from .constants import (
     SYNC_SCAN_PATH,
 )
 from .exceptions import McpRelayScanError, McpRelaySecurityBlockError, ScanApiAuthenticationError, ScanApiInternalError
+from .models import ToolScanResponse
 
 log = utils.get_logger(__name__)
 
@@ -212,8 +213,10 @@ class SecurityScanner(BaseModel):
             log.exception("Failed to parse scan response")
             raise McpRelayScanError("Security Scan Failed JSON Decoding") from de
         except ValidationError as ve:
+            # todo change raised error
             log.exception("Failed to validate scan response schema")
             raise McpRelaySecurityBlockError("Security Scan Failed") from ve
+
 
         action = scan_response.action
 
@@ -239,6 +242,209 @@ class SecurityScanner(BaseModel):
             )
 
         return scan_response
+
+    @validate_call
+    @tenacity.retry(
+        reraise=True,
+        retry=tenacity.retry_if_not_exception_type((ScanApiAuthenticationError, McpRelaySecurityBlockError)),
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(2),
+    )
+    async def scan_list_tools(
+        self,
+        server_name: str,
+        output_data: str | None = None,
+    ) -> ScanResponse | None:
+        scan_label = f"mcp-relay.{ScanSource.prepare_tool}"
+
+        utc_dt = datetime.datetime.now(datetime.UTC)  # UTC time
+        dt: datetime.datetime = utc_dt.astimezone()  # local time
+
+        tr_id = scan_label + dt.isoformat()
+        ai_profile = self.ai_profile()
+        metadata = self.metadata()
+
+        tool_metadata = dict(ecosystem="mcp")
+        # if call or list
+        tool_metadata["method"] = "tools/list"
+        tool_metadata["server_name"] = server_name
+        tool_event: dict[str, Any] = dict(metadata=tool_metadata)
+        tool_event["output"] = output_data
+
+        content = dict(tool_event=tool_event)
+
+        body = dict(tr_id=tr_id, ai_profile=ai_profile, metadata=metadata, contents=[content])
+        body_json = json.dumps(body)
+        log.info(f"wenfu debug: body_json {body_json}")
+        body_checksum = hashlib.sha256(body_json.encode("utf-8")).hexdigest()[:8]
+        log.debug(f"{scan_label}: POST {self.client.base_url}+{SYNC_SCAN_PATH} (checksum: {body_checksum})")
+        try:
+            scan_result: httpx.Response = await self.client.post(
+                SYNC_SCAN_PATH,
+                json=body,
+            )
+            scan_result.raise_for_status()
+            scan_response_data = scan_result.json()
+            log.info(f"wenfu debug: scan_response_data: {scan_response_data}")
+            tool_scan_response = ToolScanResponse(**scan_response_data)
+            log.info(f"wenfu debug: tool_scan_response: {tool_scan_response}")
+        except httpx.HTTPStatusError as se:
+            response_data: dict | None = None
+            response_body: bytes | None = None
+            api_error: str | None = None
+            try:
+                response_data = se.response.json()
+            except JSONDecodeError:
+                response_body = se.response.content
+            if response_data:
+                api_error = response_data.get("error", {}).get("message", None)
+            if api_error is None:
+                api_error = "Unknown Error"
+                log.debug(response_body)
+            api_error = f"{api_error} ({se.response.status_code})"
+            if se.response.status_code in [http.HTTPStatus.UNAUTHORIZED, http.HTTPStatus.FORBIDDEN]:
+                raise ScanApiAuthenticationError(api_error) from se
+            elif se.response.status_code > 500:
+                raise ScanApiInternalError(api_error) from se
+            log.exception(f"Failed to execute scan request: {se}")
+            raise McpRelayScanError("Security Scan Failed") from se
+        except JSONDecodeError as de:
+            log.exception("Failed to parse scan response")
+            raise McpRelayScanError("Security Scan Failed JSON Decoding") from de
+        except ValidationError as ve:
+            # todo change raised error
+            log.exception("Failed to validate scan response schema")
+            raise McpRelaySecurityBlockError("Security Scan Failed") from ve
+
+
+        action = tool_scan_response.action
+
+        log.debug(tool_scan_response.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True))
+
+        log_msg = f"{scan_label}: action={action} (checksum: {body_checksum})"
+
+        if action == "allow":
+            log.info(
+                f"[bold green]{log_msg}[/bold green] scan_id={tool_scan_response.scan_id}",
+                extra=dict(markup=True),
+            )
+        elif action == "block":
+            log.warning(
+                f"[bold red]{log_msg}[/bold red] scan_id={tool_scan_response.scan_id}",
+                extra=dict(markup=True),
+            )
+            # raise McpRelaySecurityBlockError(f"tools/call was blocked")
+        else:
+            log.error(
+                f"[bold orange]UNKNOWN ACTION:{action}, tools/call[/bold orange]",
+                extra=dict(markup=True),
+            )
+
+        return tool_scan_response
+
+    @validate_call
+    @tenacity.retry(
+        reraise=True,
+        retry=tenacity.retry_if_not_exception_type((ScanApiAuthenticationError, McpRelaySecurityBlockError)),
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(2),
+    )
+    async def scan_call_tool(
+        self,
+        tool_name: str,
+        input_data: str | None = None,
+        output_data: str | None = None,
+    ) -> ScanResponse | None:
+        scan_label = f"mcp-relay.{ScanSource.call_tool}"
+
+        utc_dt = datetime.datetime.now(datetime.UTC)  # UTC time
+        dt: datetime.datetime = utc_dt.astimezone()  # local time
+
+        tr_id = scan_label + dt.isoformat()
+        ai_profile = self.ai_profile()
+        metadata = self.metadata()
+
+        tool_metadata = dict(ecosystem="mcp")
+        # if call or list
+        tool_metadata["method"] = "tools/call"
+        tool_metadata["server_name"] = tool_name.split(".", 1)[0]
+        tool_metadata["tool_invoked"] = tool_name.split(".", 1)[1]
+        tool_event: dict[str, Any] = dict(metadata=tool_metadata)
+        if input_data:
+            tool_event["input"] = input_data
+        if output_data:
+            tool_event["output"] = output_data
+
+        content = dict(tool_event=tool_event)
+
+        body = dict(tr_id=tr_id, ai_profile=ai_profile, metadata=metadata, contents=[content])
+        body_json = json.dumps(body)
+        log.info(f"wenfu debug: body_json {body_json}")
+        body_checksum = hashlib.sha256(body_json.encode("utf-8")).hexdigest()[:8]
+        log.debug(f"{scan_label}: POST {self.client.base_url}+{SYNC_SCAN_PATH} (checksum: {body_checksum})")
+        try:
+            scan_result: httpx.Response = await self.client.post(
+                SYNC_SCAN_PATH,
+                json=body,
+            )
+            scan_result.raise_for_status()
+            scan_response_data = scan_result.json()
+            log.info(f"wenfu debug: scan_response_data: {scan_response_data}")
+            tool_scan_response = ToolScanResponse(**scan_response_data)
+            log.info(f"wenfu debug: tool_scan_response: {tool_scan_response}")
+        except httpx.HTTPStatusError as se:
+            response_data: dict | None = None
+            response_body: bytes | None = None
+            api_error: str | None = None
+            try:
+                response_data = se.response.json()
+            except JSONDecodeError:
+                response_body = se.response.content
+            if response_data:
+                api_error = response_data.get("error", {}).get("message", None)
+            if api_error is None:
+                api_error = "Unknown Error"
+                log.debug(response_body)
+            api_error = f"{api_error} ({se.response.status_code})"
+            if se.response.status_code in [http.HTTPStatus.UNAUTHORIZED, http.HTTPStatus.FORBIDDEN]:
+                raise ScanApiAuthenticationError(api_error) from se
+            elif se.response.status_code > 500:
+                raise ScanApiInternalError(api_error) from se
+            log.exception(f"Failed to execute scan request: {se}")
+            raise McpRelayScanError("Security Scan Failed") from se
+        except JSONDecodeError as de:
+            log.exception("Failed to parse scan response")
+            raise McpRelayScanError("Security Scan Failed JSON Decoding") from de
+        except ValidationError as ve:
+            # todo change raised error
+            log.exception("Failed to validate scan response schema")
+            raise McpRelaySecurityBlockError("Security Scan Failed") from ve
+
+
+        action = tool_scan_response.action
+
+        log.debug(tool_scan_response.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True))
+
+        log_msg = f"{scan_label}: action={action} (checksum: {body_checksum})"
+
+        if action == "allow":
+            log.info(
+                f"[bold green]{log_msg}[/bold green] scan_id={tool_scan_response.scan_id}",
+                extra=dict(markup=True),
+            )
+        elif action == "block":
+            log.warning(
+                f"[bold red]{log_msg}[/bold red] scan_id={tool_scan_response.scan_id}",
+                extra=dict(markup=True),
+            )
+            raise McpRelaySecurityBlockError(f"tools/call was blocked")
+        else:
+            log.error(
+                f"[bold orange]UNKNOWN ACTION:{action}, tools/call[/bold orange]",
+                extra=dict(markup=True),
+            )
+
+        return tool_scan_response
 
 
 @functools.cache

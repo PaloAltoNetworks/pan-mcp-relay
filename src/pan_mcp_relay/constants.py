@@ -26,9 +26,31 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Final
 
+
+# =============================================================================
+# FAILURE POLICY TYPES
+# =============================================================================
+
+
+
+class FailurePolicy(StrEnum):
+    FAIL_CLOSED = "fail_closed"
+    FAIL_OPEN = "fail_open"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            value = value.lower()
+            for member in cls:
+                if member.value == value:
+                    return member
+        return None
+
+
 API_DOMAIN = "api.aisecurity.paloaltonetworks.com"
 API_ENDPOINT_RE = r"^https://service(?:-[a-z]{2}|\.[a-z]{2,3})?\." + re.escape(API_DOMAIN) + r"/?$"
 DEFAULT_API_ENDPOINT = f"https://service.{API_DOMAIN}"
+DEFAULT_FAILURE_POLICY = FailurePolicy.FAIL_OPEN
 
 # Environment Variables
 

@@ -41,6 +41,7 @@ risks, and provides a unified interface for clients while enforcing security pol
 
 import asyncio
 import functools
+import json
 from collections import deque
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -61,7 +62,7 @@ from .client import RelayClient
 from .client.session_group import RelaySessionGroup
 from .configuration import McpRelayConfig, McpServerType
 from .constants import (
-    MCP_RELAY_NAME,
+    MCP_RELAY_NAME, FailurePolicy,
 )
 from .exceptions import (
     McpRelayBaseError,
@@ -109,6 +110,7 @@ class PanSecurityRelay:
         self._exit_stack.enter_async_context(client_session_group.__aenter__)
         self._exit_stack.push_async_exit(client_session_group.__aexit__)
 
+        self._client_session_group.tools
         if len(self.mcp_servers_config) == 0:
             raise McpRelayConfigurationError("No MCP servers configured.")
         elif len(self.mcp_servers_config) >= self.config.max_mcp_servers:
@@ -174,6 +176,7 @@ class PanSecurityRelay:
             # Collect individual server tool lists
             await self._initialize_relay_clients()
             tools: dict[str, types.Tool] = self._client_session_group.tools
+            log.info(f"wenfu test: tools: dict[str, types.Tool] {tools}")
             all_tools: dict[str, InternalTool] = await self._scan_tools(tools)
 
         except Exception:
@@ -196,6 +199,9 @@ class PanSecurityRelay:
             except mcp.McpError as e:
                 log.error(f"Failed starting server: {server_name}: {e}")
                 log.error(server_params)
+            # except Exception as e:
+            #     log.error(f"Unexpected error connecting to server {server_name}: {e}")
+                # raise
 
         for server_name, server_config in self.mcp_servers_config.items():
             client = RelayClient(name=server_name, config=server_config)
@@ -234,15 +240,24 @@ class PanSecurityRelay:
             tool_info_yaml = yaml.dump(tool_info_dict, sort_keys=False)
             log.debug(f"Scanning Tool Description:\n{tool_info_yaml!s}")
             try:
-                await self.scanner.scan(
-                    source=ScanSource.prepare_tool, scan_type=ScanType.scan_tool, prompt=tool_info_yaml, response=None
+                # await self.scanner.scan(
+                #     source=ScanSource.prepare_tool, scan_type=ScanType.scan_tool, prompt=tool_info_yaml, response=None
+                # )
+                json_str = json.dumps(
+                    [internal_tool.model_dump(by_alias=True, exclude_none=True)],
+                    ensure_ascii=False
                 )
+                await self.scanner.scan_list_tools(server_name=internal_tool.name.split(".", 1)[0], output_data=json_str)
             except McpRelaySecurityBlockError:
                 internal_tool.state = ToolState.DISABLED_SECURITY_RISK
                 log.warning(f"Tool {internal_tool.name} Blocked by Security Scan")
             except McpRelayScanError:
                 log.error(f"Security Scan Failed for tool: {internal_tool.name}")
-                internal_tool.state = ToolState.DISABLED_ERROR
+                if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:
+                    internal_tool.state = ToolState.DISABLED_ERROR
+                else:
+                    # self.config.failure_policy == FailurePolicy.FAIL_OPEN
+                    internal_tool.state = ToolState.ENABLED
             else:
                 internal_tool.state = ToolState.ENABLED
         else:
@@ -308,10 +323,10 @@ class PanSecurityRelay:
 
         # Process each tool
         for tool_name, tool in self.tool_registry.get_available_tools().items():
-            log.debug(f"Processing tool: {tool_name}")
+            log.info(f"Processing tool: {tool_name}")
             available_tool_list.append(tool.to_mcp_tool())
 
-        log.debug(f"total tools: {len(available_tool_list)}")
+        log.info(f"total tools: {len(available_tool_list)}")
         return available_tool_list
 
     @validate_call
@@ -322,11 +337,22 @@ class PanSecurityRelay:
 
         # Scan the request for security issues
         # Raises McpRelaySecurityBlockError if AI Profile blocked content
-        await self.scanner.scan(ScanSource.call_tool, ScanType.scan_request, input_text)
+        try:
+            # todo wenfu fail open/close
+            await self.scanner.scan_call_tool(tool_name=name, input_data=input_text)
+            # await self.scanner.scan(ScanSource.call_tool, ScanType.scan_request, input_text)
+        except McpRelaySecurityBlockError:
+            log.warning(f"CallTool {name} input Blocked by Security Scan")
+            raise
+        except McpRelayScanError:
+            log.error(f"Security Scan Failed for CallTool {name}")
+            if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:
+                raise
 
         # Get the server for this tool
+        log.info("wenfu test log: before available tools")
         available_tools = self.tool_registry.get_available_tools()
-
+        log.info(f"wenfu test log: before available tools {available_tools}")
         if name not in available_tools:
             err_msg = f"Unknown tool: {name}"
             log.error(err_msg)
@@ -340,7 +366,16 @@ class PanSecurityRelay:
 
         result_content = self.extract_text_content(result.content)
 
-        await self.scanner.scan(ScanSource.call_tool, ScanType.scan_response, input_text, str(result_content))
+        try:
+            # await self.scanner.scan(ScanSource.call_tool, ScanType.scan_response, input_text, str(result_content))
+            await self.scanner.scan_call_tool(tool_name=name, input_data=input_text, output_data=str(result_content))
+        except McpRelaySecurityBlockError:
+            log.warning(f"CallTool {name} output Blocked by Security Scan")
+            raise
+        except McpRelayScanError:
+            log.error(f"Security Scan Failed for CallTool {name}")
+            if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:
+                raise
 
         if result.isError:
             log.error(str(result.content))

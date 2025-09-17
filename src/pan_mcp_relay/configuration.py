@@ -35,10 +35,11 @@ from pydantic.types import PathType
 from .constants import (
     API_ENDPOINT_RE,
     DEFAULT_API_ENDPOINT,
+    DEFAULT_FAILURE_POLICY,
     MAX_MCP_SERVERS_DEFAULT,
     MAX_MCP_TOOLS_DEFAULT,
     TOOL_REGISTRY_CACHE_TTL_DEFAULT,
-    TransportType,
+    TransportType, FailurePolicy,
 )
 from .exceptions import McpRelayConfigurationError
 from .utils import expand_vars, get_logger
@@ -98,6 +99,15 @@ class McpRelayConfig(BaseModel):
         description="Prisma AIRS API Endpoint",
         pattern=API_ENDPOINT_RE,
         validation_alias=make_validation_aliases("api_endpoint", "endpoint"),
+    )
+    failure_policy: FailurePolicy = Field(
+        default=DEFAULT_FAILURE_POLICY,
+        description="Prisma AIRS Failure Policy",
+        validation_alias=make_validation_aliases(
+            "failure_policy",
+            "fail_strategy",
+            "error_handling_mode",
+        ),
     )
 
     config_file: Path | None = Field(
