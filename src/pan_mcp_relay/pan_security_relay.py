@@ -76,7 +76,7 @@ from .exceptions import (
     McpRelayToolExecutionError,
     McpRelayToolNotFoundError,
 )
-from .security_scanner import SecurityScanner, ScanSourceMethod
+from .security_scanner import ScanSourceMethod, SecurityScanner
 from .tool import InternalTool, ToolState
 from .tool_registry import ToolRegistry
 
@@ -343,7 +343,7 @@ class PanSecurityRelay:
             )
             if response.action == "block":
                 log.warning(f"CallTool {name} input Blocked by Security Scan")
-                raise McpRelaySecurityBlockError(f"CallTool input was blocked")
+                raise McpRelaySecurityBlockError("CallTool input was blocked")
         except McpRelayScanError:
             log.error(f"Security Scan Failed for CallTool {name}")
             if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:
@@ -374,7 +374,7 @@ class PanSecurityRelay:
             )
             if response.action == "block":
                 log.warning(f"CallTool {name} output Blocked by Security Scan")
-                raise McpRelaySecurityBlockError(f"CallTool output was blocked")
+                raise McpRelaySecurityBlockError("CallTool output was blocked")
         except McpRelayScanError:
             log.error(f"Security Scan Failed for CallTool {name}")
             if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:

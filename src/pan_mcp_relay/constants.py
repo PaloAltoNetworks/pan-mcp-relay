@@ -22,11 +22,9 @@ Constants are organized into logical groups for better maintainability and clari
 """
 
 import re
-
 from datetime import datetime
 from enum import StrEnum
 from typing import Final
-
 
 # =============================================================================
 # FAILURE POLICY TYPES
