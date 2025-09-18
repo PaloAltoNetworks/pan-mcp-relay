@@ -69,19 +69,20 @@ class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
         log.info(f"wenfu test: component_name_hook={name} serverinfo={serverinfo.model_dump_json()}")
         # self._tool_to_serverinfo[name] = serverinfo
         # server_name = self._server_info_to_server_name.get(serverinfo.model_dump_json())
-        server_name = self.format_server_name(serverinfo.name)
-        new_name = f"{server_name}.{name}"
+        server_name = self.format_name(serverinfo.name)
+        tool_name = self.format_name(name)
+        new_name = f"{server_name}.{tool_name}"
         log.info(f"component rename: {name} -> {new_name}")
         return new_name
 
     @staticmethod
-    def format_server_name(raw_name: str) -> str:
+    def format_name(raw_name: str) -> str:
         # Lowercase and trim whitespace
         lower_namer = raw_name.strip().lower()
         # Replace anything not a-z or 0-9 with '-'
-        clean_name = re.sub(r"[^a-z0-9]", "-", lower_namer)
+        clean_name = re.sub(r"[^a-z0-9]", "_", lower_namer)
         # Collapse multiple '-' and trim
-        formatted_name = re.sub(r"-{2,}", "-", clean_name).strip("-")
+        formatted_name = re.sub(r"-{2,}", "_", clean_name).strip("_")
         return formatted_name
 
     @validate_call
@@ -104,5 +105,5 @@ class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
         # log.info(f"connecting to server - list_tools={listToolResult.model_dump_json()}")
 
         # self._server_info_to_server_name[server_info.model_dump_json()] = server_name
-        self._session_to_server_name[session] = server_name
+        self._session_to_server_name[session] = self.format_name(server_name)
         return session

@@ -73,7 +73,7 @@ from .exceptions import (
     McpRelayToolExecutionError,
     McpRelayToolNotFoundError,
 )
-from .security_scanner import ScanSource, ScanType, SecurityScanner
+from .security_scanner import SecurityScanner, ScanSourceMethod
 from .tool import InternalTool, ToolState
 from .tool_registry import ToolRegistry
 
@@ -234,23 +234,25 @@ class PanSecurityRelay:
             **tool.model_dump(exclude_unset=True, exclude_none=True, exclude={"name"}),
         )
         known_tool = self.tool_registry.get_tool_by_hash(internal_tool.sha256_hash)
+        server_name = await self._client_session_group.get_server_name_by_tool(internal_tool.name)
         if known_tool is None:
             # Security scan
             tool_info_dict = internal_tool.model_dump(mode="json", exclude_none=True, exclude_unset=True)
             tool_info_yaml = yaml.dump(tool_info_dict, sort_keys=False)
             log.debug(f"Scanning Tool Description:\n{tool_info_yaml!s}")
+            tool_info = json.dumps(
+                [internal_tool.model_dump(mode="json", by_alias=True, exclude_none=True, exclude_unset=True)],
+                ensure_ascii=False
+            )
+            log.info(f"wenfu debug: list tools:\n{tool_info}")
             try:
-                # await self.scanner.scan(
-                #     source=ScanSource.prepare_tool, scan_type=ScanType.scan_tool, prompt=tool_info_yaml, response=None
-                # )
-                json_str = json.dumps(
-                    [internal_tool.model_dump(by_alias=True, exclude_none=True)],
-                    ensure_ascii=False
-                )
-                await self.scanner.scan_list_tools(server_name=internal_tool.name.split(".", 1)[0], output_data=json_str)
-            except McpRelaySecurityBlockError:
-                internal_tool.state = ToolState.DISABLED_SECURITY_RISK
-                log.warning(f"Tool {internal_tool.name} Blocked by Security Scan")
+                response = await self.scanner.scan_tool_event(
+                    server_name=server_name,
+                    method=ScanSourceMethod.list_tools,
+                    output_data=tool_info)
+                if response.action == "block":
+                    internal_tool.state = ToolState.DISABLED_SECURITY_RISK
+                    log.warning(f"Tool {internal_tool.name} Blocked by Security Scan")
             except McpRelayScanError:
                 log.error(f"Security Scan Failed for tool: {internal_tool.name}")
                 if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:
@@ -332,18 +334,20 @@ class PanSecurityRelay:
     @validate_call
     async def _call_tool(self, name: str, arguments: dict[str, Any]) -> types.CallToolResult:
         """Handle tool execution requests."""
-        input_data = {name: arguments}
-        input_text = yaml.safe_dump(input_data, sort_keys=False)
+        input_data = yaml.safe_dump(arguments, sort_keys=False)
+        server_name = self._client_session_group.get_server_name_by_tool_name(name)
 
         # Scan the request for security issues
         # Raises McpRelaySecurityBlockError if AI Profile blocked content
         try:
-            # todo wenfu fail open/close
-            await self.scanner.scan_call_tool(tool_name=name, input_data=input_text)
-            # await self.scanner.scan(ScanSource.call_tool, ScanType.scan_request, input_text)
-        except McpRelaySecurityBlockError:
-            log.warning(f"CallTool {name} input Blocked by Security Scan")
-            raise
+            response = await self.scanner.scan_tool_event(
+                method=ScanSourceMethod.call_tool,
+                server_name=server_name,
+                tool_name=name,
+                input_data=input_data)
+            if response.action == "block":
+                log.warning(f"CallTool {name} input Blocked by Security Scan")
+                raise McpRelaySecurityBlockError(f"CallTool input was blocked")
         except McpRelayScanError:
             log.error(f"Security Scan Failed for CallTool {name}")
             if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:
@@ -367,11 +371,15 @@ class PanSecurityRelay:
         result_content = self.extract_text_content(result.content)
 
         try:
-            # await self.scanner.scan(ScanSource.call_tool, ScanType.scan_response, input_text, str(result_content))
-            await self.scanner.scan_call_tool(tool_name=name, input_data=input_text, output_data=str(result_content))
-        except McpRelaySecurityBlockError:
-            log.warning(f"CallTool {name} output Blocked by Security Scan")
-            raise
+            response = await self.scanner.scan_tool_event(
+                method=ScanSourceMethod.call_tool,
+                server_name=server_name,
+                tool_name=name,
+                input_data=input_text,
+                output_data=str(result_content))
+            if response.action == "block":
+                log.warning(f"CallTool {name} output Blocked by Security Scan")
+                raise McpRelaySecurityBlockError(f"CallTool output was blocked")
         except McpRelayScanError:
             log.error(f"Security Scan Failed for CallTool {name}")
             if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:
