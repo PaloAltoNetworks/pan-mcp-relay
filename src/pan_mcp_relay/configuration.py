@@ -39,7 +39,8 @@ from .constants import (
     MAX_MCP_SERVERS_DEFAULT,
     MAX_MCP_TOOLS_DEFAULT,
     TOOL_REGISTRY_CACHE_TTL_DEFAULT,
-    TransportType, FailurePolicy,
+    FailurePolicy,
+    TransportType,
 )
 from .exceptions import McpRelayConfigurationError
 from .utils import expand_vars, get_logger

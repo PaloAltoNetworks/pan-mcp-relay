@@ -62,7 +62,8 @@ from .client import RelayClient
 from .client.session_group import RelaySessionGroup
 from .configuration import McpRelayConfig, McpServerType
 from .constants import (
-    MCP_RELAY_NAME, FailurePolicy,
+    MCP_RELAY_NAME,
+    FailurePolicy,
 )
 from .exceptions import (
     McpRelayBaseError,
@@ -110,7 +111,6 @@ class PanSecurityRelay:
         self._exit_stack.enter_async_context(client_session_group.__aenter__)
         self._exit_stack.push_async_exit(client_session_group.__aexit__)
 
-        self._client_session_group.tools
         if len(self.mcp_servers_config) == 0:
             raise McpRelayConfigurationError("No MCP servers configured.")
         elif len(self.mcp_servers_config) >= self.config.max_mcp_servers:
@@ -199,9 +199,6 @@ class PanSecurityRelay:
             except mcp.McpError as e:
                 log.error(f"Failed starting server: {server_name}: {e}")
                 log.error(server_params)
-            # except Exception as e:
-            #     log.error(f"Unexpected error connecting to server {server_name}: {e}")
-                # raise
 
         for server_name, server_config in self.mcp_servers_config.items():
             client = RelayClient(name=server_name, config=server_config)
@@ -325,10 +322,10 @@ class PanSecurityRelay:
 
         # Process each tool
         for tool_name, tool in self.tool_registry.get_available_tools().items():
-            log.info(f"Processing tool: {tool_name}")
+            log.debug(f"Processing tool: {tool_name}")
             available_tool_list.append(tool.to_mcp_tool())
 
-        log.info(f"total tools: {len(available_tool_list)}")
+        log.debug(f"total tools: {len(available_tool_list)}")
         return available_tool_list
 
     @validate_call
@@ -375,7 +372,7 @@ class PanSecurityRelay:
                 method=ScanSourceMethod.call_tool,
                 server_name=server_name,
                 tool_name=name,
-                input_data=input_text,
+                input_data=input_data,
                 output_data=str(result_content))
             if response.action == "block":
                 log.warning(f"CallTool {name} output Blocked by Security Scan")
