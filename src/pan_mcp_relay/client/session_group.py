@@ -15,7 +15,6 @@
 # any kind of legal claim.
 
 import contextlib
-import re
 from typing import Any
 
 import mcp.client.session_group
