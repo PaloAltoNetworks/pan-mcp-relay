@@ -53,9 +53,11 @@ import anyio
 import mcp
 import mcp.types as types
 import yaml
-from mcp.client.session_group import ServerParameters
+from mcp import StdioServerParameters
+from mcp.client.session_group import ServerParameters, SseServerParameters, StreamableHttpParameters
 from mcp.server.lowlevel import Server
 from pydantic import validate_call
+from rich.syntax import Syntax
 
 from . import utils
 from .client import RelayClient
@@ -110,13 +112,6 @@ class PanSecurityRelay:
         self._client_session_group = client_session_group
         self._exit_stack.enter_async_context(client_session_group.__aenter__)
         self._exit_stack.push_async_exit(client_session_group.__aexit__)
-
-        if len(self.mcp_servers_config) == 0:
-            raise McpRelayConfigurationError("No MCP servers configured.")
-        elif len(self.mcp_servers_config) >= self.config.max_mcp_servers:
-            raise McpRelayConfigurationError(
-                f"MCP servers configuration limit exceeded, maximum allowed: {self.config.max_mcp_servers}"
-            )
 
     async def __aenter__(self) -> Self:
         return self
@@ -176,7 +171,6 @@ class PanSecurityRelay:
             # Collect individual server tool lists
             await self._initialize_relay_clients()
             tools: dict[str, types.Tool] = self._client_session_group.tools
-            log.info(f"wenfu test: tools: dict[str, types.Tool] {tools}")
             all_tools: dict[str, InternalTool] = await self._scan_tools(tools)
 
         except Exception:
@@ -197,8 +191,14 @@ class PanSecurityRelay:
                 session = await self._client_session_group.connect_to_server_with_name(server_name, server_params)
                 client_sessions.append((server_name, session))
             except mcp.McpError as e:
-                log.error(f"Failed starting server: {server_name}: {e}")
-                log.error(server_params)
+                log.error(f"Failed starting server '{server_name}': {e}")
+                match server_params:
+                    case StdioServerParameters():
+                        log.error(
+                            f"command={server_params.command}, args={server_params.args}, cwd={server_params.cwd}"
+                        )
+                    case SseServerParameters() | StreamableHttpParameters():
+                        log.error(f"url={server_params.url}")
 
         for server_name, server_config in self.mcp_servers_config.items():
             client = RelayClient(name=server_name, config=server_config)
@@ -236,12 +236,14 @@ class PanSecurityRelay:
             # Security scan
             tool_info_dict = internal_tool.model_dump(mode="json", exclude_none=True, exclude_unset=True)
             tool_info_yaml = yaml.dump(tool_info_dict, sort_keys=False)
+            yaml_syntax = Syntax(tool_info_yaml, "yaml")
+
+            log.debug(f"[bold]Scanning Tool Description:[/bold]\n{yaml_syntax}", extra=dict(markup=True))
             log.debug(f"Scanning Tool Description:\n{tool_info_yaml!s}")
             tool_info = json.dumps(
                 [internal_tool.model_dump(mode="json", by_alias=True, exclude_none=True, exclude_unset=True)],
                 ensure_ascii=False
             )
-            log.info(f"wenfu debug: list tools:\n{tool_info}")
             try:
                 response = await self.scanner.scan_tool_event(
                     server_name=server_name,
@@ -332,7 +334,7 @@ class PanSecurityRelay:
     async def _call_tool(self, name: str, arguments: dict[str, Any]) -> types.CallToolResult:
         """Handle tool execution requests."""
         input_data = yaml.safe_dump(arguments, sort_keys=False)
-        server_name = self._client_session_group.get_server_name_by_tool_name(name)
+        server_name = await self._client_session_group.get_server_name_by_tool(name)
 
         # Scan the request for security issues
         # Raises McpRelaySecurityBlockError if AI Profile blocked content
@@ -351,9 +353,7 @@ class PanSecurityRelay:
                 raise
 
         # Get the server for this tool
-        log.info("wenfu test log: before available tools")
         available_tools = self.tool_registry.get_available_tools()
-        log.info(f"wenfu test log: before available tools {available_tools}")
         if name not in available_tools:
             err_msg = f"Unknown tool: {name}"
             log.error(err_msg)

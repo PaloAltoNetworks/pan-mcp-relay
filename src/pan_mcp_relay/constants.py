@@ -52,6 +52,8 @@ API_ENDPOINT_RE = r"^https://service(?:-[a-z]{2}|\.[a-z]{2,3})?\." + re.escape(A
 DEFAULT_API_ENDPOINT = f"https://service.{API_DOMAIN}"
 DEFAULT_FAILURE_POLICY = FailurePolicy.FAIL_OPEN
 
+ENV_VAR_RE = re.compile(r"[^\n]*(\${\w+}|\$\w+)")
+
 # Environment Variables
 
 API_PREFIX = "PRISMA_AIRS"

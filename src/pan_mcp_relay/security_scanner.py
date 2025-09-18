@@ -98,7 +98,7 @@ class SecurityScanner(BaseModel):
         ctx.minimum_version = ssl.TLSVersion.TLSv1_3
         ctx.verify_mode = ssl.CERT_REQUIRED
         ctx.check_hostname = True
-        auth = APIAuth(api_key=self.config.api_key.get_secret_value())
+        auth = APIAuth(api_key=self.config.api_key.get_secret_value().strip())
         log.debug("Creating httpx client")
         limits = httpx.Limits(keepalive_expiry=300)
         transport = httpx.AsyncHTTPTransport(verify=ctx, retries=3)
@@ -133,7 +133,7 @@ class SecurityScanner(BaseModel):
                 ai_profile_name = self.config.ai_profile
                 ai_profile = dict(profile_name=ai_profile_name)
         ai_profile_text = yaml.safe_dump(ai_profile)
-        log.info(f"Using AI Profile: {ai_profile_text}")
+        log.info(f"Using AI Profile: {ai_profile_text.strip()}")
         return ai_profile
 
     @functools.cache
@@ -182,7 +182,6 @@ class SecurityScanner(BaseModel):
 
         body = dict(tr_id=tr_id, ai_profile=ai_profile, metadata=metadata, contents=[content])
         body_json = json.dumps(body)
-        log.info(f"wenfu debug: body_json {body_json}")
         body_checksum = hashlib.sha256(body_json.encode("utf-8")).hexdigest()[:8]
         log.debug(f"{scan_label}: POST {self.client.base_url}+{SYNC_SCAN_PATH} (checksum: {body_checksum})")
         try:
@@ -192,9 +191,7 @@ class SecurityScanner(BaseModel):
             )
             scan_result.raise_for_status()
             scan_response_data = scan_result.json()
-            log.info(f"wenfu debug: scan_response_data: {scan_response_data}")
             tool_scan_response = ToolScanResponse(**scan_response_data)
-            log.info(f"wenfu debug: tool_scan_response: {tool_scan_response}")
         except httpx.HTTPStatusError as se:
             response_data: dict | None = None
             response_body: bytes | None = None
@@ -210,8 +207,10 @@ class SecurityScanner(BaseModel):
                 log.debug(response_body)
             api_error = f"{api_error} ({se.response.status_code})"
             if se.response.status_code in [http.HTTPStatus.UNAUTHORIZED, http.HTTPStatus.FORBIDDEN]:
+                log.exception(f"Failed to authenticate: {se}")
                 raise ScanApiAuthenticationError(api_error) from se
             elif se.response.status_code > 500:
+                log.exception(f"Scan service internal error: {se}")
                 raise ScanApiInternalError(api_error) from se
             log.exception(f"Failed to execute scan request: {se}")
             raise McpRelayScanError("Security Scan Failed") from se
@@ -221,7 +220,6 @@ class SecurityScanner(BaseModel):
         except ValidationError as ve:
             log.exception("Failed to validate scan response schema")
             raise McpRelayScanError("Security Scan Failed Validate Schema") from ve
-
 
         action = tool_scan_response.action
 

@@ -85,7 +85,6 @@ class ToolRegistry(BaseModel):
             log.warning("Update registry failed: no tools found")
 
         log.debug(f"Updating tool registry with {len(tools)} internal tools")
-        log.info(f"wenfu test tools: {tools}")
         try:
             self.tools = tools
             self.update_available_tools()

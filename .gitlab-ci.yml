@@ -182,10 +182,6 @@ default:
     - *unshallow
     - bash ${CI_PROJECT_DIR}/scripts/install-task.sh -b ${UV_TOOL_BIN_DIR} -d latest
     - export PATH="${UV_TOOL_BIN_DIR}:${HOME}/.local/bin:${PATH}"
-    - |
-      if [[ -v INTERNAL_CA_BUNDLE && -f "$INTERNAL_CA_BUNDLE" ]]; then
-      python3 -m pip config --user set global.cert "$INTERNAL_CA_BUNDLE"
-      fi
     - python3 -m pip config debug
     - python3 -m pip install ${PIP_CI_ARGS:-} --user --upgrade uv
     - uv sync --all-extras --frozen # install all project dependencies
@@ -240,20 +236,18 @@ bandit:
   before_script:
     - !reference [.base-job, before_script]
     - uv tool install --upgrade ruff
-    - uv run ruff --version
-    - IFS=$'\n' read -r -d '' -a CHANGED_PY_FILES < <(git diff --diff-filter=d --no-renames --name-only origin/main -- '*.py' && printf '\0')
-    - |
-      # Include entire repo if there are no python changes compared to main branch
-      if [[ ${#CHANGED_PY_FILES} -eq 0 ]]; then CHANGED_PY_FILES=( . ); fi
   rules:
-    - !reference [.base-rules, rules]
-    - if: $CI_COMMIT_BRANCH
-      changes:
+    - if: $CI_COMMIT_REF_PROTECTED == 'true'
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
+    - changes:
         compare_to: refs/heads/main
         paths:
           - "*.py"
           - "**/*.py"
           - "pyproject.toml"
+          - ".ruff.toml"
   dependencies: []
   needs: []
 
@@ -261,9 +255,9 @@ lint:
   extends: .base_lint
   # language=sh
   script:
-    - uv run ruff check --output-format=concise --exit-zero "${CHANGED_PY_FILES[@]}"
-    - uv run ruff check --statistics --exit-zero "${CHANGED_PY_FILES[@]}"
-    - uv run ruff check --output-format=gitlab --output-file=reports/code-quality-report.json "${CHANGED_PY_FILES[@]}"
+    - uv tool run ruff check --output-format=concise --exit-zero
+    - uv tool run ruff check --statistics --exit-zero
+    - uv tool run ruff check --output-format=gitlab --output-file=reports/code-quality-report.json
   artifacts:
     reports:
       codequality: reports/code-quality-report.json
@@ -272,7 +266,7 @@ format:
   extends: .base_lint
   # language=sh
   script:
-    - uv run ruff format --check --respect-gitignore "${CHANGED_PY_FILES[@]}"
+    - uv run ruff format --check --respect-gitignore
 
 test:
   stage: test
@@ -321,7 +315,6 @@ test:
           - "**/*.py"
           - "pyproject.toml"
           - "uv.lock"
-          - "requirements*.txt"
   dependencies: []
   needs: []
 
@@ -354,7 +347,6 @@ build:
           - "*.py"
           - "**/*.py"
           - "pyproject.toml"
-          - "requirements*.txt"
   dependencies: []
   needs:
     - job: test
@@ -375,8 +367,6 @@ blackduck:
     PIP_IGNORE_REQUIRES_PYTHON: 1
 
     DETECT_DETECTOR_SEARCH_DEPTH: 4
-    DETECTOR_PIP_REQUIREMENTS_PATH: |
-      requirements.txt
     SECURE_CICD_BD_BEFORE_SCRIPT: >-
       set -xe &&
       python3 -m pip install --upgrade pip &&

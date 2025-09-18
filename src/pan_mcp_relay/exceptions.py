@@ -59,6 +59,14 @@ class AiProfileError(McpRelayConfigurationError):
     """Exception for invalid AI profile errors."""
 
 
+class UnexpandedVariableError(McpRelayConfigurationError):
+    """Exception for unexpanded environment variable errors."""
+
+
+class McpRelayConfigurationErrorGroup(ExceptionGroup):
+    """Use to raise multiple configuration errors simultainuously."""
+
+
 # Server and Tool Errors
 
 
