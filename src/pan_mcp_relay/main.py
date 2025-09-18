@@ -260,7 +260,6 @@ def format_env_help(help: str, envvar: str, masked: bool = False) -> str:
 @click.pass_context
 def cli(ctx, **kwargs) -> int:
     """Run the MCP Relay Server."""
-    print(f"MCP Relay kwargs: {kwargs}")
     ctx.ensure_object(dict)
     dotenv_search = kwargs.get("dotenv") or ".env"
     dotenv_src = ctx.get_parameter_source("dotenv")
@@ -295,7 +294,6 @@ def cli(ctx, **kwargs) -> int:
             del kwargs[k]
             continue
 
-    print(f"MCP Relay kwargs2: {kwargs}")
     config_file: Path | None = expand_path(kwargs.get("config_file"))
     config_file = find_config_file(config_file)
     if config_file:
@@ -303,7 +301,6 @@ def cli(ctx, **kwargs) -> int:
         kwargs["config_file"] = config_file
 
     cli_vars = {"mcpRelay": kwargs}
-    print(f"MCP Relay cli_vars: {cli_vars}")
     log.debug(f'event="parsed cli variables" data={cli_vars}')
 
     config_file_data = {}

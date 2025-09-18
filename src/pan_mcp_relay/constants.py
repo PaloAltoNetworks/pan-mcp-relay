@@ -32,7 +32,6 @@ from typing import Final
 # =============================================================================
 
 
-
 class FailurePolicy(StrEnum):
     FAIL_CLOSED = "fail_closed"
     FAIL_OPEN = "fail_open"
@@ -93,7 +92,6 @@ Note:
     Configuration precedence: CLI Flags > Environment > .env file.
 """
 
-
 # =============================================================================
 # SERVER IDENTIFICATION
 # =============================================================================
@@ -141,7 +139,6 @@ MAX_MCP_SERVERS_DEFAULT: Final[int] = 32
 MAX_MCP_TOOLS_DEFAULT: Final[int] = 256
 """Maximum total number of tools across all servers."""
 
-
 # =============================================================================
 # TIME CONSTANTS
 # =============================================================================
@@ -149,14 +146,12 @@ MAX_MCP_TOOLS_DEFAULT: Final[int] = 256
 UNIX_EPOCH: Final[datetime] = datetime.fromtimestamp(0)
 """Unix epoch reference time (1970-01-01 00:00:00 UTC)."""
 
-
 # =============================================================================
 # TOOL NAMES
 # =============================================================================
 
 TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO: Final[str] = f"{MCP_RELAY_NAME}:list_downstream_servers_info"
 """Tool name for listing downstream server information."""
-
 
 # =============================================================================
 # SECURITY SCAN CONSTANTS

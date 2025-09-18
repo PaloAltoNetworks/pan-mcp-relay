@@ -242,13 +242,12 @@ class PanSecurityRelay:
             log.debug(f"Scanning Tool Description:\n{tool_info_yaml!s}")
             tool_info = json.dumps(
                 [internal_tool.model_dump(mode="json", by_alias=True, exclude_none=True, exclude_unset=True)],
-                ensure_ascii=False
+                ensure_ascii=False,
             )
             try:
                 response = await self.scanner.scan_tool_event(
-                    server_name=server_name,
-                    method=ScanSourceMethod.list_tools,
-                    output_data=tool_info)
+                    server_name=server_name, method=ScanSourceMethod.list_tools, output_data=tool_info
+                )
                 if response.action == "block":
                     internal_tool.state = ToolState.DISABLED_SECURITY_RISK
                     log.warning(f"Tool {internal_tool.name} Blocked by Security Scan")
@@ -340,10 +339,8 @@ class PanSecurityRelay:
         # Raises McpRelaySecurityBlockError if AI Profile blocked content
         try:
             response = await self.scanner.scan_tool_event(
-                method=ScanSourceMethod.call_tool,
-                server_name=server_name,
-                tool_name=name,
-                input_data=input_data)
+                method=ScanSourceMethod.call_tool, server_name=server_name, tool_name=name, input_data=input_data
+            )
             if response.action == "block":
                 log.warning(f"CallTool {name} input Blocked by Security Scan")
                 raise McpRelaySecurityBlockError(f"CallTool input was blocked")
@@ -373,7 +370,8 @@ class PanSecurityRelay:
                 server_name=server_name,
                 tool_name=name,
                 input_data=input_data,
-                output_data=str(result_content))
+                output_data=str(result_content),
+            )
             if response.action == "block":
                 log.warning(f"CallTool {name} output Blocked by Security Scan")
                 raise McpRelaySecurityBlockError(f"CallTool output was blocked")
