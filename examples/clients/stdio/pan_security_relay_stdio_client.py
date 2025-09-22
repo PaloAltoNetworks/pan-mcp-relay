@@ -159,15 +159,9 @@ async def interactive_mode(client: PanSecurityRelayStdioClient):
     """
     print("\n=== Pan Security Relay Client Interactive Mode ===")
     print(f"Commands: {', '.join([c.value for c in InteractiveCommand])}")
-    reader = asyncio.StreamReader()
-    protocol = asyncio.StreamReaderProtocol(reader)
-    await asyncio.get_event_loop().connect_read_pipe(lambda: protocol, sys.stdin)
-
     while True:
         try:
-            print("> ")
-            line = await reader.readline()
-            command = line.decode().strip()
+            command = (await asyncio.to_thread(input, "> ")).strip()
             if not command:
                 continue
             elif command == InteractiveCommand.QUIT:
