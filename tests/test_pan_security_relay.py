@@ -204,12 +204,7 @@ class TestPanSecurityRelay:
         tool_args = {"arg1": "value1"}
 
         relay.scanner.scan_tool_event = AsyncMock(
-            return_value=ToolScanResponse(
-                action="block",
-                report_id="report_id",
-                scan_id="scan_id",
-                category="category"
-            )
+            return_value=ToolScanResponse(action="block", report_id="report_id", scan_id="scan_id", category="category")
         )
         relay._client_session_group.get_server_name_by_tool = AsyncMock(return_value="server_name")
 
