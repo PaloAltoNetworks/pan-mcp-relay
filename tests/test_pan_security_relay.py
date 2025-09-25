@@ -29,6 +29,7 @@ from pan_mcp_relay.exceptions import (
 )
 from pan_mcp_relay.pan_security_relay import PanSecurityRelay
 from pan_mcp_relay.tool import InternalTool, ToolState
+from pan_mcp_relay.models import ToolScanResponse
 
 
 @pytest.fixture
@@ -201,12 +202,21 @@ class TestPanSecurityRelay:
         """Test a tool call blocked by security scan."""
         tool_name = "test_tool"
         tool_args = {"arg1": "value1"}
-        relay.scanner.scan = AsyncMock(side_effect=McpRelaySecurityBlockError("Blocked"))
+
+        relay.scanner.scan_tool_event = AsyncMock(
+            return_value=ToolScanResponse(
+                action="block",
+                report_id="report_id",
+                scan_id="scan_id",
+                category="category"
+            )
+        )
+        relay._client_session_group.get_server_name_by_tool = AsyncMock(return_value="server_name")
 
         with pytest.raises(McpRelaySecurityBlockError):
             await relay._call_tool(tool_name, tool_args)
 
-        relay.scanner.scan.assert_awaited_once()
+        relay.scanner.scan_tool_event.assert_called()
 
     def test_extract_text_content(self, relay):
         """Test the extract_text_content helper function."""
