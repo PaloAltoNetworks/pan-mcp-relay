@@ -305,6 +305,9 @@ class PanSecurityRelay:
                 if result.isError:
                     raise McpRelayToolExecutionError(str(result.content))
                 return result.content
+            except McpRelaySecurityBlockError as block_error:
+                log.warning(f"Tool {name} blocked: {block_error}")
+                return [types.TextContent(type="text", text=f"McpRelaySecurityBlock: {block_error.message}")]
             except McpRelayBaseError as relay_error:
                 log.exception("MCP Relay call tool error")
                 raise relay_error
