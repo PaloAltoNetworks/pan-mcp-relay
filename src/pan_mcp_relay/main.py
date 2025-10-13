@@ -29,7 +29,6 @@ import click
 import click.shell_completion
 import dotenv
 import rich.logging
-import rich.markup
 import yaml
 from click.core import ParameterSource
 from pydantic import ValidationError

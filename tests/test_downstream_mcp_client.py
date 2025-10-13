@@ -28,7 +28,6 @@ from contextlib import AsyncExitStack
 from unittest.mock import AsyncMock, call, patch
 
 import httpx
-import mcp
 import mcp.shared.exceptions
 import mcp.types as types
 import pytest
