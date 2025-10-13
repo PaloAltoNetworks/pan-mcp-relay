@@ -110,7 +110,8 @@ async def main():
 
     if argv.output and argv.output.strip() != "-":
         output_path = Path(argv.output)
-        output_path.write_text(id_token)
+        # Use asyncio.to_thread to write the file asynchronously
+        await asyncio.to_thread(output_path.write_text, pypi_token)
         log.info(f"Wrote {len(pypi_token)} bytes to {output_path}")
     else:
         print(pypi_token)
