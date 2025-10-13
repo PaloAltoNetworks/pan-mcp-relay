@@ -27,9 +27,9 @@ from pan_mcp_relay.exceptions import (
     McpRelaySecurityBlockError,
     McpRelayToolNotFoundError,
 )
+from pan_mcp_relay.models import ToolScanResponse
 from pan_mcp_relay.pan_security_relay import PanSecurityRelay
 from pan_mcp_relay.tool import InternalTool, ToolState
-from pan_mcp_relay.models import ToolScanResponse
 
 
 @pytest.fixture
