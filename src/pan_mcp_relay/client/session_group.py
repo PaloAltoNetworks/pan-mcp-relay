@@ -95,8 +95,8 @@ class RelaySessionGroup(mcp.client.session_group.ClientSessionGroup):
         server_info: mcp.types.Implementation
         session: mcp.ClientSession
         server_info, session = await self._establish_session(server_params)
+        self._server_info_to_server_name[serverinfo_str(server_info)] = server_name
         await self.connect_with_session(server_info, session)
 
-        self._server_info_to_server_name[serverinfo_str(server_info)] = server_name
         self._session_to_server_name[session] = server_name
         return session

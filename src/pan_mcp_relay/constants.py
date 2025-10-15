@@ -26,9 +26,29 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Final
 
+# =============================================================================
+# FAILURE POLICY TYPES
+# =============================================================================
+
+
+class FailurePolicy(StrEnum):
+    FAIL_CLOSED = "fail_closed"
+    FAIL_OPEN = "fail_open"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            value = value.lower()
+            for member in cls:
+                if member.value == value:
+                    return member
+        return None
+
+
 API_DOMAIN = "api.aisecurity.paloaltonetworks.com"
 API_ENDPOINT_RE = r"^https://service(?:-[a-z]{2}|\.[a-z]{2,3})?\." + re.escape(API_DOMAIN) + r"/?$"
 DEFAULT_API_ENDPOINT = f"https://service.{API_DOMAIN}"
+DEFAULT_FAILURE_POLICY = FailurePolicy.FAIL_OPEN
 
 ENV_VAR_RE = re.compile(r"[^\n]*(\${\w+}|\$\w+)")
 
@@ -70,7 +90,6 @@ Environment Variables:
 Note:
     Configuration precedence: CLI Flags > Environment > .env file.
 """
-
 
 # =============================================================================
 # SERVER IDENTIFICATION
@@ -119,7 +138,6 @@ MAX_MCP_SERVERS_DEFAULT: Final[int] = 32
 MAX_MCP_TOOLS_DEFAULT: Final[int] = 256
 """Maximum total number of tools across all servers."""
 
-
 # =============================================================================
 # TIME CONSTANTS
 # =============================================================================
@@ -127,14 +145,12 @@ MAX_MCP_TOOLS_DEFAULT: Final[int] = 256
 UNIX_EPOCH: Final[datetime] = datetime.fromtimestamp(0)
 """Unix epoch reference time (1970-01-01 00:00:00 UTC)."""
 
-
 # =============================================================================
 # TOOL NAMES
 # =============================================================================
 
 TOOL_NAME_LIST_DOWNSTREAM_SERVERS_INFO: Final[str] = f"{MCP_RELAY_NAME}:list_downstream_servers_info"
 """Tool name for listing downstream server information."""
-
 
 # =============================================================================
 # SECURITY SCAN CONSTANTS

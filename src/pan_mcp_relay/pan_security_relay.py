@@ -41,6 +41,7 @@ risks, and provides a unified interface for clients while enforcing security pol
 
 import asyncio
 import functools
+import json
 from collections import deque
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -64,6 +65,7 @@ from .client.session_group import RelaySessionGroup
 from .configuration import McpRelayConfig, McpServerType
 from .constants import (
     MCP_RELAY_NAME,
+    FailurePolicy,
 )
 from .exceptions import (
     McpRelayBaseError,
@@ -74,7 +76,7 @@ from .exceptions import (
     McpRelayToolExecutionError,
     McpRelayToolNotFoundError,
 )
-from .security_scanner import ScanSource, ScanType, SecurityScanner
+from .security_scanner import ScanSourceMethod, SecurityScanner
 from .tool import InternalTool, ToolState
 from .tool_registry import ToolRegistry
 
@@ -229,6 +231,7 @@ class PanSecurityRelay:
             **tool.model_dump(exclude_unset=True, exclude_none=True, exclude={"name"}),
         )
         known_tool = self.tool_registry.get_tool_by_hash(internal_tool.sha256_hash)
+        server_name = await self._client_session_group.get_server_name_by_tool(internal_tool.name)
         if known_tool is None:
             # Security scan
             tool_info_dict = internal_tool.model_dump(mode="json", exclude_none=True, exclude_unset=True)
@@ -236,16 +239,25 @@ class PanSecurityRelay:
             yaml_syntax = Syntax(tool_info_yaml, "yaml")
 
             log.debug(f"[bold]Scanning Tool Description:[/bold]\n{yaml_syntax}", extra=dict(markup=True))
+            log.debug(f"Scanning Tool Description:\n{tool_info_yaml!s}")
+            tool_info = json.dumps(
+                [internal_tool.model_dump(mode="json", by_alias=True, exclude_none=True, exclude_unset=True)],
+                ensure_ascii=False,
+            )
             try:
-                await self.scanner.scan(
-                    source=ScanSource.prepare_tool, scan_type=ScanType.scan_tool, prompt=tool_info_yaml, response=None
+                response = await self.scanner.scan_tool_event(
+                    server_name=server_name, method=ScanSourceMethod.list_tools, output_data=tool_info
                 )
-            except McpRelaySecurityBlockError:
-                internal_tool.state = ToolState.DISABLED_SECURITY_RISK
-                log.warning(f"Tool {internal_tool.name} Blocked by Security Scan")
+                if response.action == "block":
+                    internal_tool.state = ToolState.DISABLED_SECURITY_RISK
+                    log.warning(f"Tool {internal_tool.name} Blocked by Security Scan")
             except McpRelayScanError:
                 log.error(f"Security Scan Failed for tool: {internal_tool.name}")
-                internal_tool.state = ToolState.DISABLED_ERROR
+                if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:
+                    internal_tool.state = ToolState.DISABLED_ERROR
+                else:
+                    # self.config.failure_policy == FailurePolicy.FAIL_OPEN
+                    internal_tool.state = ToolState.ENABLED
             else:
                 internal_tool.state = ToolState.ENABLED
         else:
@@ -293,6 +305,9 @@ class PanSecurityRelay:
                 if result.isError:
                     raise McpRelayToolExecutionError(str(result.content))
                 return result.content
+            except McpRelaySecurityBlockError as block_error:
+                log.warning(f"Tool {name} blocked: {block_error}")
+                return [types.TextContent(type="text", text=f"McpRelaySecurityBlock: {block_error.message}")]
             except McpRelayBaseError as relay_error:
                 log.exception("MCP Relay call tool error")
                 raise relay_error
@@ -320,16 +335,25 @@ class PanSecurityRelay:
     @validate_call
     async def _call_tool(self, name: str, arguments: dict[str, Any]) -> types.CallToolResult:
         """Handle tool execution requests."""
-        input_data = {name: arguments}
-        input_text = yaml.safe_dump(input_data, sort_keys=False)
+        input_data = yaml.safe_dump(arguments, sort_keys=False)
+        server_name = await self._client_session_group.get_server_name_by_tool(name)
 
         # Scan the request for security issues
         # Raises McpRelaySecurityBlockError if AI Profile blocked content
-        await self.scanner.scan(ScanSource.call_tool, ScanType.scan_request, input_text)
+        try:
+            response = await self.scanner.scan_tool_event(
+                method=ScanSourceMethod.call_tool, server_name=server_name, tool_name=name, input_data=input_data
+            )
+            if response.action == "block":
+                log.warning(f"CallTool {name} input Blocked by Security Scan")
+                raise McpRelaySecurityBlockError("CallTool input was blocked")
+        except McpRelayScanError:
+            log.error(f"Security Scan Failed for CallTool {name}")
+            if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:
+                raise
 
         # Get the server for this tool
         available_tools = self.tool_registry.get_available_tools()
-
         if name not in available_tools:
             err_msg = f"Unknown tool: {name}"
             log.error(err_msg)
@@ -343,7 +367,21 @@ class PanSecurityRelay:
 
         result_content = self.extract_text_content(result.content)
 
-        await self.scanner.scan(ScanSource.call_tool, ScanType.scan_response, input_text, str(result_content))
+        try:
+            response = await self.scanner.scan_tool_event(
+                method=ScanSourceMethod.call_tool,
+                server_name=server_name,
+                tool_name=name,
+                input_data=input_data,
+                output_data=str(result_content),
+            )
+            if response.action == "block":
+                log.warning(f"CallTool {name} output Blocked by Security Scan")
+                raise McpRelaySecurityBlockError("CallTool output was blocked")
+        except McpRelayScanError:
+            log.error(f"Security Scan Failed for CallTool {name}")
+            if self.config.failure_policy == FailurePolicy.FAIL_CLOSED:
+                raise
 
         if result.isError:
             log.error(str(result.content))

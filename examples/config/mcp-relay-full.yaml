@@ -40,6 +40,15 @@ mcpRelay:
   # default endpoint: https://service.api.aisecurity.paloaltonetworks.com
   api_endpoint: >-
     https://service.api.aisecurity.paloaltonetworks.com
+  # failure_policy Optional, default shown
+  # Policy to apply when the security scanner service encounters an internal error.
+  # - fail_closed : Treat errors as malicious (block).
+  # - fail_open   : Treat errors as benign (allow).
+  # This setting determines whether the system prioritizes strict security
+  # (restrictive, blocking on errors) or availability (permissive, allowing on errors).
+  # aliases: failure_policy, fail_strategy, error_handling_mode
+  # default: fail_open
+  failure_policy: fail_closed
   # Relay MCP Server Configuration
   # default transport: stdio
   transport: sse

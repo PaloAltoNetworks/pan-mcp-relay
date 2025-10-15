@@ -29,7 +29,6 @@ import click
 import click.shell_completion
 import dotenv
 import rich.logging
-import rich.markup
 import yaml
 from click.core import ParameterSource
 from pydantic import ValidationError
@@ -307,16 +306,8 @@ def cli(ctx, **kwargs) -> int:
     if config_file and config_file.exists():
         config_file_data = load_config_file(config_file)
     try:
-        file_config = Config(**config_file_data)
-        cli_config = Config(**cli_vars)
-        file_config_data = file_config.model_dump(exclude_unset=True, exclude_none=True)
-        cli_config_data = cli_config.model_dump(exclude_unset=True, exclude_none=True)
-        # log.debug(f"event=merging_config\nconfig_file={file_config_data}\ncli={cli_config_data}")
-        merged_config = deep_merge(
-            file_config_data,
-            cli_config_data,
-        )
         # log.debug(f"event=merged_config merged={merged_config}")
+        merged_config = deep_merge(config_file_data, cli_vars)
         config: Config = Config(**merged_config)
         # log.debug(f"event=loaded_config config={config.model_dump(exclude_unset=True, exclude_none=True)}")
     except ValidationError as e:
