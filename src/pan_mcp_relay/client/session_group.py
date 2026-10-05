@@ -19,7 +19,7 @@ from typing import Any
 
 import mcp.client.session_group
 import tenacity
-from mcp import McpError, types
+from mcp import MCPError as McpError, types
 from mcp.client.session_group import ServerParameters
 from pydantic import validate_call
 from tenacity import retry_if_not_exception_type, stop_after_attempt
